@@ -1,0 +1,6 @@
+unstructured[all-docs]
+libmagic
+poppler
+tesseract-ocr
+libreoffice
+pandoc
