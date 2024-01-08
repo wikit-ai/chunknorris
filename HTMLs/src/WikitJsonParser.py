@@ -1,11 +1,10 @@
 import json
-import os
 import re
 from typing import Dict, List 
 from markdownify import markdownify
 
 
-class WikitJsonParserException(Exception):
+class HTMLChunkNorrisException(Exception):
     def __init__(self, message):
         pass
 
@@ -15,7 +14,7 @@ class ChunkSizeExceeded(Exception):
         pass
 
 
-class WikitJsonParser:
+class HTMLChunkNorris:
     def __init__(self):
         pass
 
@@ -41,7 +40,7 @@ class WikitJsonParser:
                 read_file = json.load(f)
             md_file = markdownify(read_file["hasPart"][0]['text'], strip=["figure", "img"], bullets="-*+")
         except Exception as e:
-            raise WikitJsonParserException(f"Can't open JSON file : {e}")
+            raise HTMLChunkNorrisException(f"Can't open JSON file : {e}")
 
         return md_file
 
@@ -96,7 +95,7 @@ class WikitJsonParser:
             parent_ids = [t for t in parent_ids if not t.endswith("_")]
             # get the id of each parent title
             parent_titles = [
-                WikitJsonParser.get_item(toc, conditions={"id": t})["title"]
+                HTMLChunkNorris.get_item(toc, conditions={"id": t})["title"]
                 for t in parent_ids
                 ]
             # build dict of parent titles
@@ -195,7 +194,7 @@ class WikitJsonParser:
         return result
 
 
-    def chunk_document(self, text:str, max_chunk_size:int=300, chunk_on_title_level:int=None, raise_errors=True, **kwargs):
+    def chunk_document(self, text:str, max_chunk_size:int=300, chunk_on_title_level:int=None, raise_errors=True, max_title_level_to_use=5, **kwargs):
         """Chunks a document using titles
         The title level used to chunk can be forced by specifying chunk_on_title.
         Otherwise the each part will be chunk recursively using its titles until the chunks reach
@@ -206,6 +205,7 @@ class WikitJsonParser:
             max_chunk_size (int, optional): _description_. Defaults to 300.
             chunk_on_title_level (int, optional): _description_. Defaults to None.
             raise_errors (bool, optional): _description_. Defaults to False.
+            max_title_level_to_use (int, optional) : the max level of the titles to use for subdivision
 
         Raises:
             ChunkSizeExceeded: _description_
@@ -220,8 +220,8 @@ class WikitJsonParser:
         if chunk_on_title_level is not None:
             assert chunk_on_title_level in set(tp["level"] for tp in toc),\
             f"Can't chunk on level '{chunk_on_title_level}' as no title at that level are found"
-            chunks = [self.format_chunk(tp) for tp in toc if tp["level"] == chunk_on_title_level]
-            if any([len(c.split()) > max_chunk_size for c in chunks]) and raise_errors:
+            total_chunks = [self.format_chunk(tp) for tp in toc if tp["level"] == chunk_on_title_level]
+            if any([len(c.split()) > max_chunk_size for c in total_chunks]) and raise_errors:
                 raise ChunkSizeExceeded(f"Chunking on level '{chunk_on_title_level}' lead to oversized chunks")
         
         else:
@@ -250,29 +250,36 @@ class WikitJsonParser:
                 # while we have toc pieces that needs to be subdivided...
                 while toc_pieces_to_subdivide:
                     # ...iterate over the toc pieces that needs to be subdivided
+                    new_toc_pieces_to_subdivide = []
                     for tp2subdivide in toc_pieces_to_subdivide:
+                        # if the level is of the title is >= to the max level we want to use, just make a chunk without using children
+                        if tp2subdivide["level"] == max_title_level_to_use:
+                            treated_toc_ids.append(tp2subdivide["id"])
+                            treated_toc_ids.extend([child["id"] for child in tp2subdivide["children"]])
+                            total_chunks.append(self.format_chunk(tp2subdivide))
                         # check if the tocpiece have children titles that we can use
-                        if tp2subdivide["children"]:
+                        elif tp2subdivide["children"]:
                             children = []
                             for tpc in tp2subdivide["children"]:
-                                child = WikitJsonParser.get_item(toc, conditions={"id": tpc["id"]})
-                                child_id = child["id"]
-                                children.append(child)
-                                treated_toc_ids.append(child_id)
+                                child = HTMLChunkNorris.get_item(toc, conditions={"id": tpc["id"]})
+                                if child["level"] == tp2subdivide["level"] -1:
+                                    child_id = child["id"]
+                                    children.append(child)
+                                    treated_toc_ids.append(child_id)
                             chunks = [self.format_chunk(child) for child in children]
-                            toc_pieces_to_subdivide = [
+                            new_toc_pieces_to_subdivide.extend([
                                 child
                                 for child, chunk in zip(children, chunks)
                                 if len(chunk.split()) > max_chunk_size
-                                ]
+                                ])
                             chunks_that_are_ok = [c for c in chunks if len(c.split()) < max_chunk_size]
                             total_chunks.extend(chunks_that_are_ok)
                         # if we don't have children (=subtitles) then just leave this a big chunk
                         # TODO: find other subdivision method for cases where we have no children titles
                         else:
-                            toc_pieces_to_subdivide = []
                             treated_toc_ids.append(tp2subdivide["id"])
                             total_chunks.append(self.format_chunk(tp2subdivide))
+                    toc_pieces_to_subdivide = new_toc_pieces_to_subdivide
 
         return total_chunks
 
@@ -280,10 +287,10 @@ class WikitJsonParser:
     def format_chunk(self, toc_piece):
         chunk = ""
         if toc_piece["parents"]:
-            chunk = "\n".join([WikitJsonParser.cleanup_text(p["title"]) for p in toc_piece["parents"]])
+            chunk = "\n".join([HTMLChunkNorris.cleanup_text(p["title"]) for p in toc_piece["parents"]])
             chunk += "\n"
-        chunk += f"{WikitJsonParser.cleanup_text(toc_piece['title'])}\n"
-        chunk += WikitJsonParser.cleanup_text(toc_piece["text"])
+        chunk += f"{HTMLChunkNorris.cleanup_text(toc_piece['title'])}\n"
+        chunk += HTMLChunkNorris.cleanup_text(toc_piece["text"])
         chunk = self.change_links_format(chunk, link_position="end_of_chunk")
         chunk += "\n"
 
@@ -323,7 +330,7 @@ class WikitJsonParser:
                         text = text.replace(m[0], f"{m[1]} (pour plus d'informations : {m[2]})")
                     case "end_of_sentence":
                         link_end_position = m.span(2)[1]
-                         #next_breakpoint = WikitJsonParser.find_end_of_sentence(text, link_end_position)
+                         #next_breakpoint = HTMLChunkNorris.find_end_of_sentence(text, link_end_position)
                         raise NotImplementedError
 
         return text
