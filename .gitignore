@@ -1,6 +1,16 @@
-data
 ovh
 .env
 ovh.conf
 
+# Datas
+data
+
+# Chroma related stuff
+ChromaDB
+
+# python related stuff
+__pycache__
+
+# specific files
 WikitPDFParser_Output.pdf
+table.html
