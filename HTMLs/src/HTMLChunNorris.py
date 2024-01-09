@@ -30,10 +30,11 @@ Titles = List[Title]
 
 
 class Chunk(TypedDict, total=True):
-    id: int
-    text: str
+    id: str
     token_count: int
+    word_count:int
     source_doc: str
+    text: str
 
 
 Chunks = List[Chunk]
@@ -461,10 +462,10 @@ class HTMLChunkNorris:
             chunks.append(
                 {
                     "id": f"{source_filename.replace('.json', '')}-{i}.json",
-                    "text": text,
                     "token_count": len(self.tokenizer.encode(text)),
                     "word_count": len(text.split()),
                     "source_file": source_filename,
+                    "text": text,
                 }
             )
         # check that chunks don't exceed the hard token limit
@@ -698,7 +699,7 @@ class HTMLChunkNorris:
         chunk_tokens_exceeded_handling: str = "raise_error",
         **kwargs,
     ):
-        """Checks that the chunks don't exceed the token limit, considered as a hard limit
+        """Checks that the chunks do not exceed the token limit, considered as a hard limit
         If chunk_tokens_exceeded_handling is:
         - "raise_error" -> it will raise an error in case a chunk to big is found
         for it to be investigated.
@@ -769,10 +770,10 @@ class HTMLChunkNorris:
         splitted_chunk = [
             {
                 "id": f"{chunk['id'].replace('.json', '')}-{i}.json",
-                "text": sct,
                 "token_count": len(self.tokenizer.encode(sct)),
                 "word_count": len(sct.split()),
                 "source_file": chunk["source_file"],
+                "text": sct,
             }
             for i, sct in enumerate(splitted_text)
         ]
