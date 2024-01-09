@@ -460,7 +460,7 @@ class HTMLChunkNorris:
         for i, text in enumerate(text_chunks):
             chunks.append(
                 {
-                    "id": f"{source_filename}-{i}",
+                    "id": f"{source_filename.replace('.json', '')}-{i}.json",
                     "text": text,
                     "token_count": len(self.tokenizer.encode(text)),
                     "word_count": len(text.split()),
@@ -468,9 +468,7 @@ class HTMLChunkNorris:
                 }
             )
         # check that chunks don't exceed the hard token limit
-        print(chunks)
         chunks = self.check_chunks(chunks, **kwargs)
-        print(chunks)
 
         return chunks
 
@@ -770,7 +768,7 @@ class HTMLChunkNorris:
         # recreate subchunks from the initial chunk
         splitted_chunk = [
             {
-                "id": f"{chunk['id']}-{i}",
+                "id": f"{chunk['id'].replace('.json', '')}-{i}.json",
                 "text": sct,
                 "token_count": len(self.tokenizer.encode(sct)),
                 "word_count": len(sct.split()),
