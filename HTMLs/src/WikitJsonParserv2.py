@@ -679,7 +679,7 @@ class HTMLChunkNorris:
                         text = text.replace(m[0], m[1])
                     case "end_of_chunk":
                         if i == 0:
-                            text += "\nPour plus d'informations:\n"
+                            text += "Pour plus d'informations:\n"
                         text = text.replace(m[0], m[1])
                         text += f"- {m[1]}: {m[2]}\n"
                     case "in_sentence":
@@ -720,7 +720,7 @@ class HTMLChunkNorris:
         )
 
         splitted_chunks = []
-        for i, chunk in enumerate(chunks):
+        for chunk in chunks:
             if chunk["token_count"] < max_chunk_tokens:
                 splitted_chunks.append(chunk)
             else:
