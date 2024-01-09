@@ -2,6 +2,7 @@ import json
 import re
 from typing import Dict, List, Tuple, TypedDict
 from markdownify import markdownify
+import tiktoken
 
 
 # Types
@@ -25,7 +26,15 @@ class Title(TypedDict, total=False):
     
 Titles = List[Title]
 
+class Chunk(TypedDict, total=True):
+    id: int
+    text: str
+    token_count: int
+    source_doc: str
 
+Chunks = List[Chunk]
+
+# Exceptions
 class HTMLChunkNorrisException(Exception):
     def __init__(self, message):
         pass
@@ -36,15 +45,16 @@ class ChunkSizeExceeded(Exception):
         pass
 
 
+# ChunkNorris
 class HTMLChunkNorris:
     def __init__(self):
-        pass
+        self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
-    
+
     def __call__(self, filepath:str, **kwargs) -> str:
         text = HTMLChunkNorris.read_json_file(filepath)
         titles = self.get_toc(text, **kwargs)
-        chunks = HTMLChunkNorris.get_chunks(titles, **kwargs)
+        chunks = self.get_chunks(titles, os.path.basename(filepath), **kwargs)
 
         return chunks
     
@@ -80,6 +90,19 @@ class HTMLChunkNorris:
 
         return md_file
     
+
+    @staticmethod
+    def check_string_argument_is_valid(argname:str, argvalue:str, allowed_values:List[str]):
+        """Checks that an argument has a valid value
+
+        Args:
+            argname (str): the name of the argument
+            argvalue (str): the value of the argument
+            allowed_values (List[str]): list of allowed values
+        """
+        assert argvalue in allowed_values,\
+        ValueError(f"Argument '{argname}' should be one of {allowed_values}. Got '{argvalue}'")
+    
     
     def get_toc(self, text:str, **kwargs) -> Titles:
         """Get the Table Of Content i.e the list
@@ -100,19 +123,21 @@ class HTMLChunkNorris:
         return titles
     
 
-    def get_titles(self, text:str, max_title_level:str="h4") -> Titles:
+    def get_titles(self, text:str, max_title_level_to_use:str="h4") -> Titles:
         """Gets the titles (=headers h1, h2 ...) in the text
         using regex
 
         Args:
             text (str): the titles to look for titles in
-            max_title_level (str, optional): the max level of headers to look for (included). Defaults to "h4".
+            max_title_level_to_use (str, optional): the max level of headers to look for (included). Defaults to "h4".
 
         Returns:
             Titles: a list of dicts describing titles. For more info, look at Title class
         """
+        HTMLChunkNorris.check_string_argument_is_valid("max_title_level", max_title_level_to_use, ["h1", "h2", "h3", "h4", "h5"])
+
         # Get the titles types to consider (h1, h2, ...)
-        title_types_to_consider = [f"h{i}" for i in range(1, int(max_title_level[1])+1)]
+        title_types_to_consider = [f"h{i}" for i in range(1, int(max_title_level_to_use[1])+1)]
         titles = []
         for title_level, title_type in  enumerate(title_types_to_consider):
             regex_pattern = self.regex_patterns[title_type]
@@ -350,7 +375,6 @@ class HTMLChunkNorris:
         Returns:
             Title: The title that matches the conditions
         """
-
         conditions = list(conditions.items())
         title = [t for t in titles
                 if all([condition in t.items() for condition in conditions])]
@@ -389,14 +413,59 @@ class HTMLChunkNorris:
         
         return [HTMLChunkNorris.get_title_using_condition(titles, c)
                 for c in direct_children]
-        
+    
+
+    def get_chunks(
+        self,
+        titles:Titles,
+        source_filename:str,
+        **kwargs
+        )-> Chunks:
+        """Builds the chunks based on the titles
+
+        Args:
+            titles (Titles): The titles, obtained from get_toc() method
+            max_title_level_to_use (str, optional): The lowest level of titles to consider.
+                Defaults to "h4".
+            max_chunk_word_length (int, optional): The max size a chunk can be. Defaults to 250.
+            hard_limit (bool, optional): if True, it will raise error if the chunk couldn't be chunked
+                down to max_chunk_word_length. Defaults to False. 
+
+        Returns:
+            Chunks: a list of Chunk
+        """
+        text_chunks = HTMLChunkNorris.get_chunks_text_content(titles, **kwargs)
+        # Change position of links in the text
+        text_chunks = [
+            self.change_links_format(t, **kwargs)
+            for t in text_chunks
+            ]
+        # build list of chunks object
+        chunks = []
+        for i, text in enumerate(text_chunks):
+            chunks.append({
+                "id": f"{source_filename}-{i}",
+                "text": text,
+                "token_count": len(self.tokenizer.encode(text)),
+                "word_count": len(text.split()),
+                "source_file": source_filename
+            })
+        # check that chunks don't exceed the hard token limit
+        print(chunks)
+        chunks = self.check_chunks(chunks, **kwargs)
+        print(chunks)
+
+        return chunks
+
     
     @staticmethod
-    def get_chunks(titles:Titles, max_title_level_to_use:str="h4", max_chunk_word_length:int=250, **kwargs) -> List[str]:
+    def get_chunks_text_content(
+        titles:Titles, max_title_level_to_use:str="h4", max_chunk_word_length:int=250, **kwargs
+        ) -> List[str]:
         """Builds the chunks based on the titles obtained by the get_toc() method.
 
         It will split the text recursively using the titles. Here's what happens:
-        - it takes a title and builds of chunk with the title, its content, and the content of its children
+        - it takes a title and builds of chunk text (using title + content + content of children)
         - if the chunk obtained is too big and the title has children, it will subdivide it
         - otherwise the chunk is kept as is
 
@@ -412,8 +481,8 @@ class HTMLChunkNorris:
         Returns:
             List[str]: the chunk's texts
         """
-        assert max_title_level_to_use in ["h1", "h2", "h3", "h4", "h5"],\
-            ValueError(f"Argument 'max_title_level_to_use' should be one of ['h1', 'h2', 'h3', 'h4', 'h5']. Got '{max_title_level_to_use}'")
+        HTMLChunkNorris.check_string_argument_is_valid("max_title_level_to_use", max_title_level_to_use, ["h1", "h2", "h3", "h4", "h5"])
+
         total_chunks = []
         total_used_ids = []
         # make sure titles are sorted by order of appearance
@@ -540,3 +609,117 @@ class HTMLChunkNorris:
         title_text += title["content"] + "\n" if title["content"] else "" 
         
         return title_text
+    
+
+    def change_links_format(self, text, link_placement:str="end_of_chunk", **kwargs) -> str:
+        """Removes the markdown format of the links in the text.
+        The links are treated as specified by 'link_position':
+        - None : links are removed
+        - in_sentence : the link is placed in the sentence, between parenthesis
+        - end_of_chunk : all links are added at the end of the text
+        - end_of_sentence : each link is added at the end of the sentence it is found in
+
+        Args:
+            text (str): the text to find the links in
+            link_placement (str, optional): How the links should be handled. Defaults to None.
+
+        Raises:
+            NotImplementedError: _description_
+
+        Returns:
+            str: the formated text
+        """
+        allowed_link_placements = ["remove", "end_of_chunk", "in_sentence", "end_of_sentence"]
+        HTMLChunkNorris.check_string_argument_is_valid("link_placement", link_placement, allowed_link_placements)
+
+        matches = re.finditer(self.regex_patterns["link"], text)
+        if matches is not None:
+            for i, m in enumerate(matches):
+                match link_placement:
+                    case "remove":
+                        text = text.replace(m[0], m[1])
+                    case "end_of_chunk":
+                        if i == 0:
+                            text += "\nPour plus d'informations:\n"
+                        text = text.replace(m[0], m[1])
+                        text += f"- {m[1]}: {m[2]}\n"
+                    case "in_sentence":
+                        text = text.replace(m[0], f"{m[1]} (pour plus d'informations : {m[2]})")
+                    case "end_of_sentence":
+                        link_end_position = m.span(2)[1]
+                         #next_breakpoint = HTMLChunkNorris.find_end_of_sentence(text, link_end_position)
+                        raise NotImplementedError()
+
+        return text
+
+
+    def check_chunks(self, chunks:Chunks, max_chunk_tokens:int=8191, chunk_tokens_exceeded_handling:str="raise_error", **kwargs):
+        """Checks that the chunks don't exceed the token limit, considered as a hard limit
+        If chunk_tokens_exceeded_handling is:
+        - "raise_error" -> it will raise an error in case a chunk to big is found
+        for it to be investigated.
+        - "split" -> Chunks exceeding the max size will be split to fit max_chunk_tokens
+
+        Args:
+            chunks (Chunks): The chunks obtained from the get_chunks() method
+            max_chunk_tokens (int, optional): the maximum size a chunk is allowed to be, 
+                in tokens. Defaults to 8191.
+            chunk_tokens_exceeded_handling (bool, optional): whether or not error sould be raised if a big 
+                chunk is encountered, or split. Defaults to True.
+        """
+        HTMLChunkNorris.check_string_argument_is_valid("chunk_tokens_exceeded_handling", chunk_tokens_exceeded_handling, ["raise_error", "split"])
+
+        splitted_chunks = []
+        for i, chunk in enumerate(chunks):
+            if chunk["token_count"] < max_chunk_tokens:
+                splitted_chunks.append(chunk)
+            else:
+                match chunk_tokens_exceeded_handling:
+                    case "raise_error":
+                        raise ChunkSizeExceeded((
+                            f"Found chunk bigger than the specified token limit {max_chunk_tokens}:",
+                            "You can disable this error and allow dummy splitting of this chunk by passing 'raise_error=False'",
+                            f"The chunk : {chunk}"))
+                    case "split":
+                        splitted_chunk = self.split_big_chunk(chunk, max_chunk_tokens)
+                        splitted_chunks.extend(splitted_chunk)
+        
+        return splitted_chunks
+
+
+
+    def split_big_chunk(self, chunk:Chunk, max_chunk_tokens:int=8191,) -> Chunks:
+        """Splits the chunk so that the subchunk fit un max_chunk_size
+
+        Args:
+            chunk (Chunk): _description_
+            max_chunk_tokens (int, optional): _description_. Defaults to 8191.
+
+        Returns:
+            _type_: _description_
+        """
+        # if chunk is smaller that specified limit, just return the chunk
+        if chunk["token_count"] < max_chunk_tokens:
+            return [chunk]
+        
+        split_count = (chunk["token_count"] // max_chunk_tokens) + 1
+        split_token_size = chunk["token_count"] // split_count
+        # split the chunk's text
+        tokenized_text = self.tokenizer.encode(chunk["text"])
+        splitted_text = [
+            self.tokenizer.decode(tokenized_text[i*split_token_size:(i+1)*split_token_size])
+            for i in range(split_count)
+            ]
+        # recreate subchunks from the initial chunk
+        splitted_chunk = [
+            {
+            "id": f"{chunk['id']}-{i}",
+            "text": sct, 
+            "token_count": len(self.tokenizer.encode(sct)),
+            "word_count": len(sct.split()),
+            "source_file": chunk["source_file"],
+            }
+            for i, sct in enumerate(splitted_text)
+            ]
+        
+        return splitted_chunk
