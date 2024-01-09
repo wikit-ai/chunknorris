@@ -81,7 +81,7 @@ class HTMLChunkNorris:
         return md_file
     
     
-    def get_toc(self, text:str) -> Titles:
+    def get_toc(self, text:str, **kwargs) -> Titles:
         """Get the Table Of Content i.e the list
         of titles and their relation with each other
 
@@ -92,8 +92,9 @@ class HTMLChunkNorris:
             Titles: list of dicts describing the titles. For more info, look at Title class
         """
         titles = self.get_titles(text)
-        titles = HTMLChunkNorris.get_titles_children(titles)
-        titles = HTMLChunkNorris.get_titles_parents(titles)
+        for title in titles:
+            title["children"] = HTMLChunkNorris.get_titles_children(title, titles)
+            title["parents"] = HTMLChunkNorris.get_titles_parents(title, titles)
         titles = HTMLChunkNorris.get_titles_content(titles, text)
 
         return titles
@@ -175,8 +176,8 @@ class HTMLChunkNorris:
 
 
     @staticmethod
-    def get_titles_children(titles:Titles) -> Titles:
-        """For each title, gets its children titles,
+    def get_titles_children(title:Title, titles:Titles) -> List[ShortTitle]:
+        """Gets the children of a title among titles,
         meaning the titles of its subsections.
 
         A child is:
@@ -184,60 +185,57 @@ class HTMLChunkNorris:
          - lower in terms of level (higher 'level')
 
         Args:
+            title (Title): The title for which we want the children
             titles (Titles): The titles found in the text
 
         Returns:
-            Titles: The titles, with "children" fields added
+            Titles: A list of child titles
         """
         # in the children, put the titles without their "content", "children" or "parents" fields
         child_keys_to_keep = ["id", "text", "level", "start_position", "end_position"]
-        for title in titles:
-            title_of_next_section = HTMLChunkNorris.get_title_of_next_section(title, titles)
-            if title_of_next_section is None:
-                title["children"] = [
-                    {k:v for k,v in t.items() if k in child_keys_to_keep}
-                    for t in titles
-                    if t["start_position"] > title["end_position"]
-                    ]
-            else:
-                title["children"] = [
-                    {k:v for k,v in t.items() if k in child_keys_to_keep}
-                    for t in titles
-                    if t["start_position"] > title["end_position"]
-                    and t["end_position"] < title_of_next_section["start_position"]
-                    ]
-
-        return titles
+        title_of_next_section = HTMLChunkNorris.get_title_of_next_section(title, titles)
+        if title_of_next_section is None:
+            return [
+                {k:v for k,v in t.items() if k in child_keys_to_keep}
+                for t in titles
+                if t["start_position"] > title["end_position"]
+                ]
+        else:
+            return [
+                {k:v for k,v in t.items() if k in child_keys_to_keep}
+                for t in titles
+                if t["start_position"] > title["end_position"]
+                and t["end_position"] < title_of_next_section["start_position"]
+                ]
 
 
     @staticmethod
-    def get_titles_parents(titles:Titles) -> Titles:
-        """Gets the parents of each title
+    def get_titles_parents(title:Title, titles:Titles) -> List[ShortTitle]:
+        """Gets the parents of the specified title
 
-        Parents are titles of the section that a title 
+        Parents are titles of the section that the specified title 
         belongs to.
 
         Args:
+            title (Title): The title we want the parents of
             titles (Titles): The titles found in the text
 
         Returns:
-            Titles: the titles with "parents" section added
+            List[ShortTitle]: A list of parents
         """
         # in the parents, put the titles without their "content", "children" or "parents" fields
         parent_keys_to_keep = ["id", "text", "level", "start_position", "end_position"]
-        for title in titles:
-            parents = []
-            # find the title's parent, and consecutive parents of parents
-            direct_parent = title
-            while direct_parent:
-                direct_parent = HTMLChunkNorris.get_direct_parent_of_title(direct_parent, titles)
-                if direct_parent is not None:
-                    direct_parent = {k:v for k,v in direct_parent.items()
-                                     if k in parent_keys_to_keep}
-                    parents.append(direct_parent)
-            title["parents"] = parents
+        parents = []
+        # find the title's parent, and consecutive parents of parents
+        direct_parent = title
+        while direct_parent:
+            direct_parent = HTMLChunkNorris.get_direct_parent_of_title(direct_parent, titles)
+            if direct_parent is not None:
+                direct_parent = {k:v for k,v in direct_parent.items()
+                                    if k in parent_keys_to_keep}
+                parents.append(direct_parent)
 
-        return titles
+        return parents
 
 
     @staticmethod
@@ -394,7 +392,7 @@ class HTMLChunkNorris:
         
     
     @staticmethod
-    def get_chunks(titles:Titles, max_title_level_to_use:str="h4", max_chunk_word_length:int=250) -> List[str]:
+    def get_chunks(titles:Titles, max_title_level_to_use:str="h4", max_chunk_word_length:int=250, **kwargs) -> List[str]:
         """Builds the chunks based on the titles obtained by the get_toc() method.
 
         It will split the text recursively using the titles. Here's what happens:
