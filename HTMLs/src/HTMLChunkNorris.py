@@ -694,8 +694,10 @@ class HTMLChunkNorris:
         Returns:
             str: the text to put in the chunk for that title
         """
+        title_text = ""
         # add # before title (markdown style)
-        title_text = "#" * (title["level"] + 1) + " " + title["text"] + "\n"
+        if title["text"]:
+            title_text += "#" * (title["level"] + 1) + " " + title["text"] + "\n"
         # add title content
         if with_content:
             title_text += title["content"] + "\n" if title["content"] else ""
