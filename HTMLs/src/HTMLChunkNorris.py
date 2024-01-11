@@ -5,6 +5,10 @@ from typing import Dict, List, Tuple, TypedDict
 from markdownify import markdownify
 import tiktoken
 
+abspath = os.path.abspath(__file__)
+dname = os.path.dirname(abspath)
+os.chdir(dname)
+
 from utils.split_into_sentences import split_into_sentences
 
 
@@ -210,7 +214,7 @@ class HTMLChunkNorris:
         for i, title in enumerate(titles):
             if i + 1 < len(titles):
                 next_title = titles[i + 1]
-                content = text[title["end_position"] : next_title["start_position"]]
+                content = text[max(0, title["end_position"]) : next_title["start_position"]]
             else:  # its the last title
                 content = text[title["end_position"] :]
             title["content"] = HTMLChunkNorris.cleanup_text(content)
@@ -480,8 +484,8 @@ class HTMLChunkNorris:
             "id": -1,
             "text": "",
             "level": -1,
-            "start_position": 0,
-            "end_position": 0,
+            "start_position": -1,
+            "end_position": -1,
                 }
         titles.insert(0, dummy_title)
 
@@ -567,7 +571,9 @@ class HTMLChunkNorris:
                     chunk, max_chunk_word_length
                 ) and HTMLChunkNorris.title_has_children(title, max_title_level_to_use):
                     titles_to_subdivide = [title]
-                    total_chunks.append(HTMLChunkNorris.create_title_text(title))
+                    # if the title has a content, create a chunk just with this title and its content
+                    if title["content"]:
+                        total_chunks.append(HTMLChunkNorris.create_title_text(title))
                     total_used_ids.append(title["id"])
                 # if chunk is OK, or too big but can't be subdivided with children
                 else:
@@ -591,7 +597,8 @@ class HTMLChunkNorris:
                                 child, max_title_level_to_use
                             ):
                                 new_titles_to_subdivide.append(child)
-                                total_chunks.append(HTMLChunkNorris.create_title_text(child))
+                                if child["content"]:
+                                    total_chunks.append(HTMLChunkNorris.create_title_text(child))
                                 total_used_ids.append(child["id"])
                             else:
                                 total_chunks.append(chunk)
@@ -659,7 +666,7 @@ class HTMLChunkNorris:
                 parent = HTMLChunkNorris.get_title_using_condition(
                     titles, {"id": parent["id"]}
                 )
-                chunk += parent["text"]
+                chunk += HTMLChunkNorris.create_title_text(parent, with_content=False)
         # add title + content of current title
         chunk += HTMLChunkNorris.create_title_text(title)
         used_titles_ids = [title["id"]]
@@ -675,13 +682,14 @@ class HTMLChunkNorris:
         return chunk, used_titles_ids
 
     @staticmethod
-    def create_title_text(title: Title) -> str:
-        """Generate the text of the title, using the title name and it's content.
-        If sentences_to_keep is None, all the text content is used, otherwise
-        only n sentences are kept
+    def create_title_text(title: Title, with_content:bool=True) -> str:
+        """Generate the text of the title, using the title name and 
+        its content if 'with_content' is set tot True
+
 
         Args:
             title (Title): a title element
+            with_content (bool): whether or not the title content should be added
 
         Returns:
             str: the text to put in the chunk for that title
@@ -689,7 +697,8 @@ class HTMLChunkNorris:
         # add # before title (markdown style)
         title_text = "#" * (title["level"] + 1) + " " + title["text"] + "\n"
         # add title content
-        title_text += title["content"] + "\n" if title["content"] else ""
+        if with_content:
+            title_text += title["content"] + "\n" if title["content"] else ""
 
         return title_text
 
