@@ -181,7 +181,7 @@ class HTMLChunkNorris:
                 end_position = match.end()
                 titles.append(
                     {
-                        "text": title_text,
+                        "text": HTMLChunkNorris.cleanup_text(title_text),
                         "level": title_level,
                         "start_position": start_position,
                         "end_position": end_position,
@@ -567,6 +567,7 @@ class HTMLChunkNorris:
                     chunk, max_chunk_word_length
                 ) and HTMLChunkNorris.title_has_children(title, max_title_level_to_use):
                     titles_to_subdivide = [title]
+                    total_chunks.append(HTMLChunkNorris.create_title_text(title))
                     total_used_ids.append(title["id"])
                 # if chunk is OK, or too big but can't be subdivided with children
                 else:
@@ -590,6 +591,7 @@ class HTMLChunkNorris:
                                 child, max_title_level_to_use
                             ):
                                 new_titles_to_subdivide.append(child)
+                                total_chunks.append(HTMLChunkNorris.create_title_text(child))
                                 total_used_ids.append(child["id"])
                             else:
                                 total_chunks.append(chunk)
@@ -657,7 +659,7 @@ class HTMLChunkNorris:
                 parent = HTMLChunkNorris.get_title_using_condition(
                     titles, {"id": parent["id"]}
                 )
-                chunk += HTMLChunkNorris.create_title_text(parent, sentences_to_keep=1)
+                chunk += parent["text"]
         # add title + content of current title
         chunk += HTMLChunkNorris.create_title_text(title)
         used_titles_ids = [title["id"]]
@@ -673,15 +675,13 @@ class HTMLChunkNorris:
         return chunk, used_titles_ids
 
     @staticmethod
-    def create_title_text(title: Title, sentences_to_keep:int=None) -> str:
+    def create_title_text(title: Title) -> str:
         """Generate the text of the title, using the title name and it's content.
         If sentences_to_keep is None, all the text content is used, otherwise
         only n sentences are kept
 
         Args:
             title (Title): a title element
-            sentences_to_keep (int): the amount of sentences to keep. If None,
-                all the content is kept. Defaults to None.
 
         Returns:
             str: the text to put in the chunk for that title
@@ -689,11 +689,7 @@ class HTMLChunkNorris:
         # add # before title (markdown style)
         title_text = "#" * (title["level"] + 1) + " " + title["text"] + "\n"
         # add title content
-        if sentences_to_keep and title["content"]:
-            content = " ".join(split_into_sentences(title["content"])[:sentences_to_keep])
-            title_text += content + "\n"
-        else:
-            title_text += title["content"] + "\n" if title["content"] else ""
+        title_text += title["content"] + "\n" if title["content"] else ""
 
         return title_text
 
