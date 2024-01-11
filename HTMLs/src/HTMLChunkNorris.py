@@ -94,6 +94,28 @@ class HTMLChunkNorris:
             raise HTMLChunkNorrisException(f"Can't open JSON file : {e}")
 
         return md_file
+    
+
+    @staticmethod
+    def read_html_file(filepath: str) -> str:
+        """Reads a html file and applies markdownify to it
+
+        Args:
+            filepath (str): path to a json file
+
+        Returns:
+            str: the text, mardkownified
+        """
+        try:
+            with open(filepath, "r") as f:
+                read_file = f.read()
+            md_file = markdownify(
+                read_file, strip=["figure", "img"], bullets="-*+"
+            )
+        except Exception as e:
+            raise HTMLChunkNorrisException(f"Can't open HTML file : {e}")
+
+        return md_file
 
     @staticmethod
     def check_string_argument_is_valid(
@@ -121,6 +143,7 @@ class HTMLChunkNorris:
             Titles: list of dicts describing the titles. For more info, look at Title class
         """
         titles = self.get_titles(text)
+        titles = HTMLChunkNorris._get_text_before_titles(titles, text)
         for title in titles:
             title["children"] = HTMLChunkNorris.get_titles_children(title, titles)
             title["parents"] = HTMLChunkNorris.get_titles_parents(title, titles)
@@ -203,7 +226,7 @@ class HTMLChunkNorris:
             str: the cleanedup text
         """
         # remove special characters
-        special_chars = ["**", "\xa0"]
+        special_chars = ["**", "\xa0", "\*"]
         for char in special_chars:
             text = text.replace(char, "")
         # remove white spaces and newlines
@@ -438,6 +461,30 @@ class HTMLChunkNorris:
             HTMLChunkNorris.get_title_using_condition(titles, c)
             for c in direct_children
         ]
+
+
+    @staticmethod
+    def _get_text_before_titles(titles:Titles, text:str) -> Titles:
+        """Some documents may have text that arrives before any header.
+        This function create a dummy title in the toc, at the very begining
+        (like a parent of all titles) so that this test is taken into account
+
+        Args:
+            titles (Titles): the titles detected in the document
+            text (str): the document's content
+        """
+        # insert new dummy title
+        dummy_title = {
+            "id": -1,
+            "text": "",
+            "level": -1,
+            "start_position": 0,
+            "end_position": 0,
+                }
+        titles.insert(0, dummy_title)
+
+        return titles
+
 
     def get_chunks(self, titles: Titles, source_filename: str, **kwargs) -> Chunks:
         """Builds the chunks based on the titles
