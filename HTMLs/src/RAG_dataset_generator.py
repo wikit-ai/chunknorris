@@ -1,6 +1,7 @@
 import json
 import os
 from typing import Any, Callable
+import re
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -193,11 +194,12 @@ class RAGDatasetGenerator:
             _type_: _description_
         """
         try:
+            content = re.match(r'\["(.*)"\]', content)[0]
             content = json.loads(content)
             if isinstance(content, list):
                 return content[:elems_in_list]
         except Exception:
-            print(f"Generated content is not list of strings : {content} . \nRetrying...")
+            print(f"Generated content is not list of strings : {content}\nRetrying...")
             return None
         
 
@@ -259,7 +261,7 @@ class RAGDatasetGenerator:
             })
 
         save_path = os.path.join(os.path.dirname(chunks_dir), f"generated_data_{self.model.replace('.', '-')}.json")
-        with open(save_path, "w", encode="utf8") as f:
+        with open(save_path, "w", encoding="utf8") as f:
             json.dump(records, f, ensure_ascii=False)
             print(f"Dataset saved at : {save_path}")
 
