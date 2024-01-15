@@ -225,7 +225,7 @@ class RAGDatasetGenerator:
         return response
     
 
-    def generate_RAG_dataset(self, chunks_dir:str, filenames:list[str]=[], keys_to_text:list[Any]=["text"]) -> None:
+    def generate_RAG_dataset(self, chunks_dir:str, filenames:list[str]=[], keys_to_text:list[Any]=["text"], **kwargs) -> None:
         """Generates a RAG dataset from texts. The dataset is saved in the parent
         directory of chunks_dir.
 
@@ -248,9 +248,9 @@ class RAGDatasetGenerator:
                 os.path.join(chunks_dir, filename),
                 keys_to_text)
             
-            question = self.generate_questions_from_chunk(text, 1)[0]
-            answer = self.generate_answer(question, text)
-            short_answer = self.generate_answer(question, text, short=True)
+            question = self.generate_questions_from_chunk(text, 1, **kwargs)[0]
+            answer = self.generate_answer(question, text, **kwargs)
+            short_answer = self.generate_answer(question, text, short=True, **kwargs)
             records.append({
                 "query": question,
                 "long_answer": answer,
@@ -259,8 +259,8 @@ class RAGDatasetGenerator:
             })
 
         save_path = os.path.join(os.path.dirname(chunks_dir), f"generated_data_{self.model.replace('.', '-')}.json")
-        with open(save_path, "w") as f:
-            json.dump(records, f)
+        with open(save_path, "w", encode="utf8") as f:
+            json.dump(records, f, ensure_ascii=False)
             print(f"Dataset saved at : {save_path}")
 
 
