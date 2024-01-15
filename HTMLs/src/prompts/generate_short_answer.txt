@@ -3,9 +3,6 @@ Considering the following question and pieces of information :
 Question : {question}
 Informations : {context}
 ---------------
-What is the KEYWORD(S) allowing to answer the question ? Generated answer must be with as little characters as possible.
+What is the KEYWORD(S) allowing to answer the question ? Generated questions must be formatted in JSON array with string keywords.
 --------------
-Example :
-Question : De quel montant total le Fonds de Soutien aux Œuvres Animées dispose-t-il ?
-Informations : Le montant total de l'enveloppe du Fonds de Soutien aux Œuvres Animées en 2023 est de 380 000€.
-Réponse : ["380 000€"]
+Example output : ["keyword1", "keyword2", ...]
