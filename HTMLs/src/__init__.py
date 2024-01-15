@@ -1,4 +1,5 @@
 from .ChromaDBEmbedder import ChromaDBEmbedder
+from .RAG_dataset_generator import RAGDatasetGenerator
 from .VoyageAIEmbeddingFunction import VoyageAIEmbeddingFunction
 from .SentenceTransformerEmbeddingFunction import SentenceTransformerEmbeddingFunction
 from .ModelConfig import ModelConfig

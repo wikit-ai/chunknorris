@@ -1,0 +1,7 @@
+Answer the following question in french:
+-------------------
+{question}
+-------------------
+Based on the following information :
+-------------------
+{context}
