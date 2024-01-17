@@ -9,8 +9,10 @@ abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
 os.chdir(dname)
 
-from utils.split_into_sentences import split_into_sentences
+from ..utils.split_into_sentences import split_into_sentences
 
+# specify working dir
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # Types
 class ShortTitle(TypedDict, total=True):
@@ -62,12 +64,36 @@ class HTMLChunkNorris:
     def __init__(self):
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
+
     def __call__(self, filepath: str, **kwargs) -> str:
         text = HTMLChunkNorris.read_json_file(filepath)
         titles = self.get_toc(text, **kwargs)
         chunks = self.get_chunks(titles, os.path.basename(filepath), **kwargs)
 
         return chunks
+    
+    
+    def chunk_entire_directory(self, input_dir:str, output_dir:str, min_chunk_wordcount:int=15, **kwargs) -> None:
+        """Chunks the json files of entire directory
+
+        Args:
+            input_dir (str): the path to directory
+            output_dir (str): the directory where chunks will be saved
+            min_chunk_wordcount (int, optional): minimum words to consider saving the chunks. Defaults to 15.
+        """
+        if os.path.exists(output_dir) and os.listdir(output_dir):
+            raise ValueError("Output directory already contains data !")
+        elif not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+
+        filenames = os.listdir(input_dir)
+        for fn in filenames:
+            chunks = self.__call__(os.path.join(input_dir, fn), **kwargs)
+            chunks = [c for c in chunks if c["word_count"] > min_chunk_wordcount]
+            for c in chunks:
+                with open(os.path.join(output_dir, c["id"]), "w", encoding="utf8") as f:
+                    json.dump(c, f, ensure_ascii=False)
+
 
     @property
     def regex_patterns(self):
@@ -216,7 +242,7 @@ class HTMLChunkNorris:
                 next_title = titles[i + 1]
                 content = text[max(0, title["end_position"]) : next_title["start_position"]]
             else:  # its the last title
-                content = text[title["end_position"] :]
+                content = text[max(0, title["end_position"]) :]
             title["content"] = HTMLChunkNorris.cleanup_text(content)
 
         return titles
@@ -473,7 +499,7 @@ class HTMLChunkNorris:
     def _get_text_before_titles(titles:Titles, text:str) -> Titles:
         """Some documents may have text that arrives before any header.
         This function create a dummy title in the toc, at the very begining
-        (like a parent of all titles) so that this test is taken into account
+        (like a parent of all titles) so that this text is taken into account
 
         Args:
             titles (Titles): the titles detected in the document
