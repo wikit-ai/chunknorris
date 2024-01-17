@@ -1,5 +1,2 @@
-from .ChromaDBEmbedder import ChromaDBEmbedder
+from .GetDataFromMongo import GetDataFromMongo
 from .RAG_dataset_generator import RAGDatasetGenerator
-from .VoyageAIEmbeddingFunction import VoyageAIEmbeddingFunction
-from .SentenceTransformerEmbeddingFunction import SentenceTransformerEmbeddingFunction
-from .ModelConfig import ModelConfig
