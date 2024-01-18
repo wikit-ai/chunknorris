@@ -9,8 +9,6 @@ abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
 os.chdir(dname)
 
-from ..utils.split_into_sentences import split_into_sentences
-
 # specify working dir
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -65,11 +63,10 @@ class HTMLChunkNorris:
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
 
-    def __call__(self, filepath: str, **kwargs) -> str:
-        file_content = HTMLChunkNorris.read_file(filepath)
-        text = HTMLChunkNorris.apply_markdownify(file_content)
+    def __call__(self, html_text: str, **kwargs) -> str:
+        text = HTMLChunkNorris.apply_markdownify(html_text)
         titles = self.get_toc(text, **kwargs)
-        chunks = self.get_chunks(titles, os.path.basename(filepath), **kwargs)
+        chunks = self.get_chunks(titles, **kwargs)
 
         return chunks
     
@@ -90,8 +87,8 @@ class HTMLChunkNorris:
         filenames = os.listdir(input_dir)
         for fn in filenames:
             filepath = os.path.join(input_dir, fn)
-            chunks = self.__call__(filepath, **kwargs)
-            chunks = [c for c in chunks if c["word_count"] > min_chunk_wordcount]
+            html_text = HTMLChunkNorris.read_file(filepath)
+            chunks = self.__call__(html_text, **kwargs)
             file_content = HTMLChunkNorris.format_output(filepath, chunks)
             with open(os.path.join(output_dir, fn), "w", encoding="utf8") as f:
                 json.dump(file_content, f, ensure_ascii=False)
@@ -166,6 +163,7 @@ class HTMLChunkNorris:
         assert argvalue in allowed_values, ValueError(
             f"Argument '{argname}' should be one of {allowed_values}. Got '{argvalue}'"
         )
+
 
     def get_toc(self, text: str, **kwargs) -> Titles:
         """Get the Table Of Content i.e the list
@@ -521,16 +519,11 @@ class HTMLChunkNorris:
         return titles
 
 
-    def get_chunks(self, titles: Titles, source_filename: str, **kwargs) -> Chunks:
+    def get_chunks(self, titles: Titles, **kwargs) -> Chunks:
         """Builds the chunks based on the titles
 
         Args:
             titles (Titles): The titles, obtained from get_toc() method
-            max_title_level_to_use (str, optional): The lowest level of titles to consider.
-                Defaults to "h4".
-            max_chunk_word_length (int, optional): The max size a chunk can be. Defaults to 250.
-            hard_limit (bool, optional): if True, it will raise error if the chunk couldn't be chunked
-                down to max_chunk_word_length. Defaults to False.
 
         Returns:
             Chunks: a list of Chunk
@@ -543,10 +536,9 @@ class HTMLChunkNorris:
         for i, text in enumerate(text_chunks):
             chunks.append(
                 {
-                    "id": f"{source_filename.replace('.json', '')}-{i}.json",
+                    "id": f"{i}",
                     "token_count": len(self.tokenizer.encode(text)),
                     "word_count": len(text.split()),
-                    "source_file": source_filename,
                     "text": text,
                 }
             )
@@ -745,7 +737,7 @@ class HTMLChunkNorris:
 
         Args:
             text (str): the text to find the links in
-            link_placement (str, optional): How the links should be handled. Defaults to None.
+            link_placement (str, optional): How the links should be handled. Defaults to end_of_chunk.
 
         Raises:
             NotImplementedError: _description_
@@ -788,6 +780,7 @@ class HTMLChunkNorris:
     def check_chunks(
         self,
         chunks: Chunks,
+        min_chunk_wordcount = 15,
         max_chunk_tokens: int = 8191,
         chunk_tokens_exceeded_handling: str = "raise_error",
         **kwargs,
@@ -802,15 +795,17 @@ class HTMLChunkNorris:
             chunks (Chunks): The chunks obtained from the get_chunks() method
             max_chunk_tokens (int, optional): the maximum size a chunk is allowed to be,
                 in tokens. Defaults to 8191.
-            chunk_tokens_exceeded_handling (bool, optional): whether or not error sould be raised if a big
-                chunk is encountered, or split. Defaults to True.
+            chunk_tokens_exceeded_handling (str, optional): whether or not error sould be raised if a big
+                chunk is encountered, or split. Defaults to raise_error.
         """
         HTMLChunkNorris.check_string_argument_is_valid(
             "chunk_tokens_exceeded_handling",
             chunk_tokens_exceeded_handling,
             ["raise_error", "split"],
         )
-
+        # remove small chunks
+        chunks = [c for c in chunks if c["word_count"] > min_chunk_wordcount]
+        # split too big chunks
         splitted_chunks = []
         for chunk in chunks:
             if chunk["token_count"] < max_chunk_tokens:
@@ -862,10 +857,9 @@ class HTMLChunkNorris:
         # recreate subchunks from the initial chunk
         splitted_chunk = [
             {
-                "id": f"{chunk['id'].replace('.json', '')}-{i}.json",
+                "id": f"{chunk['id']}-{i}",
                 "token_count": len(self.tokenizer.encode(sct)),
                 "word_count": len(sct.split()),
-                "source_file": chunk["source_file"],
                 "text": sct,
             }
             for i, sct in enumerate(splitted_text)

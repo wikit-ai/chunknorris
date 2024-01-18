@@ -1,3 +1,29 @@
+def read_file(filepath: str, return_full_content:bool=False) -> str:
+    """Reads a html or json file
+
+    Args:
+        filepath (str): path to a file. must end with .json or .html
+        return_full_content (bool): Only applies to JSON files. Indicates whether or not
+            the entire content of the file is returned or just the text content.
+    Returns:
+        str: the text, mardkownified
+    """
+    try:
+        with open(filepath, "r") as f:
+            if filepath.endswith(".json"):
+                file = json.load(f)
+                if not return_full_content:
+                    file = file["hasPart"][0]["text"]
+            elif filepath.endswith(".html"):
+                file = f.read()
+            else:
+                raise HTMLChunkNorrisException(f"Can only open JSON or HTML files")
+    except Exception as e:
+        raise HTMLChunkNorrisException(f"Can't open file : {e}")
+
+    return file
+
+
 import re
 alphabets= "([A-Za-z])"
 prefixes = "(Mr|St|Mrs|Ms|Dr)[.]"
