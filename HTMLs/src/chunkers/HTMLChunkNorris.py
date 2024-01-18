@@ -66,7 +66,8 @@ class HTMLChunkNorris:
 
 
     def __call__(self, filepath: str, **kwargs) -> str:
-        text = HTMLChunkNorris.read_json_file(filepath)
+        file_content = HTMLChunkNorris.read_file(filepath)
+        text = HTMLChunkNorris.apply_markdownify(file_content)
         titles = self.get_toc(text, **kwargs)
         chunks = self.get_chunks(titles, os.path.basename(filepath), **kwargs)
 
@@ -88,11 +89,12 @@ class HTMLChunkNorris:
 
         filenames = os.listdir(input_dir)
         for fn in filenames:
-            chunks = self.__call__(os.path.join(input_dir, fn), **kwargs)
+            filepath = os.path.join(input_dir, fn)
+            chunks = self.__call__(filepath, **kwargs)
             chunks = [c for c in chunks if c["word_count"] > min_chunk_wordcount]
-            for c in chunks:
-                with open(os.path.join(output_dir, c["id"]), "w", encoding="utf8") as f:
-                    json.dump(c, f, ensure_ascii=False)
+            file_content = HTMLChunkNorris.format_output(filepath, chunks)
+            with open(os.path.join(output_dir, fn), "w", encoding="utf8") as f:
+                json.dump(file_content, f, ensure_ascii=False)
 
 
     @property
@@ -105,49 +107,50 @@ class HTMLChunkNorris:
             "h5": re.compile(r"^#{5} (.+)\n", re.MULTILINE),
             "link": re.compile(r"\[(.+?)\]\((https?:.+?)\)"),
         }
-
-    @staticmethod
-    def read_json_file(filepath: str) -> str:
-        """Reads a json file and applies markdownify to it
-
-        Args:
-            filepath (str): path to a json file
-
-        Returns:
-            str: the text, mardkownified
-        """
-        try:
-            with open(filepath, "r") as f:
-                read_file = json.load(f)
-            md_file = markdownify(
-                read_file["hasPart"][0]["text"], strip=["figure", "img"], bullets="-*+"
-            )
-        except Exception as e:
-            raise HTMLChunkNorrisException(f"Can't open JSON file : {e}")
-
-        return md_file
     
 
-    @staticmethod
-    def read_html_file(filepath: str) -> str:
-        """Reads a html file and applies markdownify to it
+    def apply_markdownify(html_text):
+        """Applies markdownify to the html text
 
         Args:
-            filepath (str): path to a json file
+            html_text (str): the text of the html file
 
+        Returns:
+            _type_: _description_
+        """
+        md_text = markdownify(
+                html_text, strip=["figure", "img"], bullets="-*+"
+            )
+        
+        return md_text
+
+
+    @staticmethod
+    def read_file(filepath: str, return_full_content:bool=False) -> str:
+        """Reads a html or json file
+
+        Args:
+            filepath (str): path to a file. must end with .json or .html
+            return_full_content (bool): Only applies to JSON files. Indicates whether or not
+                the entire content of the file is returned or just the text content.
         Returns:
             str: the text, mardkownified
         """
         try:
             with open(filepath, "r") as f:
-                read_file = f.read()
-            md_file = markdownify(
-                read_file, strip=["figure", "img"], bullets="-*+"
-            )
+                if filepath.endswith(".json"):
+                    file = json.load(f)
+                    if not return_full_content:
+                        file = file["hasPart"][0]["text"]
+                elif filepath.endswith(".html"):
+                    file = f.read()
+                else:
+                    raise HTMLChunkNorrisException(f"Can only open JSON or HTML files")
         except Exception as e:
-            raise HTMLChunkNorrisException(f"Can't open HTML file : {e}")
+            raise HTMLChunkNorrisException(f"Can't open file : {e}")
 
-        return md_file
+        return file
+
 
     @staticmethod
     def check_string_argument_is_valid(
@@ -869,3 +872,28 @@ class HTMLChunkNorris:
         ]
 
         return splitted_chunk
+    
+    @staticmethod
+    def format_output(filepath:str, chunks:Chunks) -> dict:
+        """Formats the chunks according to the input json file
+        i.e places the chunks inside the key [hasPart]
+
+        Args:
+            filepath (str): path toward the json file
+            chunks (Chunks): the chunks
+
+        Returns:
+            dict: the formatted file content
+        """
+        file_content = HTMLChunkNorris.read_file(filepath, return_full_content=True)
+        chunks = [
+            {
+                "@type": "DocumentChunk", 
+                "text": c["text"],
+                "position": i,
+            } for i, c in enumerate(chunks)]
+        
+        file_content["hasPart"] = chunks
+
+        return file_content
+
