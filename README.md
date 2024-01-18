@@ -15,19 +15,44 @@ The package features multiple ***chunkers*** that can be used independently depe
 
 All chunkers follow a similar logic :
 - Extract table of contents (= headers)
-- Remove images, figures, etc...
 - Build chunks using the text content of a part, and put the titles of the parts it belongs to on top
 
-### HTMLChunkNorris
+### MarkdownChunkNorris
 
-This chunker is meant to be used **on html formatted text**. It may also work on markdown text if the format used for header is [Setext (and not atx !)](https://golem.ph.utexas.edu/~distler/maruku/markdown_syntax.html#header).
+This chunker is meant to be used **on markdown-formatted text**. 
+
+Note: When calling the chunker, **you need to specify the header style** of your markdown text ([ATX or Setext](https://golem.ph.utexas.edu/~distler/maruku/markdown_syntax.html#header)). By default it will consider "Setext" heading style.
 
 #### Usage
 
 For chunking a json file :
 
 ```py
-from chunkers.HTMLChunkNorris import HTMLChunkNorris
+from chunkers import MarkdownChunkNorris
+
+chunker = MarkdownChunkNorris()
+html_text = MarkdownChunkNorris.read_file("path_to_my_file.json")
+header_style = "atx" # or "setext" depending on headers in your text
+chunks = chunker(html_text, header_style=header_style)
+```
+
+Instead, if you wish to chunk ***an entire folder*** of json_files
+```py
+INPUT_FOLDER = "./my_folder_with_json_files/"
+OUTPUT_FOLDER = "./my_empty_folder/"
+hcn.chunk_entire_directory(INPUT_FOLDER, OUTPUT_FOLDER)
+```
+
+### HTMLChunkNorris
+
+This chunker is meant to be used **on html-formatted text**. Behind the scene, it uses markdownify to transform the text to markdown with "setex"-style headers and uses MarkdownChunkNorris to process it.
+
+#### Usage
+
+For chunking a json file :
+
+```py
+from chunkers import HTMLChunkNorris
 
 hcn = HTMLChunkNorris()
 html_text = HTMLChunkNorris.read_file("path_to_my_file.json")
@@ -41,29 +66,31 @@ OUTPUT_FOLDER = "./my_empty_folder/"
 hcn.chunk_entire_directory(INPUT_FOLDER, OUTPUT_FOLDER)
 ```
 
-#### Advanced usage
+### Advanced usage of chunkers
 
-Additionally, the chunker can take a number of argument allowing to modifiy its behavior:
+Additionally, the chunkers can take a number of argument allowing to modifiy its behavior:
 
 ```py
-from src.chunkers.HTMLChunkNorris import HTMLChunkNorris
+from chunkers import HTMLChunkNorris, MarkdownChunkNorris
 
 INPUT_FOLDER = "path/to/my_folder"
 OUTPUT_FOLDER = f"{INPUT_FOLDER}-chunked"
 
-html_cn = HTMLChunkNorris()
-html_cn.chunk_entire_directory(
+chunker = HTMLChunkNorris() # or MarkdownChunkNorris()
+chunker.chunk_entire_directory(
     INPUT_FOLDER,
     OUTPUT_FOLDER,
     max_title_level_to_use="h3",
     max_chunk_word_length=250,
     link_placement="in_sentence",
-    chunk_tokens_exceeded_handling="split"
+    max_chunk_tokens=8191,
+    chunk_tokens_exceeded_handling="split",
+    min_chunk_wordcount=15,
     )
 ```
 
 ***max_title_level_to_use*** 
-(str): The maximum (included) level of headers take into account for chunking. Must be a string of type "hx" with x being the title level Defaults to "h4".
+(str): The maximum (included) level of headers take into account for chunking. For example, if "h3" is set, then "h4" and "h5" titles won't be used. Must be a string of type "hx" with x being the title level. Defaults to "h4".
 
 ***max_chunk_word_length***
 (int): The maximum size (soft limit, in words) a chunk can be. Chunk bigger that this size will be chunked using lower level headers, until no lower level headers are available. Defaults to 250.
@@ -85,8 +112,8 @@ Options:
 - "split": split the chunks arbitrarily sothat each chunk has a size lower than max_chunk_tokens
 
 ***min_chunk_wordcount***
-(int): Minimum number of words to consider saving the chunks. Chunks with less words will be discarded. Defaults to 15.
+(int): Minimum number of words to consider keeping the chunks. Chunks with less words will be discarded. Defaults to 15.
 
 ### PDFChunkNorris
 
-#TODO
+#TODO:
