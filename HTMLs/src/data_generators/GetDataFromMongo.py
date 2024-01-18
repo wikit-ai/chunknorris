@@ -10,15 +10,23 @@ from tqdm import tqdm
 tqdm.pandas()
 load_dotenv()
 
-class GetDataFromMongo:
-    """Gets queries/answers/chunks from mongo
-    Usage :
-    ```py
+
+"""Gets queries/answers/chunks from mongo, using 
+an llm_app_id or organization_id
+
+Usage :
+- as a class:
+
     mongo = GetDataFromMongo(os.getenv("MONGO_CONNECTION_STRING"))
     data = mongo(llm_app_id="myllmappid")
-    ```
-    You may provide an llm_app_id or organization_id
-    """
+
+- as command line:
+
+    python src/data_generator/GetDataFromMongo.py --llm_app_id "yourid"
+
+"""
+
+class GetDataFromMongo:
     def __init__(self, connection_string:str, db_name:str="ProdSemantics"):
         """_summary_
 
