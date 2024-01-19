@@ -14,3 +14,6 @@ __pycache__
 # specific files
 WikitPDFParser_Output.pdf
 table.html
+
+# vs-code stuff
+*code-workspace
