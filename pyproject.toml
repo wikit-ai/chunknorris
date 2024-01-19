@@ -1,0 +1,24 @@
+[project]
+name = "chunknorris"
+version = "0.0.1"
+authors = [
+  { name="Mathieu Ciancone", email="mathieu@wikit.ai" },
+]
+description = "A package for chunking documents from various formats"
+keywords = ["chunk", "document", "split", "html", "markdown", "pdf", "header"]
+readme = {file = "README.md", content-type = "text/markdown"}
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "markdownify>=0.11.6",
+  "tqdm>=4.66.1",
+  "tiktoken>=0.5.2",
+]
+
+[project.urls]
+Homepage = "https://gitlab.com/wikit/research-and-development/chunk-norris"
+Issues = "https://gitlab.com/wikit/research-and-development/chunk-norris/-/issues"
