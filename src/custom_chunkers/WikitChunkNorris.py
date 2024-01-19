@@ -4,7 +4,7 @@ from ..chunkers.HTMLChunkNorris import HTMLChunkNorris
 from ..types.types import *
 
 # specify working dir
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+# os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 class WikitChunkNorris(HTMLChunkNorris):
     def __init__(self):

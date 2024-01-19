@@ -7,7 +7,7 @@ from ..exceptions.exceptions import *
 from ..types.types import *
 
 # specify working dir
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+# os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # ChunkNorris
 class MarkdownChunkNorris:
@@ -57,7 +57,7 @@ class MarkdownChunkNorris:
             Titles: list of dicts describing the titles. For more info, look at Title class
         """
         titles = self.get_titles(text, **kwargs)
-        titles = MarkdownChunkNorris._get_text_before_titles(titles, text)
+        titles = MarkdownChunkNorris._get_text_before_titles(titles)
         for title in titles:
             title["children"] = MarkdownChunkNorris._get_titles_children(title, titles)
             title["parents"] = MarkdownChunkNorris._get_titles_parents(title, titles)
@@ -120,7 +120,7 @@ class MarkdownChunkNorris:
                 end_position = match.end()
                 titles.append(
                     {
-                        "text": MarkdownChunkNorris.cleanup_text(title_text),
+                        "text": title_text,
                         "level": title_level,
                         "start_position": start_position,
                         "end_position": end_position,
@@ -153,7 +153,7 @@ class MarkdownChunkNorris:
                 content = text[max(0, title["end_position"]) : next_title["start_position"]]
             else:  # its the last title
                 content = text[max(0, title["end_position"]) :]
-            title["content"] = MarkdownChunkNorris.cleanup_text(content)
+            title["content"] = content
 
         return titles
 
@@ -172,9 +172,7 @@ class MarkdownChunkNorris:
         for char in special_chars:
             text = text.replace(char, "")
         # remove white spaces and newlines
-        text = " ".join(text.split())
-        # restore newline for bullet-point lists
-        text = "\n- ".join(text.split("- "))
+        text = re.sub(r'\n\s*\n', '\n', text)
 
         return text
 
@@ -406,7 +404,7 @@ class MarkdownChunkNorris:
 
 
     @staticmethod
-    def _get_text_before_titles(titles:Titles, text:str) -> Titles:
+    def _get_text_before_titles(titles:Titles) -> Titles:
         """Some documents may have text that arrives before any header.
         This function create a dummy title in the toc, at the very begining
         (like a parent of all titles) so that this text is taken into account
@@ -443,15 +441,17 @@ class MarkdownChunkNorris:
         # build list of chunks object
         chunks = []
         for i, text in enumerate(text_chunks):
+            text = MarkdownChunkNorris.cleanup_text(text)
             chunks.append(
                 {
                     "id": f"{i}",
                     "token_count": len(self.tokenizer.encode(text)),
                     "word_count": len(text.split()),
-                    "text": text,
+                    "text": text
                 }
             )
         # check that chunks don't exceed the hard token limit
+        
         chunks = self.check_chunks(chunks, **kwargs)
 
         return chunks
@@ -503,7 +503,7 @@ class MarkdownChunkNorris:
                     titles_to_subdivide = [title]
                     # if the title has a content, create a chunk just with this title and its content
                     if title["content"]:
-                        total_chunks.append(MarkdownChunkNorris._create_title_text(title))
+                        total_chunks.append(MarkdownChunkNorris.create_title_text(title))
                     total_used_ids.append(title["id"])
                 # if chunk is OK, or too big but can't be subdivided with children
                 else:
@@ -528,7 +528,7 @@ class MarkdownChunkNorris:
                             ):
                                 new_titles_to_subdivide.append(child)
                                 if child["content"]:
-                                    total_chunks.append(MarkdownChunkNorris._create_title_text(child))
+                                    total_chunks.append(MarkdownChunkNorris.create_title_text(child))
                                 total_used_ids.append(child["id"])
                             else:
                                 total_chunks.append(chunk)
@@ -596,9 +596,9 @@ class MarkdownChunkNorris:
                 parent = MarkdownChunkNorris._get_title_using_condition(
                     titles, {"id": parent["id"]}
                 )
-                chunk += MarkdownChunkNorris._create_title_text(parent, with_content=False)
+                chunk += MarkdownChunkNorris.create_title_text(parent, with_content=False)
         # add title + content of current title
-        chunk += MarkdownChunkNorris._create_title_text(title)
+        chunk += MarkdownChunkNorris.create_title_text(title)
         used_titles_ids = [title["id"]]
         # add title + content of all children
         if title["children"]:
@@ -606,13 +606,13 @@ class MarkdownChunkNorris:
                 child = MarkdownChunkNorris._get_title_using_condition(
                     titles, {"id": child["id"]}
                 )
-                chunk += MarkdownChunkNorris._create_title_text(child)
+                chunk += MarkdownChunkNorris.create_title_text(child)
                 used_titles_ids.append(child["id"])
 
         return chunk, used_titles_ids
 
     @staticmethod
-    def _create_title_text(title: Title, with_content:bool=True) -> str:
+    def create_title_text(title: Title, with_content:bool=True) -> str:
         """Generate the text of the title, using the title name and 
         its content if 'with_content' is set tot True
 
@@ -663,27 +663,41 @@ class MarkdownChunkNorris:
         MarkdownChunkNorris._check_string_argument_is_valid(
             "link_placement", link_placement, allowed_link_placements
         )
-        pattern = re.compile(r"\[(.+?)\]\((https?:.+?)\)")
-        matches = re.finditer(pattern, text)
-        if matches is not None:
-            for i, m in enumerate(matches):
-                match link_placement:
-                    case "remove":
-                        text = text.replace(m[0], m[1])
-                    case "end_of_chunk":
-                        if i == 0:
-                            text += "Pour plus d'informations:\n"
-                        text = text.replace(m[0], m[1])
-                        text += f"- {m[1]}: {m[2]}\n"
-                    case "in_sentence":
-                        text = text.replace(
-                            m[0], f"{m[1]} (pour plus d'informations : {m[2]})"
-                        )
-                    case "end_of_sentence":
-                        link_end_position = m.span(2)[1]
-                        # next_breakpoint = MarkdownChunkNorris.find_end_of_sentence(text, link_end_position)
-                        raise NotImplementedError()
 
+        image_pattern = re.compile(r'\[!\[([^\]]*)\]\((.*?)(?=\"|\))(\".*\")?\)\]\((https?:.+?)\)')
+        image_matches = re.finditer(image_pattern, text)
+        image_replacements = [(m[0], m[1], m[4]) for m in image_matches]
+        if image_replacements is not None:
+            text = MarkdownChunkNorris._handle_link_replacements(text, image_replacements, link_placement=link_placement)
+      
+        link_pattern = re.compile(r"\[(.+?)\]\((https?:.+?)\)")
+        link_matches = re.finditer(link_pattern, text)
+        link_replacements = [(m[0], m[1], m[2]) for m in link_matches]
+        if link_replacements is not None:
+            text = MarkdownChunkNorris._handle_link_replacements(text, link_replacements, link_placement=link_placement)      
+
+        return text
+    
+    @staticmethod
+    def _handle_link_replacements(text:str, replacements:list[Tuple[str, str, str]], link_placement: str = "end_of_chunk") -> str:
+        for i, m in enumerate(replacements):
+            match link_placement:
+                case "remove":
+                    text = text.replace(m[0], m[1])
+                case "end_of_chunk":
+                    if i == 0:
+                        text += "Pour plus d'informations:\n"
+                    text = text.replace(m[0], m[1])
+                    text += f"- {m[1]}: {m[2]}\n"
+                case "in_sentence":
+                    text = text.replace(
+                        m[0], f"{m[1]} (pour plus d'informations : {m[2]})"
+                    )
+                case "end_of_sentence":
+                    link_end_position = m.span(2)[1]
+                    # next_breakpoint = MarkdownChunkNorris.find_end_of_sentence(text, link_end_position)
+                    raise NotImplementedError()
+                
         return text
 
     def check_chunks(
