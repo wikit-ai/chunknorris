@@ -1,8 +1,6 @@
-import json
 import re
 import os
 from typing import Dict, List, Tuple
-from markdownify import markdownify
 import tiktoken
 
 from ..exceptions.exceptions import *
@@ -30,60 +28,10 @@ class MarkdownChunkNorris:
         chunks = self.get_chunks(titles, **kwargs)
 
         return chunks
-    
-    
-    def chunk_entire_directory(self, input_dir:str, output_dir:str, min_chunk_wordcount:int=15, **kwargs) -> None:
-        """Chunks the json files of entire directory
-
-        Args:
-            input_dir (str): the path to directory
-            output_dir (str): the directory where chunks will be saved
-            min_chunk_wordcount (int, optional): minimum words to consider saving the chunks. Defaults to 15.
-        """
-        if os.path.exists(output_dir) and os.listdir(output_dir):
-            raise ValueError("Output directory already contains data !")
-        elif not os.path.exists(output_dir):
-            os.mkdir(output_dir)
-
-        filenames = os.listdir(input_dir)
-        for fn in filenames:
-            filepath = os.path.join(input_dir, fn)
-            html_text = MarkdownChunkNorris.read_file(filepath)
-            chunks = self.__call__(html_text, **kwargs)
-            file_content = MarkdownChunkNorris.format_output(filepath, chunks)
-            with open(os.path.join(output_dir, fn), "w", encoding="utf8") as f:
-                json.dump(file_content, f, ensure_ascii=False)
 
 
     @staticmethod
-    def read_file(filepath: str, return_full_content:bool=False) -> str:
-        """Reads a html or json file
-
-        Args:
-            filepath (str): path to a file. must end with .json or .html
-            return_full_content (bool): Only applies to JSON files. Indicates whether or not
-                the entire content of the file is returned or just the text content.
-        Returns:
-            str: the text, mardkownified
-        """
-        try:
-            with open(filepath, "r") as f:
-                if filepath.endswith(".json"):
-                    file = json.load(f)
-                    if not return_full_content:
-                        file = file["hasPart"][0]["text"]
-                elif filepath.endswith(".html"):
-                    file = f.read()
-                else:
-                    raise ChunkNorrisException(f"Can only open JSON or HTML files")
-        except Exception as e:
-            raise ChunkNorrisException(f"Can't open file : {e}")
-
-        return file
-
-
-    @staticmethod
-    def check_string_argument_is_valid(
+    def _check_string_argument_is_valid(
         argname: str, argvalue: str, allowed_values: List[str]
     ):
         """Checks that an argument has a valid value
@@ -111,14 +59,14 @@ class MarkdownChunkNorris:
         titles = self.get_titles(text, **kwargs)
         titles = MarkdownChunkNorris._get_text_before_titles(titles, text)
         for title in titles:
-            title["children"] = MarkdownChunkNorris.get_titles_children(title, titles)
-            title["parents"] = MarkdownChunkNorris.get_titles_parents(title, titles)
-        titles = MarkdownChunkNorris.get_titles_content(titles, text)
+            title["children"] = MarkdownChunkNorris._get_titles_children(title, titles)
+            title["parents"] = MarkdownChunkNorris._get_titles_parents(title, titles)
+        titles = MarkdownChunkNorris._get_titles_content(titles, text)
 
         return titles
 
 
-    def get_header_regex_patterns(self, header_style:str="setext") -> dict:
+    def _get_header_regex_patterns(self, header_style:str="setext") -> dict:
         """Get the header regex patterns depending on the header_style
 
         Args:
@@ -128,8 +76,7 @@ class MarkdownChunkNorris:
         Returns:
             (dict) : a mapping between header name and regex patterns 
         """
-        print(header_style)
-        self.check_string_argument_is_valid("header_style", header_style, ["setext", "atx"])
+        self._check_string_argument_is_valid("header_style", header_style, ["setext", "atx"])
         patterns = {
             "h1": re.compile(r"(.+?)\n={3,}", re.MULTILINE),
             "h2": re.compile(r"(.+?)\n-{3,}", re.MULTILINE),
@@ -155,7 +102,7 @@ class MarkdownChunkNorris:
         Returns:
             Titles: a list of dicts describing titles. For more info, look at Title class
         """
-        MarkdownChunkNorris.check_string_argument_is_valid(
+        MarkdownChunkNorris._check_string_argument_is_valid(
             "max_title_level", max_title_level_to_use, ["h1", "h2", "h3", "h4", "h5"]
         )
 
@@ -163,7 +110,7 @@ class MarkdownChunkNorris:
         title_types_to_consider = [
             f"h{i}" for i in range(1, int(max_title_level_to_use[1]) + 1)
         ]
-        regex_patterns = self.get_header_regex_patterns(header_style)
+        regex_patterns = self._get_header_regex_patterns(header_style)
         titles = []
         for title_level, title_type in enumerate(title_types_to_consider):
             regex_pattern = regex_patterns[title_type]
@@ -187,7 +134,7 @@ class MarkdownChunkNorris:
 
 
     @staticmethod
-    def get_titles_content(titles: Titles, text: str) -> Titles:
+    def _get_titles_content(titles: Titles, text: str) -> Titles:
         """Get the text content of each title, meaning
         the text that is between the title and the next title
 
@@ -232,7 +179,7 @@ class MarkdownChunkNorris:
         return text
 
     @staticmethod
-    def get_titles_children(title: Title, titles: Titles) -> List[ShortTitle]:
+    def _get_titles_children(title: Title, titles: Titles) -> List[ShortTitle]:
         """Gets the children of a title among titles,
         meaning the titles of its subsections.
 
@@ -249,7 +196,7 @@ class MarkdownChunkNorris:
         """
         # in the children, put the titles without their "content", "children" or "parents" fields
         child_keys_to_keep = ["id", "text", "level", "start_position", "end_position"]
-        title_of_next_section = MarkdownChunkNorris.get_title_of_next_section(title, titles)
+        title_of_next_section = MarkdownChunkNorris._get_title_of_next_section(title, titles)
         if title_of_next_section is None:
             return [
                 {k: v for k, v in t.items() if k in child_keys_to_keep}
@@ -265,7 +212,7 @@ class MarkdownChunkNorris:
             ]
 
     @staticmethod
-    def get_titles_parents(title: Title, titles: Titles) -> List[ShortTitle]:
+    def _get_titles_parents(title: Title, titles: Titles) -> List[ShortTitle]:
         """Gets the parents of the specified title
 
         Parents are titles of the section that the specified title
@@ -284,7 +231,7 @@ class MarkdownChunkNorris:
         # find the title's parent, and consecutive parents of parents
         direct_parent = title
         while direct_parent:
-            direct_parent = MarkdownChunkNorris.get_direct_parent_of_title(
+            direct_parent = MarkdownChunkNorris._get_direct_parent_of_title(
                 direct_parent, titles
             )
             if direct_parent is not None:
@@ -296,7 +243,7 @@ class MarkdownChunkNorris:
         return parents
 
     @staticmethod
-    def get_direct_parent_of_title(title: Title, titles: Titles) -> Title:
+    def _get_direct_parent_of_title(title: Title, titles: Titles) -> Title:
         """Considering a title, gets the direct parent of a title,
         meaning the title of the section this title belongs to.
 
@@ -328,7 +275,7 @@ class MarkdownChunkNorris:
         return max(direct_parent, key=lambda x: x["start_position"])
 
     @staticmethod
-    def get_title_of_next_section(title: Title, titles: Titles) -> Title:
+    def _get_title_of_next_section(title: Title, titles: Titles) -> Title:
         """Considering a title, gets the title of the next section.
         The next section comes when we reach a title that as a
         equal or higher level than the provided title.
@@ -358,7 +305,7 @@ class MarkdownChunkNorris:
         return min(same_level_titles, key=lambda x: x["start_position"])
 
     @staticmethod
-    def get_title_of_next_subsection(title: Title, titles: Titles) -> Title:
+    def _get_title_of_next_subsection(title: Title, titles: Titles) -> Title:
         """Considering a title, gets the title of the next subsection.
         The next subsection comes when we reach a title that as a
         lower level than the provided title.
@@ -388,7 +335,7 @@ class MarkdownChunkNorris:
         return min(same_level_titles, key=lambda x: x["start_position"])
 
     @staticmethod
-    def get_title_using_condition(
+    def _get_title_using_condition(
         titles: Titles, conditions: Dict, raise_errors: bool = True
     ) -> Title:
         """Get the titles corresponding to the conditions.
@@ -453,7 +400,7 @@ class MarkdownChunkNorris:
         ]
 
         return [
-            MarkdownChunkNorris.get_title_using_condition(titles, c)
+            MarkdownChunkNorris._get_title_using_condition(titles, c)
             for c in direct_children
         ]
 
@@ -490,7 +437,7 @@ class MarkdownChunkNorris:
         Returns:
             Chunks: a list of Chunk
         """
-        text_chunks = MarkdownChunkNorris.get_chunks_text_content(titles, **kwargs)
+        text_chunks = MarkdownChunkNorris._get_chunks_text_content(titles, **kwargs)
         # Change position of links in the text
         text_chunks = [self.change_links_format(t, **kwargs) for t in text_chunks]
         # build list of chunks object
@@ -510,7 +457,7 @@ class MarkdownChunkNorris:
         return chunks
 
     @staticmethod
-    def get_chunks_text_content(
+    def _get_chunks_text_content(
         titles: Titles,
         max_title_level_to_use: str = "h4",
         max_chunk_word_length: int = 250,
@@ -535,7 +482,7 @@ class MarkdownChunkNorris:
         Returns:
             List[str]: the chunk's texts
         """
-        MarkdownChunkNorris.check_string_argument_is_valid(
+        MarkdownChunkNorris._check_string_argument_is_valid(
             "max_title_level_to_use",
             max_title_level_to_use,
             ["h1", "h2", "h3", "h4", "h5"],
@@ -547,16 +494,16 @@ class MarkdownChunkNorris:
         titles = sorted(titles, key=lambda x: x["start_position"])
         for title in titles:
             if title["id"] not in total_used_ids:
-                chunk, used_ids = MarkdownChunkNorris.create_chunk(title, titles)
+                chunk, used_ids = MarkdownChunkNorris._create_chunk(title, titles)
                 # Note : we work on a lists to enable recursivity
                 # if chunk is too big and but title can be subdivide (because they have children)
-                if MarkdownChunkNorris.chunk_is_too_big(
+                if MarkdownChunkNorris._chunk_is_too_big(
                     chunk, max_chunk_word_length
-                ) and MarkdownChunkNorris.title_has_children(title, max_title_level_to_use):
+                ) and MarkdownChunkNorris._title_has_children(title, max_title_level_to_use):
                     titles_to_subdivide = [title]
                     # if the title has a content, create a chunk just with this title and its content
                     if title["content"]:
-                        total_chunks.append(MarkdownChunkNorris.create_title_text(title))
+                        total_chunks.append(MarkdownChunkNorris._create_title_text(title))
                     total_used_ids.append(title["id"])
                 # if chunk is OK, or too big but can't be subdivided with children
                 else:
@@ -571,17 +518,17 @@ class MarkdownChunkNorris:
                             title2subdivide, titles
                         )
                         for child in direct_children:
-                            chunk, used_ids = MarkdownChunkNorris.create_chunk(
+                            chunk, used_ids = MarkdownChunkNorris._create_chunk(
                                 child, titles
                             )
-                            if MarkdownChunkNorris.chunk_is_too_big(
+                            if MarkdownChunkNorris._chunk_is_too_big(
                                 chunk, max_chunk_word_length
-                            ) and MarkdownChunkNorris.title_has_children(
+                            ) and MarkdownChunkNorris._title_has_children(
                                 child, max_title_level_to_use
                             ):
                                 new_titles_to_subdivide.append(child)
                                 if child["content"]:
-                                    total_chunks.append(MarkdownChunkNorris.create_title_text(child))
+                                    total_chunks.append(MarkdownChunkNorris._create_title_text(child))
                                 total_used_ids.append(child["id"])
                             else:
                                 total_chunks.append(chunk)
@@ -592,7 +539,7 @@ class MarkdownChunkNorris:
         return total_chunks
 
     @staticmethod
-    def chunk_is_too_big(chunk: str, max_chunk_length: int) -> bool:
+    def _chunk_is_too_big(chunk: str, max_chunk_length: int) -> bool:
         """Returns True if the chunk is bigger than the value
         specified as max_chunk_length in terms of word count
 
@@ -606,7 +553,7 @@ class MarkdownChunkNorris:
         return len(chunk.split()) > max_chunk_length
 
     @staticmethod
-    def title_has_children(title: Title, max_title_level_to_use: str = "h4") -> bool:
+    def _title_has_children(title: Title, max_title_level_to_use: str = "h4") -> bool:
         """Returns True if the title has children, ecluding title level
         that are lower than max_title_level_use
 
@@ -623,7 +570,7 @@ class MarkdownChunkNorris:
         return bool([c for c in title["children"] if c["level"] <= max_level])
 
     @staticmethod
-    def create_chunk(title: Title, titles: Titles) -> Tuple[str, List[int]]:
+    def _create_chunk(title: Title, titles: Titles) -> Tuple[str, List[int]]:
         """Creates a chunk, based on a title.
         A chunk is made from :
         - the title text
@@ -646,26 +593,26 @@ class MarkdownChunkNorris:
         if title["parents"]:
             parents = sorted(title["parents"], key=lambda x: x["level"])
             for parent in parents:
-                parent = MarkdownChunkNorris.get_title_using_condition(
+                parent = MarkdownChunkNorris._get_title_using_condition(
                     titles, {"id": parent["id"]}
                 )
-                chunk += MarkdownChunkNorris.create_title_text(parent, with_content=False)
+                chunk += MarkdownChunkNorris._create_title_text(parent, with_content=False)
         # add title + content of current title
-        chunk += MarkdownChunkNorris.create_title_text(title)
+        chunk += MarkdownChunkNorris._create_title_text(title)
         used_titles_ids = [title["id"]]
         # add title + content of all children
         if title["children"]:
             for child in title["children"]:
-                child = MarkdownChunkNorris.get_title_using_condition(
+                child = MarkdownChunkNorris._get_title_using_condition(
                     titles, {"id": child["id"]}
                 )
-                chunk += MarkdownChunkNorris.create_title_text(child)
+                chunk += MarkdownChunkNorris._create_title_text(child)
                 used_titles_ids.append(child["id"])
 
         return chunk, used_titles_ids
 
     @staticmethod
-    def create_title_text(title: Title, with_content:bool=True) -> str:
+    def _create_title_text(title: Title, with_content:bool=True) -> str:
         """Generate the text of the title, using the title name and 
         its content if 'with_content' is set tot True
 
@@ -713,7 +660,7 @@ class MarkdownChunkNorris:
             "in_sentence",
             "end_of_sentence",
         ]
-        MarkdownChunkNorris.check_string_argument_is_valid(
+        MarkdownChunkNorris._check_string_argument_is_valid(
             "link_placement", link_placement, allowed_link_placements
         )
         pattern = re.compile(r"\[(.+?)\]\((https?:.+?)\)")
@@ -760,7 +707,7 @@ class MarkdownChunkNorris:
             chunk_tokens_exceeded_handling (str, optional): whether or not error sould be raised if a big
                 chunk is encountered, or split. Defaults to raise_error.
         """
-        MarkdownChunkNorris.check_string_argument_is_valid(
+        MarkdownChunkNorris._check_string_argument_is_valid(
             "chunk_tokens_exceeded_handling",
             chunk_tokens_exceeded_handling,
             ["raise_error", "split"],
@@ -828,28 +775,5 @@ class MarkdownChunkNorris:
         ]
 
         return splitted_chunk
-    
-    @staticmethod
-    def format_output(filepath:str, chunks:Chunks) -> dict:
-        """Formats the chunks according to the input json file
-        i.e places the chunks inside the key [hasPart]
 
-        Args:
-            filepath (str): path toward the json file
-            chunks (Chunks): the chunks
-
-        Returns:
-            dict: the formatted file content
-        """
-        file_content = MarkdownChunkNorris.read_file(filepath, return_full_content=True)
-        chunks = [
-            {
-                "@type": "DocumentChunk", 
-                "text": c["text"],
-                "position": i,
-            } for i, c in enumerate(chunks)]
-        
-        file_content["hasPart"] = chunks
-
-        return file_content
 
