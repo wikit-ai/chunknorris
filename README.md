@@ -25,22 +25,20 @@ Note: When calling the chunker, **you need to specify the header style** of your
 
 #### Usage
 
-For chunking a json file :
-
 ```py
 from chunkers import MarkdownChunkNorris
 
+text = """
+# This is a header
+This is a text
+## This is another header
+And another text
+## With this final header
+And this last text
+"""
 chunker = MarkdownChunkNorris()
-html_text = MarkdownChunkNorris.read_file("path_to_my_file.json")
 header_style = "atx" # or "setext" depending on headers in your text
-chunks = chunker(html_text, header_style=header_style)
-```
-
-Instead, if you wish to chunk ***an entire folder*** of json_files
-```py
-INPUT_FOLDER = "./my_folder_with_json_files/"
-OUTPUT_FOLDER = "./my_empty_folder/"
-hcn.chunk_entire_directory(INPUT_FOLDER, OUTPUT_FOLDER)
+chunks = chunker(text, header_style=header_style)
 ```
 
 ### HTMLChunkNorris
@@ -49,21 +47,46 @@ This chunker is meant to be used **on html-formatted text**. Behind the scene, i
 
 #### Usage
 
-For chunking a json file :
-
 ```py
 from chunkers import HTMLChunkNorris
 
+text = """
+<h1>This is 1st level heading</h1>
+<p>This is a test paragraph.</p>
+<h2>This is 2nd level heading</h2>
+<p>This is a test paragraph.</p>
+<h2>This is another level heading</h2>
+<p>This is another test paragraph.</p>
+"""
 hcn = HTMLChunkNorris()
-html_text = HTMLChunkNorris.read_file("path_to_my_file.json")
-chunks = hcn(html_text)
+chunks = hcn(text)
+```
+
+### WikitChunkNorris - custom chunker for wikit's json files
+
+This chunker uses HTMLChunkNorris behind the scene but also has few ready to use methods ***especially for processing the JSON files obtained from our custom webscrapper*** (WordPress API).
+
+In other words, the json file must have its html text content located at ```jsonfile["hasPart"][0]["text]```.
+
+#### Usage
+
+For chunking a json file :
+
+```py
+from custom_chunkers import WikitChunkNorris
+
+wcn = WikitChunkNorris()
+html_text = WikitChunkNorris.read_file("path_to_my_file.json")
+chunks = wcn(html_text)
+# if you wish to put the chunks back in their original file
+output = wcn.format_output("path_to_my_file.json", chunks)
 ```
 
 Instead, if you wish to chunk ***an entire folder*** of json_files
 ```py
 INPUT_FOLDER = "./my_folder_with_json_files/"
 OUTPUT_FOLDER = "./my_empty_folder/"
-hcn.chunk_entire_directory(INPUT_FOLDER, OUTPUT_FOLDER)
+wcn.chunk_entire_directory(INPUT_FOLDER, OUTPUT_FOLDER)
 ```
 
 ### Advanced usage of chunkers
