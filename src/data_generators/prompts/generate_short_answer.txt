@@ -1,8 +1,0 @@
-Considering the following question and pieces of information :
----------------
-Question : {question}
-Informations : {context}
----------------
-What are the information's KEYWORD(S) allowing to answer the question ? Generated answer must be formatted in JSON array with maximum 3 string keywords, AND ONLY THAT.
---------------
-Example output : ["keyword1", "keyword2", ...]
