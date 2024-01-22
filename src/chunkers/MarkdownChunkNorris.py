@@ -1,15 +1,10 @@
 import re
-import os
 from typing import Dict, List, Tuple
 import tiktoken
 
 from ..exceptions.exceptions import *
 from ..types.types import *
 
-# specify working dir
-# os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-# ChunkNorris
 class MarkdownChunkNorris:
     def __init__(self):
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
@@ -460,7 +455,7 @@ class MarkdownChunkNorris:
     def _get_chunks_text_content(
         titles: Titles,
         max_title_level_to_use: str = "h4",
-        max_chunk_word_length: int = 250,
+        max_chunk_word_count: int = 250,
         **kwargs,
     ) -> List[str]:
         """Builds the chunks based on the titles obtained by the get_toc() method.
@@ -477,7 +472,7 @@ class MarkdownChunkNorris:
             titles (Titles): The titles, obtained from get_toc() method
             max_title_level_to_use (str, optional): The lowest level of titles to consider.
                 Defaults to "h4".
-            max_chunk_word_length (int, optional): The max size a chunk can be. Defaults to 250.
+            max_chunk_word_count (int, optional): The max size a chunk can be. Defaults to 250.
 
         Returns:
             List[str]: the chunk's texts
@@ -498,7 +493,7 @@ class MarkdownChunkNorris:
                 # Note : we work on a lists to enable recursivity
                 # if chunk is too big and but title can be subdivide (because they have children)
                 if MarkdownChunkNorris._chunk_is_too_big(
-                    chunk, max_chunk_word_length
+                    chunk, max_chunk_word_count
                 ) and MarkdownChunkNorris._title_has_children(title, max_title_level_to_use):
                     titles_to_subdivide = [title]
                     # if the title has a content, create a chunk just with this title and its content
@@ -522,7 +517,7 @@ class MarkdownChunkNorris:
                                 child, titles
                             )
                             if MarkdownChunkNorris._chunk_is_too_big(
-                                chunk, max_chunk_word_length
+                                chunk, max_chunk_word_count
                             ) and MarkdownChunkNorris._title_has_children(
                                 child, max_title_level_to_use
                             ):
@@ -703,7 +698,7 @@ class MarkdownChunkNorris:
     def check_chunks(
         self,
         chunks: Chunks,
-        min_chunk_wordcount = 15,
+        min_chunk_word_count = 15,
         max_chunk_tokens: int = 8191,
         chunk_tokens_exceeded_handling: str = "raise_error",
         **kwargs,
@@ -716,7 +711,7 @@ class MarkdownChunkNorris:
 
         Args:
             chunks (Chunks): The chunks obtained from the get_chunks() method
-            max_chunk_tokens (int, optional): the maximum size a chunk is allowed to be,
+            min_chunk_tokens (int, optional): the maximum size a chunk is allowed to be,
                 in tokens. Defaults to 8191.
             chunk_tokens_exceeded_handling (str, optional): whether or not error sould be raised if a big
                 chunk is encountered, or split. Defaults to raise_error.
@@ -727,7 +722,7 @@ class MarkdownChunkNorris:
             ["raise_error", "split"],
         )
         # remove small chunks
-        chunks = [c for c in chunks if c["word_count"] > min_chunk_wordcount]
+        chunks = [c for c in chunks if c["word_count"] > min_chunk_word_count]
         # split too big chunks
         splitted_chunks = []
         for chunk in chunks:

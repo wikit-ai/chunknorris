@@ -1,16 +1,7 @@
-import json
-import re
-import os
-from typing import Dict, List, Tuple
 from markdownify import markdownify
-import tiktoken
 
 from .MarkdownChunkNorris import MarkdownChunkNorris
 
-# specify working dir
-# os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-# ChunkNorris
 class HTMLChunkNorris(MarkdownChunkNorris):
     def __init__(self):
         super().__init__()
