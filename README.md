@@ -70,7 +70,7 @@ In other words, the json file must have its html text content located at ```json
 
 #### Usage
 
-For chunking a json file :
+In order to chunk a json file :
 
 ```py
 from custom_chunkers import WikitChunkNorris
@@ -88,6 +88,11 @@ INPUT_FOLDER = "./my_folder_with_json_files/"
 OUTPUT_FOLDER = "./my_empty_folder/"
 wcn.chunk_entire_directory(INPUT_FOLDER, OUTPUT_FOLDER)
 ```
+If you do not specify the ``output_dir`` argument, files will be stored in a folder named ``<name_of_input_dir>-chunked`` by default.
+
+Alternatively, if you cloned the repo, you can chunk a folder using the following command :
+``python -m src.custom_chunkers.WikitChunkNorris --input_dir "<mydir>"``
+Other arguments can be specified. For more information, check at **advanced usage of chunkers**.
 
 ### Advanced usage of chunkers
 
