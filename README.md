@@ -9,6 +9,11 @@ An optimized chunking method might lead to smaller chunks, meaning :
 - **Less hallucinations** of generation models because of superfluous information in the prompt
 - **Reduced cost** as the prompt would have reduced size
 
+## Installation
+
+Using Pypi, just run the following command :
+```pip install chunknorris```
+
 ## Chunkers
 
 The package features multiple ***chunkers*** that can be used independently depending on the type of document needed.
@@ -16,6 +21,8 @@ The package features multiple ***chunkers*** that can be used independently depe
 All chunkers follow a similar logic :
 - Extract table of contents (= headers)
 - Build chunks using the text content of a part, and put the titles of the parts it belongs to on top
+
+![](images/chunk_method.png)
 
 ### MarkdownChunkNorris
 
@@ -61,38 +68,6 @@ text = """
 hcn = HTMLChunkNorris()
 chunks = hcn(text)
 ```
-
-### WikitChunkNorris - custom chunker for wikit's json files
-
-This chunker uses HTMLChunkNorris behind the scene but also has few ready to use methods ***especially for processing the JSON files obtained from our custom webscrapper*** (WordPress API).
-
-In other words, the json file must have its html text content located at ```jsonfile["hasPart"][0]["text]```.
-
-#### Usage
-
-In order to chunk a json file :
-
-```py
-from custom_chunkers import WikitChunkNorris
-
-wcn = WikitChunkNorris()
-html_text = WikitChunkNorris.read_file("path_to_my_file.json")
-chunks = wcn(html_text)
-# if you wish to put the chunks back in their original file
-output = wcn.format_output("path_to_my_file.json", chunks)
-```
-
-Instead, if you wish to chunk ***an entire folder*** of json_files
-```py
-INPUT_FOLDER = "./my_folder_with_json_files/"
-OUTPUT_FOLDER = "./my_empty_folder/"
-wcn.chunk_entire_directory(INPUT_FOLDER, OUTPUT_FOLDER)
-```
-If you do not specify the ``output_dir`` argument, files will be stored in a folder named ``<name_of_input_dir>-chunked`` by default.
-
-Alternatively, if you cloned the repo, you can chunk a folder using the following command :
-``python -m src.custom_chunkers.WikitChunkNorris --input_dir "<mydir>"``
-Other arguments can be specified. For more information, check at **advanced usage of chunkers**.
 
 ### Advanced usage of chunkers
 
