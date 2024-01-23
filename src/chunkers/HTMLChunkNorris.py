@@ -2,10 +2,10 @@ from markdownify import markdownify
 
 from .MarkdownChunkNorris import MarkdownChunkNorris
 
+
 class HTMLChunkNorris(MarkdownChunkNorris):
     def __init__(self):
         super().__init__()
-
 
     def __call__(self, html_text: str, **kwargs) -> str:
         text = HTMLChunkNorris.apply_markdownify(html_text)
@@ -13,7 +13,6 @@ class HTMLChunkNorris(MarkdownChunkNorris):
         chunks = self.get_chunks(titles, **kwargs)
 
         return chunks
-    
 
     def apply_markdownify(html_text):
         """Applies markdownify to the html text
@@ -24,8 +23,6 @@ class HTMLChunkNorris(MarkdownChunkNorris):
         Returns:
             _type_: _description_
         """
-        md_text = markdownify(
-                html_text, strip=["figure", "img"], bullets="-*+"
-            )
-        
+        md_text = markdownify(html_text, strip=["figure", "img"], bullets="-*+")
+
         return md_text

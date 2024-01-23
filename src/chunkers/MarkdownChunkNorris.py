@@ -4,10 +4,10 @@ import tiktoken
 from ..exceptions.exceptions import *
 from ..types.types import *
 
+
 class MarkdownChunkNorris:
     def __init__(self):
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
-
 
     def __call__(self, md_text: str, **kwargs) -> Chunks:
         """Gets chunks from markdown string
@@ -23,7 +23,6 @@ class MarkdownChunkNorris:
 
         return chunks
 
-
     @staticmethod
     def _check_string_argument_is_valid(
         argname: str, argvalue: str, allowed_values: list[str]
@@ -38,7 +37,6 @@ class MarkdownChunkNorris:
         assert argvalue in allowed_values, ValueError(
             f"Argument '{argname}' should be one of {allowed_values}. Got '{argvalue}'"
         )
-
 
     def get_toc(self, text: str, **kwargs) -> Titles:
         """Get the Table Of Content i.e the list
@@ -59,8 +57,7 @@ class MarkdownChunkNorris:
 
         return titles
 
-
-    def _get_header_regex_patterns(self, header_style:str="setext") -> dict:
+    def _get_header_regex_patterns(self, header_style: str = "setext") -> dict:
         """Get the header regex patterns depending on the header_style
 
         Args:
@@ -68,9 +65,11 @@ class MarkdownChunkNorris:
                 Defaults to "setext".
 
         Returns:
-            (dict) : a mapping between header name and regex patterns 
+            (dict) : a mapping between header name and regex patterns
         """
-        self._check_string_argument_is_valid("header_style", header_style, ["setext", "atx"])
+        self._check_string_argument_is_valid(
+            "header_style", header_style, ["setext", "atx"]
+        )
         patterns = {
             "h1": re.compile(r"(.+?)\n={3,}", re.MULTILINE),
             "h2": re.compile(r"(.+?)\n-{3,}", re.MULTILINE),
@@ -84,8 +83,13 @@ class MarkdownChunkNorris:
 
         return patterns
 
-
-    def get_titles(self, text: str, max_title_level_to_use: str = "h4", header_style = "setext", **kwargs) -> Titles:
+    def get_titles(
+        self,
+        text: str,
+        max_title_level_to_use: str = "h4",
+        header_style="setext",
+        **kwargs,
+    ) -> Titles:
         """Gets the titles (=headers h1, h2 ...) in the text
         using regex
 
@@ -126,7 +130,6 @@ class MarkdownChunkNorris:
 
         return titles
 
-
     @staticmethod
     def _get_titles_content(titles: Titles, text: str) -> Titles:
         """Get the text content of each title, meaning
@@ -144,7 +147,9 @@ class MarkdownChunkNorris:
         for i, title in enumerate(titles):
             if i + 1 < len(titles):
                 next_title = titles[i + 1]
-                content = text[max(0, title["end_position"]) : next_title["start_position"]]
+                content = text[
+                    max(0, title["end_position"]) : next_title["start_position"]
+                ]
             else:  # its the last title
                 content = text[max(0, title["end_position"]) :]
             title["content"] = content
@@ -166,7 +171,7 @@ class MarkdownChunkNorris:
         for char in special_chars:
             text = text.replace(char, "")
         # remove white spaces and newlines
-        text = re.sub(r'\n\s*\n', '\n', text)
+        text = re.sub(r"\n\s*\n", "\n", text)
 
         return text
 
@@ -188,7 +193,9 @@ class MarkdownChunkNorris:
         """
         # in the children, put the titles without their "content", "children" or "parents" fields
         child_keys_to_keep = ["id", "text", "level", "start_position", "end_position"]
-        title_of_next_section = MarkdownChunkNorris._get_title_of_next_section(title, titles)
+        title_of_next_section = MarkdownChunkNorris._get_title_of_next_section(
+            title, titles
+        )
         if title_of_next_section is None:
             return [
                 {k: v for k, v in t.items() if k in child_keys_to_keep}
@@ -395,9 +402,8 @@ class MarkdownChunkNorris:
             for c in direct_children
         ]
 
-
     @staticmethod
-    def _get_text_before_titles(titles:Titles) -> Titles:
+    def _get_text_before_titles(titles: Titles) -> Titles:
         """Some documents may have text that arrives before any header.
         This function create a dummy title in the toc, at the very begining
         (like a parent of all titles) so that this text is taken into account
@@ -413,11 +419,10 @@ class MarkdownChunkNorris:
             "level": -1,
             "start_position": -1,
             "end_position": -1,
-                }
+        }
         titles.insert(0, dummy_title)
 
         return titles
-
 
     def get_chunks(self, titles: Titles, **kwargs) -> Chunks:
         """Builds the chunks based on the titles
@@ -440,7 +445,7 @@ class MarkdownChunkNorris:
                     "id": f"{i}",
                     "token_count": len(self.tokenizer.encode(text)),
                     "word_count": len(text.split()),
-                    "text": text
+                    "text": text,
                 }
             )
         # check that chunks don't exceed the hard token limit
@@ -491,11 +496,15 @@ class MarkdownChunkNorris:
                 # if chunk is too big and but title can be subdivided using subsections...
                 if MarkdownChunkNorris._chunk_is_too_big(
                     chunk, max_chunk_word_count
-                ) and MarkdownChunkNorris._title_has_children(title, max_title_level_to_use):
+                ) and MarkdownChunkNorris._title_has_children(
+                    title, max_title_level_to_use
+                ):
                     titles_to_subdivide = [title]
                     # if the title has a content, create a chunk just with this title and its content
                     if title["content"]:
-                        total_chunks.append(MarkdownChunkNorris.create_title_text(title))
+                        total_chunks.append(
+                            MarkdownChunkNorris.create_title_text(title)
+                        )
                     total_used_ids.append(title["id"])
                 # if chunk is OK, or too big but can't be subdivided with children...
                 else:
@@ -506,8 +515,10 @@ class MarkdownChunkNorris:
                 while titles_to_subdivide:
                     new_titles_to_subdivide = []
                     for title2subdivide in titles_to_subdivide:
-                        direct_children = MarkdownChunkNorris.get_direct_children_of_title(
-                            title2subdivide, titles
+                        direct_children = (
+                            MarkdownChunkNorris.get_direct_children_of_title(
+                                title2subdivide, titles
+                            )
                         )
                         for child in direct_children:
                             chunk, used_ids = MarkdownChunkNorris._create_chunk(
@@ -520,7 +531,9 @@ class MarkdownChunkNorris:
                             ):
                                 new_titles_to_subdivide.append(child)
                                 if child["content"]:
-                                    total_chunks.append(MarkdownChunkNorris.create_title_text(child))
+                                    total_chunks.append(
+                                        MarkdownChunkNorris.create_title_text(child)
+                                    )
                                 total_used_ids.append(child["id"])
                             else:
                                 total_chunks.append(chunk)
@@ -588,7 +601,9 @@ class MarkdownChunkNorris:
                 parent = MarkdownChunkNorris._get_title_using_condition(
                     titles, {"id": parent["id"]}
                 )
-                chunk += MarkdownChunkNorris.create_title_text(parent, with_content=False)
+                chunk += MarkdownChunkNorris.create_title_text(
+                    parent, with_content=False
+                )
         # add title + content of current title
         chunk += MarkdownChunkNorris.create_title_text(title)
         used_titles_ids = [title["id"]]
@@ -604,8 +619,8 @@ class MarkdownChunkNorris:
         return chunk, used_titles_ids
 
     @staticmethod
-    def create_title_text(title: Title, with_content:bool=True) -> str:
-        """Generate the text of the title, using the title name and 
+    def create_title_text(title: Title, with_content: bool = True) -> str:
+        """Generate the text of the title, using the title name and
         its content if 'with_content' is set tot True
 
         Args:
@@ -654,22 +669,32 @@ class MarkdownChunkNorris:
             "link_placement", link_placement, allowed_link_placements
         )
 
-        image_pattern = re.compile(r'\[!\[([^\]]*)\]\((.*?)(?=\"|\))(\".*\")?\)\]\((https?:.+?)\)')
+        image_pattern = re.compile(
+            r"\[!\[([^\]]*)\]\((.*?)(?=\"|\))(\".*\")?\)\]\((https?:.+?)\)"
+        )
         image_matches = re.finditer(image_pattern, text)
         image_replacements = [(m[0], m[1], m[4]) for m in image_matches]
         if image_replacements is not None:
-            text = MarkdownChunkNorris._handle_link_replacements(text, image_replacements, link_placement=link_placement)
-      
+            text = MarkdownChunkNorris._handle_link_replacements(
+                text, image_replacements, link_placement=link_placement
+            )
+
         link_pattern = re.compile(r"\[(.+?)\]\((https?:.+?)\)")
         link_matches = re.finditer(link_pattern, text)
         link_replacements = [(m[0], m[1], m[2]) for m in link_matches]
         if link_replacements is not None:
-            text = MarkdownChunkNorris._handle_link_replacements(text, link_replacements, link_placement=link_placement)      
+            text = MarkdownChunkNorris._handle_link_replacements(
+                text, link_replacements, link_placement=link_placement
+            )
 
         return text
-    
+
     @staticmethod
-    def _handle_link_replacements(text:str, replacements:list[tuple[str, str, str]], link_placement: str = "end_of_chunk") -> str:
+    def _handle_link_replacements(
+        text: str,
+        replacements: list[tuple[str, str, str]],
+        link_placement: str = "end_of_chunk",
+    ) -> str:
         for i, m in enumerate(replacements):
             match link_placement:
                 case "remove":
@@ -683,13 +708,13 @@ class MarkdownChunkNorris:
                     text = text.replace(
                         m[0], f"{m[1]} (pour plus d'informations : {m[2]})"
                     )
-                
+
         return text
 
     def check_chunks(
         self,
         chunks: Chunks,
-        min_chunk_word_count = 15,
+        min_chunk_word_count=15,
         max_chunk_tokens: int = 8191,
         chunk_tokens_exceeded_handling: str = "raise_error",
         **kwargs,
@@ -775,5 +800,3 @@ class MarkdownChunkNorris:
         ]
 
         return splitted_chunk
-
-
