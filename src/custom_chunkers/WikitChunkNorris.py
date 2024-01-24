@@ -18,6 +18,7 @@ class WikitChunkNorris(HTMLChunkNorris):
             input_dir (str): the path to directory
             output_dir (str): the directory where chunks will be saved
         """
+        input_dir = os.path.normpath(input_dir)
         if not output_dir:
             output_dir = f"{input_dir}-chunked"
         if os.path.exists(output_dir) and os.listdir(output_dir):

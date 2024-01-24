@@ -503,13 +503,13 @@ class MarkdownChunkNorris:
                     # if the title has a content, create a chunk just with this title and its content
                     if title["content"]:
                         total_chunks.append(
-                            MarkdownChunkNorris.create_title_text(title)
+                            (MarkdownChunkNorris.create_title_text(title), title["start_position"])
                         )
                     total_used_ids.append(title["id"])
                 # if chunk is OK, or too big but can't be subdivided with children...
                 else:
                     titles_to_subdivide = []
-                    total_chunks.append(chunk)
+                    total_chunks.append((chunk, title["start_position"]))
                     total_used_ids.extend(used_ids)
                 # While we have chunks to subdivide, perform recursive subdivision
                 while titles_to_subdivide:
@@ -532,16 +532,18 @@ class MarkdownChunkNorris:
                                 new_titles_to_subdivide.append(child)
                                 if child["content"]:
                                     total_chunks.append(
-                                        MarkdownChunkNorris.create_title_text(child)
+                                        (MarkdownChunkNorris.create_title_text(child), child["start_position"])
                                     )
                                 total_used_ids.append(child["id"])
                             else:
-                                total_chunks.append(chunk)
+                                total_chunks.append((chunk, child["start_position"]))
                                 total_used_ids.extend(used_ids)
 
                     titles_to_subdivide = new_titles_to_subdivide
 
-        return total_chunks
+        total_chunks = sorted(total_chunks, key=lambda x: x[1])
+
+        return [text for text, _ in total_chunks]
 
     @staticmethod
     def _chunk_is_too_big(chunk: str, max_chunk_length: int) -> bool:
