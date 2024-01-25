@@ -73,13 +73,13 @@ class MarkdownChunkNorris:
         patterns = {
             "h1": re.compile(r"(.+?)\n={3,}", re.MULTILINE),
             "h2": re.compile(r"(.+?)\n-{3,}", re.MULTILINE),
-            "h3": re.compile(r"^#{3} (.+)\n", re.MULTILINE),
-            "h4": re.compile(r"^#{4} (.+)\n", re.MULTILINE),
-            "h5": re.compile(r"^#{5} (.+)\n", re.MULTILINE),
+            "h3": re.compile(r"^-? #{3} (.+)\n", re.MULTILINE),
+            "h4": re.compile(r"^-? #{4} (.+)\n", re.MULTILINE),
+            "h5": re.compile(r"^-? #{5} (.+)\n", re.MULTILINE),
         }
         if header_style == "atx":
-            patterns["h1"] = re.compile(r"^#{1} (.+)\n", re.MULTILINE)
-            patterns["h2"] = re.compile(r"^#{2} (.+)\n", re.MULTILINE)
+            patterns["h1"] = re.compile(r"^-? #{1} (.+)\n", re.MULTILINE)
+            patterns["h2"] = re.compile(r"^-? #{2} (.+)\n", re.MULTILINE)
 
         return patterns
 
