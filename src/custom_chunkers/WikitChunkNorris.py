@@ -24,7 +24,7 @@ class WikitChunkNorris(HTMLChunkNorris):
         if os.path.exists(output_dir) and os.listdir(output_dir):
             raise ValueError("Output directory already contains data !")
         elif not os.path.exists(output_dir):
-            os.mkdir(output_dir)
+            os.makedirs(output_dir)
 
         filenames = os.listdir(input_dir)
         for fn in filenames:
