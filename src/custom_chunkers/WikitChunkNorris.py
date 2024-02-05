@@ -1,3 +1,4 @@
+import glob
 import os
 import json
 from argparse import ArgumentParser
@@ -9,31 +10,6 @@ class WikitChunkNorris(HTMLChunkNorris):
     def __init__(self):
         super().__init__()
 
-    def chunk_entire_directory(
-        self, input_dir: str, output_dir: str = None, **kwargs
-    ) -> None:
-        """Chunks the json files of entire directory
-
-        Args:
-            input_dir (str): the path to directory
-            output_dir (str): the directory where chunks will be saved
-        """
-        input_dir = os.path.normpath(input_dir)
-        if not output_dir:
-            output_dir = f"{input_dir}-chunked"
-        if os.path.exists(output_dir) and os.listdir(output_dir):
-            raise ValueError("Output directory already contains data !")
-        elif not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
-        filenames = os.listdir(input_dir)
-        for fn in filenames:
-            filepath = os.path.join(input_dir, fn)
-            html_text = WikitChunkNorris.read_file(filepath)
-            chunks = self.__call__(html_text, **kwargs)
-            file_content = WikitChunkNorris.format_output(filepath, chunks)
-            with open(os.path.join(output_dir, fn), "w") as f:
-                json.dump(file_content, f, ensure_ascii=False)
 
     @staticmethod
     def read_file(filepath: str, return_full_content: bool = False) -> str:
@@ -60,6 +36,50 @@ class WikitChunkNorris(HTMLChunkNorris):
             raise Exception(f"Can't open file '{filepath}': {e}")
 
         return file
+    
+
+    def chunk_file(self, filepath:str, output_filepath:str=None, **kwargs):
+        """Chunks a json file and save the chunked file
+
+        Args:
+            filepath (str): path to the file
+            output_filepath (str): path of the output file
+            make_dirs (bool): whether of not to make the path if folders don't exist
+        """
+        filepath = os.path.normpath(filepath)
+        html_text = WikitChunkNorris.read_file(filepath)
+        chunks = self.__call__(html_text, **kwargs)
+        file_content = WikitChunkNorris.format_output(filepath, chunks)
+
+        if not output_filepath:
+            output_dir = os.path.dirname(filepath) + "-chunked"
+            output_filepath = os.path.join(output_dir, os.path.basename(filepath))
+        else:
+            output_dir = os.path.dirname(output_filepath)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        with open(output_filepath, "w") as f:
+            json.dump(file_content, f, ensure_ascii=False)
+
+
+    def chunk_directory(
+        self, input_dir: str, output_dir: str = None, **kwargs
+    ) -> None:
+        """Chunks the json files of entire directory, recursively
+
+        Args:
+            input_dir (str): the path to directory
+            output_dir (str): the directory where chunks will be saved
+        """
+        input_dir = os.path.normpath(input_dir)
+        if not output_dir:
+            output_dir = f"{input_dir}-chunked"
+
+        filepaths = [subdir for dir in os.walk(input_dir) for subdir in glob.glob(os.path.join(dir[0], '*.json'))]
+        for fp in filepaths:
+            self.chunk_file(fp, fp.replace(input_dir, output_dir), **kwargs)
+
 
     @staticmethod
     def format_output(filepath: str, chunks: Chunks) -> dict:
