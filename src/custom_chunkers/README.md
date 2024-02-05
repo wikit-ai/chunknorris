@@ -13,17 +13,14 @@ In order to chunk a json file :
 from custom_chunkers import WikitChunkNorris
 
 wcn = WikitChunkNorris()
-html_text = WikitChunkNorris.read_file("path_to_my_file.json")
-chunks = wcn(html_text)
-# if you wish to put the chunks back in their original file
-output = wcn.format_output("path_to_my_file.json", chunks)
+html_text = wcn.chunk_file("path_to_my_file.json")
 ```
 
 Instead, if you wish to chunk ***an entire folder*** of json_files
 ```py
 INPUT_FOLDER = "./my_folder_with_json_files/"
 OUTPUT_FOLDER = "./my_empty_folder/"
-wcn.chunk_entire_directory(INPUT_FOLDER, OUTPUT_FOLDER)
+wcn.chunk_directory(INPUT_FOLDER, OUTPUT_FOLDER)
 ```
 If you do not specify the ``output_dir`` argument, files will be stored in a folder named ``<name_of_input_dir>-chunked`` by default.
 
