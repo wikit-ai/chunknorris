@@ -9,19 +9,18 @@ class HTMLChunkNorris(MarkdownChunkNorris):
 
     def __call__(self, html_text: str, **kwargs) -> str:
         text = HTMLChunkNorris.apply_markdownify(html_text)
-        titles = self.get_toc(text, **kwargs)
-        chunks = self.get_chunks(titles, **kwargs)
 
-        return chunks
+        return super().__call__(text, **kwargs)
+    
 
-    def apply_markdownify(html_text):
+    def apply_markdownify(html_text) -> str:
         """Applies markdownify to the html text
 
         Args:
             html_text (str): the text of the html file
 
         Returns:
-            _type_: _description_
+            str: the markdownified string
         """
         md_text = markdownify(html_text, strip=["figure", "img"], bullets="-*+")
 

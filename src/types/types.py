@@ -1,34 +1,14 @@
-from typing import List, TypedDict
+from typing import TypedDict
 
+Chunk = str
 
-class ShortTitle(TypedDict, total=True):
+Chunks = list[Chunk]
+
+class TocTree(TypedDict, total=False):
     id: int
     text: str
     level: int
-    start_position: int
-    end_position: int
-
-
-class Title(TypedDict, total=False):
-    id: int
-    text: str
-    level: int
-    start_position: int
-    end_position: int
+    line_index: int
     content: str
-    parents: List[ShortTitle]
-    children: List[ShortTitle]
-
-
-Titles = List[Title]
-
-
-class Chunk(TypedDict, total=True):
-    id: str
-    token_count: int
-    word_count: int
-    source_doc: str
-    text: str
-
-
-Chunks = List[Chunk]
+    parents: TypedDict
+    children: list[TypedDict]
