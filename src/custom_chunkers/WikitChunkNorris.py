@@ -97,7 +97,7 @@ class WikitChunkNorris(HTMLChunkNorris):
         chunks = [
             {
                 "@type": "DocumentChunk",
-                "text": c["text"],
+                "text": c,
                 "position": i,
             }
             for i, c in enumerate(chunks)

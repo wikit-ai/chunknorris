@@ -74,17 +74,15 @@ chunks = hcn(text)
 Additionally, the chunkers can take a number of argument allowing to modifiy its behavior:
 
 ```py
-from chunkers import HTMLChunkNorris, MarkdownChunkNorris
+from chunkers import MarkdownChunkNorris
 
-INPUT_FOLDER = "path/to/my_folder"
-OUTPUT_FOLDER = f"{INPUT_FOLDER}-chunked"
+mystring = "# header\nThis is a markdown string"
 
-chunker = HTMLChunkNorris() # or MarkdownChunkNorris()
-chunker.chunk_entire_directory(
-    INPUT_FOLDER,
-    OUTPUT_FOLDER,
+chunker = MarkdownChunkNorris() # or any other chunker
+chunks = chunker(
+    mystring,
     max_title_level_to_use="h3",
-    max_chunk_word_length=250,
+    max_chunk_word_length=200,
     link_placement="in_sentence",
     max_chunk_tokens=8191,
     chunk_tokens_exceeded_handling="split",
@@ -96,10 +94,10 @@ chunker.chunk_entire_directory(
 (str): The maximum (included) level of headers take into account for chunking. For example, if "h3" is set, then "h4" and "h5" titles won't be used. Must be a string of type "hx" with x being the title level. Defaults to "h4".
 
 ***max_chunk_word_length***
-(int): The maximum size (soft limit, in words) a chunk can be. Chunk bigger that this size will be chunked using lower level headers, until no lower level headers are available. Defaults to 250.
+(int): The maximum size (soft limit, in words) a chunk can be. Chunk bigger that this size will be chunked using lower level headers, until no lower level headers are available. Defaults to 200.
 
 ***link_placement***
-(str): How the links should be handled. Defaults to end_of_chunk.
+(str): How the links should be handled. Defaults to in_sentence.
 Options :
 - "remove" : text is kept but links are removed
 - "end_of_chunk" : adds a paragraph at the end of the chunk containing all the links
