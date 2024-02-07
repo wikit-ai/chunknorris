@@ -228,7 +228,7 @@ class MarkdownChunkNorris:
         return chunks
             
     @staticmethod
-    def get_chunks_texts(toc_tree_element:TocTree, already_ok_chunks:Chunks=None, **kwargs) -> Chunks:
+    def get_chunks_texts(toc_tree_element:TocTree, already_ok_chunks:Chunks|None=None, **kwargs) -> Chunks:
         """Uses the toc tree to build the chunks. Uses recursion.
         Method :
         - build the chunk (= titles from sections above + section content + content of subsections)
@@ -430,7 +430,7 @@ class MarkdownChunkNorris:
     def check_chunks(
         self,
         chunks: Chunks,
-        min_chunk_word_count=15,
+        min_chunk_word_count=10,
         max_chunk_tokens: int = 8191,
         chunk_tokens_exceeded_handling: str = "raise_error",
         **kwargs,
