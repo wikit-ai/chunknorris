@@ -373,23 +373,18 @@ class MarkdownChunkNorris:
         if link_placement == "leave_as_markdown":
             return text
 
-        image_pattern = re.compile(
-            r"\[!\[([^\]]*)\]\((.*?)(?=\"|\))(\".*\")?\)\]\((https?:.+?)\)"
-        )
-        image_matches = re.finditer(image_pattern, text)
-        image_replacements = [(m[0], m[1], m[4]) for m in image_matches]
-        if image_replacements is not None:
-            text = MarkdownChunkNorris._handle_link_replacements(
-                text, image_replacements, link_placement=link_placement
-            )
-
-        link_pattern = re.compile(r"\[(.+?)\]\((https?:.+?)\)")
-        link_matches = re.finditer(link_pattern, text)
-        link_replacements = [(m[0], m[1], m[2]) for m in link_matches]
-        if link_replacements is not None:
-            text = MarkdownChunkNorris._handle_link_replacements(
-                text, link_replacements, link_placement=link_placement
-            )
+        patterns = {
+            "image_as_link": r"\[!\[(.*?)\]\(.*?\)\]\((.*?)\)",
+            "image": r"!\[(.*?)\]\((https?:[^\s'()]+).*?\)",
+            "link": r"\[(.+?)\]\((https?:.+?)\)"
+        }
+        for pattern in patterns.values():
+            matches = re.finditer(pattern, text)
+            replacements = [(m[0], m[1], m[2]) for m in matches]
+            if replacements is not None:
+                text = MarkdownChunkNorris._handle_link_replacements(
+                    text, replacements, link_placement=link_placement
+                )
 
         return text
 
