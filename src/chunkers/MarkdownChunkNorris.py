@@ -359,7 +359,6 @@ class MarkdownChunkNorris:
         - remove : links are removed
         - in_sentence : the link is placed in the sentence, between parenthesis
         - end_of_chunk : all links are added at the end of the text
-        - end_of_sentence : each link is added at the end of the sentence it is found in
         - leave_as_markdown: leave links as markdown format
 
         Args:
@@ -412,9 +411,9 @@ class MarkdownChunkNorris:
                     text = text.replace(m[0], m[1])
                 case "end_of_chunk":
                     if i == 0:
-                        text += "Pour plus d'informations:\n"
+                        text += "\nPour plus d'informations:\n"
                     text = text.replace(m[0], m[1])
-                    text += f"- {m[1]}: {m[2]}\n"
+                    text += f"- {m[1]}: {m[2]}"
                 case "in_sentence":
                     text = text.replace(
                         m[0], f"{m[1]} (lien : {m[2]})"
