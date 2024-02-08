@@ -180,7 +180,7 @@ class MarkdownChunkNorris:
         """
         text = tree["content"]
         # remove special characters
-        special_chars = ["**", "\xa0", "\*"]
+        special_chars = ["**", "\xa0", r"\*"]
         for char in special_chars:
             text = text.replace(char, "")
         # remove white spaces and newlines
@@ -223,7 +223,8 @@ class MarkdownChunkNorris:
         """
         chunks = MarkdownChunkNorris.get_chunks_texts(toc_tree, **kwargs)
         chunks = [MarkdownChunkNorris.change_links_format(c, **kwargs) for c in chunks]
-        chunks = self.check_chunks(chunks, **kwargs)
+        chunks = MarkdownChunkNorris.remove_small_chunks(chunks, **kwargs)
+        chunks = self.remove_small_chunks(chunks, **kwargs)
 
         return chunks
             
@@ -420,11 +421,24 @@ class MarkdownChunkNorris:
                     )
 
         return text
+    
+    @staticmethod
+    def remove_small_chunks(chunks: Chunks, min_chunk_word_count:int=15, **kwargs) -> Chunks:
+        """Removes chunks that have less words than the specified limit
 
-    def check_chunks(
+        Args:
+            chunks (Chunks): _description_
+            min_chunk_tokens (int, optional): the minimum size a chunk is allowed to be,
+                in words. Chunks with less words than this are dicarded. Defaults to 15.
+        Returns:
+            Chunks: the chunks with more words than the specified threshold
+        """
+        return [c for c in chunks if len(c.split()) >= min_chunk_word_count]
+
+
+    def split_big_chunks(
         self,
         chunks: Chunks,
-        min_chunk_word_count=10,
         max_chunk_tokens: int = 8191,
         chunk_tokens_exceeded_handling: str = "raise_error",
         **kwargs,
@@ -437,15 +451,12 @@ class MarkdownChunkNorris:
 
         Args:
             chunks (Chunks): The chunks obtained from the get_chunks() method
-            min_chunk_tokens (int, optional): the minimum size a chunk is allowed to be,
-                in words. Chunks with less words than this are dicarded. Defaults to 15.
             max_chunk_tokens (int, optional): the maximum size a chunk is allowed to be,
                 in tokens. Defaults to 8191.
             chunk_tokens_exceeded_handling (str, optional): whether or not error sould be raised if a big
                 chunk is encountered, or split. Defaults to raise_error.
         """
         MarkdownChunkNorris._check_string_argument_is_valid("chunk_tokens_exceeded_handling", chunk_tokens_exceeded_handling)
-        chunks = [c for c in chunks if len(c.split()) > min_chunk_word_count]
         splitted_chunks = []
         for chunk in chunks:
             if self.get_token_count(chunk) < max_chunk_tokens:
@@ -461,7 +472,7 @@ class MarkdownChunkNorris:
                             )
                         )
                     case "split":
-                        splitted_chunk = self.dummy_split_big_chunk(chunk, max_chunk_tokens)
+                        splitted_chunk = self._dummy_split_big_chunk(chunk, max_chunk_tokens)
                         splitted_chunks.extend(splitted_chunk)
 
         return splitted_chunks
@@ -479,7 +490,7 @@ class MarkdownChunkNorris:
         return len(self.tokenizer.encode(text))
 
 
-    def dummy_split_big_chunk(
+    def _dummy_split_big_chunk(
         self,
         chunk: Chunk,
         max_chunk_tokens: int = 8191,
@@ -499,7 +510,7 @@ class MarkdownChunkNorris:
 
         split_count = (token_count // max_chunk_tokens) + 1
         split_token_size = token_count // split_count
-        tokenized_text = self.tokenizer.encode(chunk["text"])
+        tokenized_text = self.tokenizer.encode(chunk)
         splitted_text = [
             self.tokenizer.decode(
                 tokenized_text[i * split_token_size : (i + 1) * split_token_size]
