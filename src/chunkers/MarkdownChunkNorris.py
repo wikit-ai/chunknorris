@@ -1,6 +1,7 @@
 import copy
 import json
 import re
+import unicodedata
 import tiktoken
 
 from ..exceptions.exceptions import *
@@ -179,8 +180,9 @@ class MarkdownChunkNorris:
             tree (TocTree): the toc tree
         """
         text = tree["content"]
+        text = unicodedata.normalize("NFKC", text)
         # remove special characters
-        special_chars = ["**", "\xa0", r"\*"]
+        special_chars = ["**", r"\*"]
         for char in special_chars:
             text = text.replace(char, "")
         # remove white spaces and newlines
