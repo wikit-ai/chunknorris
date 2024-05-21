@@ -25,5 +25,5 @@ wcn.chunk_directory(INPUT_FOLDER, OUTPUT_FOLDER)
 If you do not specify the ``output_dir`` argument, files will be stored in a folder named ``<name_of_input_dir>-chunked`` by default.
 
 Alternatively, if you cloned the repo, you can chunk a folder using the following command :
-``python -m src.custom_chunkers.WikitChunkNorris --input_dir "<mydir>"``
+``python -m src.custom_chunkers.wikit_chunknorris --input_dir "<mydir>"``
 Other arguments can be specified. For more information, check at **advanced usage of chunkers**.
