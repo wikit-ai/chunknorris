@@ -1,1 +1,1 @@
-from .WikitChunkNorris import WikitChunkNorris
+from .wikit_chunknorris import WikitChunkNorris

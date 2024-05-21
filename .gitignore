@@ -10,10 +10,12 @@ ChromaDB
 
 # python related stuff
 __pycache__
+pylintrc
 
 # specific files
 WikitPDFParser_Output.pdf
-table.html
+output.html
 
 # vs-code stuff
 *code-workspace
+.vscode
