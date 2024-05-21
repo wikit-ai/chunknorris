@@ -171,7 +171,7 @@ def main():
     args = parse_arguments()
 
     wcn = WikitChunkNorris()
-    wcn.chunk_directory(vars(args))
+    wcn.chunk_directory(**vars(args))
 
 
 if __name__ == "__main__":
