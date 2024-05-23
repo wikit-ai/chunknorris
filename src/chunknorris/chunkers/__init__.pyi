@@ -1,0 +1,2 @@
+from .html_chunknorris import HTMLChunkNorris as HTMLChunkNorris
+from .markdown_chunknorris import MarkdownChunkNorris as MarkdownChunkNorris

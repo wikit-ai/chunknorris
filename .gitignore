@@ -11,6 +11,7 @@ ChromaDB
 # python related stuff
 __pycache__
 pylintrc
+python_env
 
 # specific files
 WikitPDFParser_Output.pdf
@@ -19,3 +20,7 @@ output.html
 # vs-code stuff
 *code-workspace
 .vscode
+
+# package build files
+dist/
+chunknorris.egg-info

@@ -1,0 +1,6 @@
+from .markdown_chunknorris import MarkdownChunkNorris as MarkdownChunkNorris
+
+class HTMLChunkNorris(MarkdownChunkNorris):
+    def __call__(self, html_text: str, **kwargs) -> str: ...
+    @staticmethod
+    def apply_markdownify(html_text) -> str: ...

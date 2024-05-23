@@ -12,20 +12,23 @@ namespaces = true  # true by default
 name = "chunknorris"
 version = "0.0.1"
 authors = [
-  { name="Mathieu Ciancone", email="mathieu@wikit.ai" },
+  { name="Wikit", email="dev@wikit.ai" },
 ]
 description = "A package for chunking documents from various formats"
 keywords = ["chunk", "document", "split", "html", "markdown", "pdf", "header"]
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10"
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GNU AFFERO GPL 3.0",
-    "Operating System :: OS Independent",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3.10",
+    "Framework :: Pytest",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Text Processing :: Markup :: HTML",
+    "Operating System :: OS Independent"
 ]
 dependencies = [
   "markdownify>=0.11.6",
-  "tqdm>=4.66.1",
   "tiktoken>=0.5.2",
   "PyMuPDF>=1.23.16"
 ]

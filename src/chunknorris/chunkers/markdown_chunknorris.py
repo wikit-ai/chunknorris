@@ -234,7 +234,7 @@ class MarkdownChunkNorris:
         that they fit in size, replace links formatting.
 
         Args:
-            toc_tree (TocTree): the toc tree of the documnet
+            toc_tree (TocTree): the toc tree of the document
 
         Returns:
             Chunks: the chunks text, formatted
@@ -310,7 +310,7 @@ class MarkdownChunkNorris:
         adds the header and content of its children
 
         Args:
-            toc_tree_element (TocTree): the toc tree (or elment of toc tree)
+            toc_tree_element (TocTree): the toc tree (or element of toc tree)
 
         Returns:
             str: the text of the chunk (without the headers of parents)
@@ -473,7 +473,7 @@ class MarkdownChunkNorris:
             chunks (Chunks): The chunks obtained from the get_chunks() method
             max_chunk_tokens (int, optional): the maximum size a chunk is allowed to be,
                 in tokens. Defaults to 8191.
-            chunk_tokens_exceeded_handling (str, optional): whether or not error sould be raised if a big
+            chunk_tokens_exceeded_handling (str, optional): whether or not error should be raised if a big
                 chunk is encountered, or split. Defaults to raise_error.
         """
         MarkdownChunkNorris._check_string_argument_is_valid(
