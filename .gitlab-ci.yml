@@ -1,0 +1,22 @@
+default:
+  image: registry.gitlab.com/wikit/wikit-ci-utils/wikit-ci-node20
+
+stages:
+- app-checks
+
+
+################################
+## CHECKS STAGE ################
+
+lint:
+  stage: app-checks
+  image: registry.gitlab.com/wikit/wikit-ci-utils/wikit-ci-python3.10
+  script:
+  - pylint ./src --output-format=parseable --rcfile=./.pylintrc
+
+black:
+  stage: app-checks
+  image: registry.gitlab.com/wikit/wikit-ci-utils/wikit-ci-python3.10
+  script:
+  - black --version
+  - black --check src/

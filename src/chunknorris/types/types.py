@@ -1,12 +1,21 @@
-Chunk = str
+from pydantic import BaseModel
 
-Chunks = list[Chunk]
 
-class TocTree():
-    id: int
-    text: str
-    level: int
-    line_index: int
+class AbstractInOutType(BaseModel):
+    """
+    Abstract In/Out type
+    """
+
     content: str
-    parents: dict
-    children: list[dict]
+
+
+class MarkdownString(AbstractInOutType):
+    """A parsed Markdown Formatted String.
+    Feats :
+    - ATX header formatting.
+    - Remove base64 images
+    """
+
+
+class HTMLString(AbstractInOutType):
+    """A HTML Formatted String"""
