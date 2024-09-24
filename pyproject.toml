@@ -8,14 +8,22 @@ include = ["*"]
 exclude = ["__pycache__"]
 namespaces = true  # true by default
 
+[tool.mypy]
+mypy_path = "src-stubs"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src"
+]
+
 [project]
 name = "chunknorris"
-version = "0.0.1"
+version = "0.1.0"
 authors = [
   { name="Wikit", email="dev@wikit.ai" },
 ]
 description = "A package for chunking documents from various formats"
-keywords = ["chunk", "document", "split", "html", "markdown", "pdf", "header"]
+keywords = ["chunk", "document", "split", "html", "markdown", "pdf", "header", "RAG"]
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10"
 classifiers = [
@@ -27,11 +35,10 @@ classifiers = [
     "Topic :: Text Processing :: Markup :: HTML",
     "Operating System :: OS Independent"
 ]
-dependencies = [
-  "markdownify>=0.11.6",
-  "tiktoken>=0.5.2",
-  "PyMuPDF>=1.23.16"
-]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [project.urls]
 Homepage = "https://gitlab.com/wikit/research-and-development/chunk-norris"
