@@ -16,9 +16,12 @@ pythonpath = [
   "src"
 ]
 
+[project.scripts]
+chunknorris = "chunknorris.__main__:main"
+
 [project]
 name = "chunknorris"
-version = "0.1.0"
+version = "0.2.0"
 authors = [
   { name="Wikit", email="dev@wikit.ai" },
 ]

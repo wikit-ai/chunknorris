@@ -23,7 +23,7 @@ class Chunk:
         end_page: Optional[int] = None,
     ) -> None:
         self.headers = headers
-        self.content = self._cleanup_text(content)
+        self.content = Chunk._cleanup_text(content)
         self.start_line = start_line
         self.start_page = start_page
         self.end_page = end_page

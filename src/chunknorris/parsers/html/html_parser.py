@@ -2,7 +2,7 @@ from pathlib import Path
 import re
 from markdownify import markdownify  # type: ignore : no stub file
 
-from ...types import MarkdownString
+from ...types.types import MarkdownString
 from ..abstract_parser import AbstractParser
 
 

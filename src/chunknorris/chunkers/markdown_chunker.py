@@ -1,12 +1,9 @@
 import re
-import os
 from typing import Literal
 
-from pydantic import validate_call
-
 from .abstract_chunker import AbstractChunker
-from .tools import Chunk, TocTree
-from ..types import MarkdownString
+from .tools.tools import Chunk, TocTree
+from ..types.types import MarkdownString
 
 
 class MarkdownChunker(AbstractChunker):
@@ -15,7 +12,6 @@ class MarkdownChunker(AbstractChunker):
     hard_max_chunk_word_count: int
     min_chunk_word_count: int
 
-    @validate_call
     def __init__(
         self,
         max_headers_to_use: Literal["h1", "h2", "h3", "h4", "h5", "h6"] = "h4",
@@ -26,7 +22,6 @@ class MarkdownChunker(AbstractChunker):
         """Initialize a Markdown chunker
 
         Args:
-            parser (AbstractParser) : The parser to to use to parse the inputs
             max_headers_to_use (MaxHeadersToUse) : The maximum header level to consider (included).
                 Headers with level lower than this wont be used to split chunks.
                 For example, if 'h4' is set, then 'h5' and 'h6' headers won't be used.
@@ -57,7 +52,6 @@ class MarkdownChunker(AbstractChunker):
 
         return patterns
 
-    @validate_call
     def chunk_string(self, string: MarkdownString) -> list[Chunk]:
         """Chunks a Markdown formatted string
 
@@ -68,23 +62,6 @@ class MarkdownChunker(AbstractChunker):
         chunks = self.get_chunks(toc_tree)
 
         return chunks
-
-    def save_chunks(self, filepath: str, chunks: list[Chunk]) -> None:
-        """Saves each chunk in a MarkDown file.
-
-        Args:
-            filepath (str): the path of the source chunked file.
-            chunks (list[Chunk]): the chunks to save.
-        """
-        dirname = os.path.dirname(filepath) + "-chunked"
-        if not os.path.exists(dirname):
-            os.makedirs(dirname)
-        filename, _ = os.path.splitext(os.path.basename(filepath))
-        for i, chunk in enumerate(chunks):
-            with open(
-                os.path.join(dirname, filename + f"-{i}.md"), "w", encoding="utf8"
-            ) as f:
-                f.write(chunk.get_text())
 
     def get_toc_tree(
         self,
@@ -305,7 +282,7 @@ class MarkdownChunker(AbstractChunker):
         current_chunk_lines: list[str] = []
         headers_lines: list[str | None] = [None] * 6  # to store the headers
         headers_lines_buffer = headers_lines.copy()
-        start_line = chunk.start_line
+        prev_start_line = chunk.start_line
         within_code_block = False
         for line_idx, line in enumerate(chunk.content.split("\n")):
             if line.startswith("```") and not "```" in line[3:]:
@@ -322,18 +299,18 @@ class MarkdownChunker(AbstractChunker):
                     content="\n\n".join(headers)
                     + "\n\n"
                     + "\n".join(current_chunk_lines),
-                    start_line=start_line,
+                    start_line=prev_start_line,
                 )
                 chunks.append(new_chunk)
+                prev_start_line = chunk.start_line + line_idx
                 current_chunk_lines = []
                 headers_lines_buffer = headers_lines.copy()
-                start_line += line_idx
         if current_chunk_lines:
             headers = list(filter(None, headers_lines))
             new_chunk = Chunk(
                 headers=chunk.headers,
                 content="\n\n".join(headers) + "\n\n" + "\n".join(current_chunk_lines),
-                start_line=start_line,
+                start_line=prev_start_line,
             )
             chunks.append(new_chunk)
 

@@ -6,8 +6,8 @@ from pydantic import validate_call, ValidationError
 from ..abstract_parser import AbstractParser
 from ...parsers.markdown.markdown_parser import MarkdownParser
 from ...parsers.html.html_parser import HTMLParser
-from ...schemas import WikitJSONDocument
-from ...types import MarkdownString
+from ...schemas.schemas import WikitJSONDocument
+from ...types.types import MarkdownString
 
 
 class WikitJsonParser(AbstractParser):
