@@ -3,10 +3,10 @@ import os
 import json
 from argparse import ArgumentParser
 
-from ..chunkers import MarkdownChunker
-from ..chunkers.tools import Chunk
+from ..chunkers.markdown_chunker import MarkdownChunker
+from ..chunkers.tools.tools import Chunk
 from ..parsers.json.wikit_parser import WikitJsonParser
-from ..schemas import WikitJSONDocument, WikitJSONDocumentChunk
+from ..schemas.schemas import WikitJSONDocument, WikitJSONDocumentChunk
 from ..decorators.decorators import validate_args
 
 
@@ -59,8 +59,8 @@ class WikitJsonPipeline:
         json_content = self.parser.read_file(filepath)
         md_string = self.parser.parse_wikit_json_document(json_content)
         chunks = self.chunker.chunk_string(md_string)
-        json_content.has_part = self.format_chunks(chunks)
-        self.save_chunks_as_wikit_json(json_content, output_filepath)
+        json_content.has_part = self._format_chunks(chunks)
+        self._save_content_as_wikit_json(json_content, output_filepath)
 
     def chunk_directory(self, input_dir: str) -> None:
         """Chunks the json files of entire directory, recursively
@@ -83,7 +83,7 @@ class WikitJsonPipeline:
             output_filepath = filepath.replace(input_dir, output_dir)
             self.chunk_and_save(filepath, output_filepath)
 
-    def save_chunks_as_wikit_json(
+    def _save_content_as_wikit_json(
         self, content: WikitJSONDocument, out_filepath: str
     ) -> None:
         """Saves each chunk in a MarkDown file.
@@ -99,7 +99,7 @@ class WikitJsonPipeline:
         with open(out_filepath, "w", encoding="utf-8") as file:
             json.dump(content.model_dump(), file, ensure_ascii=False)
 
-    def format_chunks(self, chunks: list[Chunk]) -> list[WikitJSONDocumentChunk]:
+    def _format_chunks(self, chunks: list[Chunk]) -> list[WikitJSONDocumentChunk]:
         """Formats the chunks according to the input json file
         i.e places the chunks inside the key [hasPart]
 
@@ -117,6 +117,19 @@ class WikitJsonPipeline:
         ]
 
         return has_part
+
+    def save_chunks(
+        self, chunks: list[Chunk], output_filename: str, remove_links: bool = False
+    ) -> None:
+        """Saves the chunks at the designated location
+        as a json list of chunks.
+
+        Args:
+            chunks (Chunks): the chunks.
+            output_filename (str): the JSON file where to save the files. Must be json.
+            remove_links (bool): Whether or not links should be remove from the chunk's text content.
+        """
+        self.chunker.save_chunks(chunks, output_filename, remove_links)
 
 
 def parse_arguments():

@@ -1,6 +1,6 @@
 import pytest
 
-from chunknorris.parsers import MarkdownParser, WikitJsonParser, HTMLParser
+from chunknorris.parsers import MarkdownParser, WikitJsonParser, HTMLParser, PdfParser
 from chunknorris.chunkers import MarkdownChunker
 from chunknorris.chunkers.tools import Chunk
 
@@ -42,6 +42,11 @@ def wikit_parser() -> WikitJsonParser:
     return WikitJsonParser()
 
 
+@pytest.fixture(scope="session")
+def pdf_parser() -> PdfParser:
+    return PdfParser()
+
+
 ###############
 #  filepaths  #
 ###############
@@ -65,6 +70,11 @@ def wikitjson_md_filepath() -> str:
 @pytest.fixture(scope="session")
 def wikitjson_html_filepath() -> str:
     return "./tests/test_files/file_html.json"
+
+
+@pytest.fixture(scope="session")
+def pdf_filepath() -> str:
+    return "./tests/test_files/file.pdf"
 
 
 #############

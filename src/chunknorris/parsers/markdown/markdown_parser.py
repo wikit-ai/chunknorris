@@ -1,5 +1,5 @@
 from pathlib import Path
-from ...types import MarkdownString
+from ...types.types import MarkdownString
 from ..abstract_parser import AbstractParser
 
 

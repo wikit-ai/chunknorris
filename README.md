@@ -2,94 +2,120 @@
 
 ## Goal
 
-This project aims at improving the method of chunking documents from various sources (HTML, PDFs, ...)
-An optimized chunking method might lead to smaller chunks, meaning :
+This project aims at improving the method of chunking documents from various sources (HTML, PDFs, ...).
+In the context of Retrieval Augmented Generation (RAG), an optimized chunking method might lead to smaller chunks, meaning :
 - **Better relevancy of chunks** (and thus easier identification of useful chunks through embedding cosine similarity)
 - **Less errors** because of chunks exceeding the API limit in terms of number of tokens
 - **Less hallucinations** of generation models because of superfluous information in the prompt
 - **Reduced cost** as the prompt would have reduced size
 
-## Installation
+## ⬇️ Installation
 
 Using Pypi, just run the following command :
 ```pip install chunknorris```
 
-## Chunkers
+## 🚀 Quick usage
 
-The package features multiple ***chunkers*** that can be used independently depending on the type of document needed.
+You can directly invoke chunknorris on any **.md**, **.html** or **.pdf** file by running the following command in your terminal :
 
-All chunkers follow a similar logic :
-- Extract table of contents (= headers)
-- Build chunks using the text content of a part, and put the titles of the parts it belongs to on top
+```chunknorris --filepath "path/to/myfile.pdf"```
+
+See ``chunknorris -h`` for available options. Feel free to experiment 🧪 !
+
+## ⚙️ How it works
+
+ChunkNorris relies on 3 components :
+- **Parsers** : they handle the cleaning and formating of your input document. You may use any parser suited for your need (e.g PdfParser for parsing PDF documents, MarkdownParser for parser)
+- **Chunkers** : they use the output of the parser and handle its chunking.
+- **pipelines**: they combine a parser and a chunker, allowing to output chunks directly from you input documents.
+
+### Parsers
+
+The role of parsers is to take a file or a string as input, and output a clean formated string suited for a chunker. As of today, **3 parsers are available** : 
+- ``MarkdownParser`` : for parsing markdown strings.
+- ``HTMLParser`` : for parsing html-formated strings.
+- ``PdfParser`` : for parsing PDF files.
+
+For now, all parsers will output a Markdown string. Indeed, markdown is a great format to be use in RAG application as it is very well understood by LLMs.
+
+### Chunkers
 
 ![](images/chunk_method.png)
 
-### MarkdownChunkNorris
+The role of chunkers is to process the output of parsers in order to obtain relevant chunks of the document. As of today, only ``MarkdownChunker`` is available. Used in conjunction with parsers, it allows to process a various inputs.
 
-This chunker is meant to be used **on markdown-formatted text**. 
+The chunking strategy of chunkers is based on several principles:
+- **Each chunk must carry homogenous information.** To this end, they use the document's headers to chunk the documents. It helps ensuring that a specific piece of information is not splitted across multiple chunks.
+- **Each chunk must keep contextual information.** A document's section might loose its meaning if the reader as no knowledge of its context. Consequently, all the headers of the parents sections are added ad the top of the chunk.
+- **All chunks must be of similar sizes.** Indeed, when attempting to retrieve relevant chunks regarding a query, embedding models tend to be sensitive to the length of chunks. Actually, it is likely that a chunk with a text content of similar length to the query will have a high similarity score, while a chunk with a longer text content will see its similarity score descrease despite its relevancy. To prevent this, chunkers try to keep chunks of similar sizes whenever possible.
 
-#### Usage
+
+### Pipelines
+
+Pipelines are the glue that sticks together a parser and a chunker. They use both to process documents and ensure constant output quality.
+
+## Usage
+
+You may find more details examples in the [examples section](link) of the repo. Nevertheless, here is a basic example to get you started, assuming you need to chunk Mardown files.
 
 ```py
-from chunkers import MarkdownChunkNorris
+from chunknorris.parsers import MarkdownParser
+from chunknorris.chunkers import MarkdownChunker
+from chunknorris.pipelines import BasePipeline
 
-text = """
-# This is a header
-This is a text
-## This is another header
-And another text
-## With this final header
-And this last text
-"""
-chunker = MarkdownChunkNorris()
-chunks = chunker(text)
+# Instanciate components
+parser = MarkdownParser()
+chunker = MarkdownChunker()
+pipeline = BasePipeline(parser, chunker)
 
-# Alternatively, you may use the .chunk_file() method to pass a filepath
-chunks = chunker.chunk_file(filepath="myfile.md")
+# Get some chunks !
+chunks = pipeline.chunk_file(filepath="myfile.md")
+
+# Print or save :
+for chunk in chunks:
+    print(chunk.get_text())
+pipeline.save_chunks(chunks)
 ```
 
-### HTMLChunkNorris
+The ``BasePipeline`` is rather simple : it simply puts the parsers output into the chunker. While this is enough most in most cases, you may sometime need to use more advanced strategies.
 
-This chunker is meant to be used **on html-formatted text**. Behind the scene, it uses markdownify to transform the text to markdown with "setex"-style headers and uses MarkdownChunkNorris to process it.
-
-#### Usage
+The ``PdfPipeline`` for example works better with ``PdfParser``, as it has a ***fallback mechanism*** toward chunking the document by page in case no headers have been found. Here is a basic example of how to use it.
 
 ```py
-from chunknorris.chunkers import HTMLChunkNorris
+from chunknorris.parsers import PdfParser
+from chunknorris.chunkers import MarkdownChunker
+from chunknorris.pipelines import PdfPipeline
 
-html_string = """
-<h1>This is 1st level heading</h1>
-<p>This is a test paragraph.</p>
-<h2>This is 2nd level heading</h2>
-<p>This is a test paragraph.</p>
-<h2>This is another level heading</h2>
-<p>This is another test paragraph.</p>
-"""
-chunker = HTMLChunkNorris()
-chunks = chunker(html_string)
+# Instanciate components
+parser = PdfParser()
+chunker = MarkdownChunker()
+pipeline = PdfPipeline(parser, chunker)
 
-# Alternatively, you may use the .chunk_file() method to pass a filepath
-chunks = chunker.chunk_file(filepath="myfile.html")
+# Get some chunks !
+chunks = pipeline.chunk_file(filepath="myfile.pdf")
+
+# Print or save :
+for chunk in chunks:
+    print(chunk.get_text())
+pipeline.save_chunks(chunks)
 ```
 
-### Advanced usage of chunkers
+Feel free to experiment with various combinations, or even to implement your the pipeline that suits your needs !.
 
-Additionally, the chunkers can take a number of argument allowing to modifiy its behavior:
+
+### Advanced usage
+
+Additionally, the chunkers and parsers can take a number of argument allowing to modifiy their behavior:
 
 ```py
-from chunknorris.chunkers import MarkdownChunkNorris
+from chunknorris.chunkers import MarkdownChunker
 
-mystring = "# header\nThis is a markdown string"
-
-chunker = MarkdownChunkNorris() # or any other chunker
-chunks = chunker(
-    mystring,
+chunker = MarkdownChunker(
     max_headers_to_use="h4",
     max_chunk_word_count=250,
-    link_placement="in_sentence",
     hard_max_chunk_word_count=400,
     min_chunk_word_count=15,
-    )
+)
 ```
 
 ***max_headers_to_use*** 
@@ -98,21 +124,13 @@ chunks = chunker(
 ***max_chunk_word_count***
 (int): The maximum size (soft limit, in words) a chunk can be. Chunk bigger that this size will be chunked using lower level headers, until no lower level headers are available. Defaults to 200.
 
-***link_placement***
-(str): How the links should be handled. Defaults to leave_as_markdown.
-Options :
-- "leave_as_markdown" : the links are kept in markdown format
-- "remove" : text are kept but links are removed
-- "end_of_chunk" : adds a paragraph at the end of the chunk containing all the links
-- "in_sentence" : the links are added between parenthesis inside the sentence
-
 ***hard_max_chunk_word_count***
 (int): The hard maximum of number of words a chunk can be. Chunks bigger by this limit will be split into subchunks. ChunkNorris will try to equilibrate the size of resulting subchunks. It uses newlines to split. It should be greater than max_chunk_word_count. Defaults to 400. 
 
 ***min_chunk_word_count***
 (int): Minimum number of words to consider keeping the chunks. Chunks with less words will be discarded. Defaults to 15.
 
-### PDFChunkNorris
 
-#TODO:
+### Implementing your own pipeline
 
+#### TODO
