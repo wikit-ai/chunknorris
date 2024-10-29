@@ -300,6 +300,8 @@ class MarkdownChunker(AbstractChunker):
                     + "\n\n"
                     + "\n".join(current_chunk_lines),
                     start_line=prev_start_line,
+                    start_page=chunk.start_page,
+                    end_page=chunk.end_page,
                 )
                 chunks.append(new_chunk)
                 prev_start_line = chunk.start_line + line_idx
@@ -311,6 +313,8 @@ class MarkdownChunker(AbstractChunker):
                 headers=chunk.headers,
                 content="\n\n".join(headers) + "\n\n" + "\n".join(current_chunk_lines),
                 start_line=prev_start_line,
+                start_page=chunk.start_page,
+                end_page=chunk.end_page,
             )
             chunks.append(new_chunk)
 

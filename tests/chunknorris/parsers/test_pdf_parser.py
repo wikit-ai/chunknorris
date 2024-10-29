@@ -1,5 +1,5 @@
 import re
-import pymupdf
+import pymupdf  # type: ignore -> no stubs
 from chunknorris.parsers import PdfParser
 from chunknorris.types import MarkdownString
 
@@ -29,6 +29,6 @@ def test_parse_file(pdf_parser: PdfParser, pdf_filepath: str):
 
 
 def test_parse_string(pdf_parser: PdfParser, pdf_filepath: str):
-    byte_string = pymupdf.open(pdf_filepath).tobytes()
+    byte_string = pymupdf.open(pdf_filepath).tobytes()  # type: ignore -> missing typing : pymupdf.open() -> pymupdf.Document
     md_string = pdf_parser.parse_string(byte_string)
     assert isinstance(md_string, MarkdownString)
