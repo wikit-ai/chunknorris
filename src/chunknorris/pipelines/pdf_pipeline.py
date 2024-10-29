@@ -68,10 +68,17 @@ class PdfPipeline:
         Returns:
             Chunk: the list of chunks
         """
+        doc_orientation = self.parser.get_document_orientation()
+
         if self.headers_have_been_found():
             chunks = self.chunk_with_headers()
-        else:
+        elif doc_orientation == "landscape":
             chunks = self.chunk_by_page()
+        # placeholder : if no headers found and document is portrait, then chunk with headers
+        # as no header have been found, this will result in on big chunk being chunk into subchunks by word length
+        # In the future, a method will be implemented to detect TOC using advanced techniques.
+        else:
+            chunks = self.chunk_with_headers()
 
         self.parser.cleanup_memory()
 
@@ -149,6 +156,8 @@ class PdfPipeline:
                 )
             )
             line_idx += len(md_string.content.split("\n"))
+
+        chunks = self.chunker.split_big_chunks(chunks)
 
         return chunks
 

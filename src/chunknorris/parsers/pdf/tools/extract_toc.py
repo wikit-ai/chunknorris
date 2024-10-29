@@ -203,21 +203,22 @@ class PdfTocExtraction(PdfParserState):
         fontsize_counts = Counter(
             block.fontsize for block in self.blocks if not block.is_empty
         )
-        main_body_fontsize = max(fontsize_counts, key=fontsize_counts.get)
-        fontsizes = (
-            fontsize
-            for fontsize in fontsize_counts.keys()
-            if fontsize > main_body_fontsize
-        )
-        fontsizes = sorted(fontsizes, reverse=True)[:5]
-        for block in self.blocks:
-            if block.fontsize in fontsizes:
-                block.section_title = TocTitle(
-                    text=block.text,
-                    level=fontsizes.index(block.fontsize) + 1,
-                    page=block.page,
-                    source="fontsize",
-                )
+        if fontsize_counts:
+            main_body_fontsize = max(fontsize_counts, key=fontsize_counts.get)
+            fontsizes = (
+                fontsize
+                for fontsize in fontsize_counts.keys()
+                if fontsize > main_body_fontsize
+            )
+            fontsizes = sorted(fontsizes, reverse=True)[:5]
+            for block in self.blocks:
+                if block.fontsize in fontsizes:
+                    block.section_title = TocTitle(
+                        text=block.text,
+                        level=fontsizes.index(block.fontsize) + 1,
+                        page=block.page,
+                        source="fontsize",
+                    )
 
     def _get_document_main_title(self) -> str:
         """

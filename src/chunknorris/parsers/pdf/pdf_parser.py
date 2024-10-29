@@ -155,7 +155,7 @@ class PdfParser(
         self.spans = self._create_spans()
         if not self.spans or all(span.is_header_footer for span in self.spans):
             raise TextNotFoundException(
-                'No text content found in document. You may want to set use_ocr="auto" or "always".'
+                'No text content found in document. You may want to set use_ocr="always".'
             )
         self.tables = self.get_tables() if self.extract_tables else []
         self.spans = self._flag_table_spans(self.spans)
