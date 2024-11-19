@@ -3,6 +3,7 @@ to test the MarkdownChunkNorris chunker
 """
 
 from chunknorris.chunkers.tools import Chunk
+from chunknorris.parsers.markdown.components import MarkdownLine
 
 MD_STANDARD_IN = """
 # This is header 1
@@ -84,17 +85,31 @@ MD_SKIPPED_HEADER_LEVELS_OUT = [
 ]
 
 MD_BIG_CHUNK_IN = Chunk(
-    headers=["# This is header 1"],
-    content="""## This is header 2.1
-
-word word word word word word word word word word
-word word word word word word word word word word
-word word word word word word word word word word
-## This is header 2.2
-
-word word word word word word word word word word
-word word word word word word word word word word
-word word word word word word word word word word""",
+    headers=[MarkdownLine(text="# This is header 1", line_idx=0)],
+    content=[
+        MarkdownLine(text="## This is header 2.1", line_idx=1),
+        MarkdownLine(text="\n", line_idx=2),
+        MarkdownLine(
+            text="word word word word word word word word word word", line_idx=3
+        ),
+        MarkdownLine(
+            text="word word word word word word word word word word", line_idx=4
+        ),
+        MarkdownLine(
+            text="word word word word word word word word word word", line_idx=5
+        ),
+        MarkdownLine(text="## This is header 2.2", line_idx=6),
+        MarkdownLine(text="\n", line_idx=7),
+        MarkdownLine(
+            text="word word word word word word word word word word", line_idx=8
+        ),
+        MarkdownLine(
+            text="word word word word word word word word word word", line_idx=9
+        ),
+        MarkdownLine(
+            text="word word word word word word word word word word", line_idx=10
+        ),
+    ],
     start_line=0,
 )
 
@@ -102,7 +117,7 @@ MD_BIG_CHUNK_OUT = [
     "# This is header 1\n\n## This is header 2.1\n\nword word word word word word word word word word",
     "# This is header 1\n\n## This is header 2.1\n\nword word word word word word word word word word",
     "# This is header 1\n\n## This is header 2.1\n\nword word word word word word word word word word",
-    "# This is header 1\n\n## This is header 2.1\n\n## This is header 2.2\n\nword word word word word word word word word word",
+    "# This is header 1\n\n## This is header 2.2\n\n## This is header 2.2\n\nword word word word word word word word word word",
     "# This is header 1\n\n## This is header 2.2\n\nword word word word word word word word word word",
     "# This is header 1\n\n## This is header 2.2\n\nword word word word word word word word word word",
 ]

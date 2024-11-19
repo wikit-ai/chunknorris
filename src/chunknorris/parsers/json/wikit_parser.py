@@ -1,13 +1,13 @@
 import json
 from pathlib import Path
 
-from pydantic import validate_call, ValidationError
+from pydantic import ValidationError
 
 from ..abstract_parser import AbstractParser
+from ...parsers.markdown.components import MarkdownDoc
 from ...parsers.markdown.markdown_parser import MarkdownParser
 from ...parsers.html.html_parser import HTMLParser
 from ...schemas.schemas import WikitJSONDocument
-from ...types.types import MarkdownString
 
 
 class WikitJsonParser(AbstractParser):
@@ -16,15 +16,14 @@ class WikitJsonParser(AbstractParser):
     to the WikitJSONDocument interface.
     """
 
-    @validate_call
-    def parse_string(self, string: str) -> MarkdownString:
+    def parse_string(self, string: str) -> MarkdownDoc:
         """Parses a json string.
 
         Args:
             string (str): a json string.
 
         Returns:
-            MarkdownString : the formatted string.
+            MarkdownDoc : the formatted markdown string.
         """
         try:
             content = json.loads(string)
@@ -34,26 +33,28 @@ class WikitJsonParser(AbstractParser):
 
         return self.parse_wikit_json_document(content)
 
-    @validate_call
-    def parse_file(self, filepath: str) -> MarkdownString:
+    def parse_file(self, filepath: str) -> MarkdownDoc:
         """Parses a json file formatted according to Wikit's schema.
 
         Args:
             filepath (FilePath): the path to a file.
 
         Returns:
-            MarkdownString: the formatted string.
+            MarkdownDoc: the formatted markdown string.
         """
         content = self.read_file(filepath)
 
         return self.parse_wikit_json_document(content)
 
-    def parse_wikit_json_document(self, content: WikitJSONDocument) -> MarkdownString:
+    def parse_wikit_json_document(self, content: WikitJSONDocument) -> MarkdownDoc:
         """Parses the has_part key json document
         according to the specified text format.
 
         Args:
             content (WikitJSONDocument): the content to be parsed.
+
+        Returns:
+            MarkdownDoc: the formatted markdown string.
         """
         has_part = content.has_part[0].text
         match content.file_format:

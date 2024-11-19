@@ -29,8 +29,8 @@ class WikitJsonPipeline:
         Returns:
             list[Chunk]: the list of chunks
         """
-        string = self.parser.parse_file(filepath)
-        return self.chunker.chunk_string(string)
+        parsed_md = self.parser.parse_file(filepath)
+        return self.chunker.chunk(parsed_md)
 
     def chunk_string(self, string: str) -> list[Chunk]:
         """Chunks a json string formatted according to
@@ -43,8 +43,8 @@ class WikitJsonPipeline:
         Returns:
             list[Chunk]: the list of chunks
         """
-        md_string = self.parser.parse_string(string)
-        return self.chunker.chunk_string(md_string)
+        parsed_md = self.parser.parse_string(string)
+        return self.chunker.chunk(parsed_md)
 
     def chunk_and_save(self, filepath: str, output_filepath: str | None = None) -> None:
         """Chunks the file and saves the chunks
@@ -57,8 +57,8 @@ class WikitJsonPipeline:
         if not output_filepath:
             output_filepath = filepath.replace(".json", "-chunked.json")
         json_content = self.parser.read_file(filepath)
-        md_string = self.parser.parse_wikit_json_document(json_content)
-        chunks = self.chunker.chunk_string(md_string)
+        md_lines = self.parser.parse_wikit_json_document(json_content)
+        chunks = self.chunker.chunk(md_lines)
         json_content.has_part = self._format_chunks(chunks)
         self._save_content_as_wikit_json(json_content, output_filepath)
 

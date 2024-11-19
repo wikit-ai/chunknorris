@@ -1,5 +1,7 @@
+from itertools import groupby
+from operator import attrgetter
+from ..parsers.markdown.components import MarkdownLine
 from ..decorators.decorators import validate_args
-from ..types.types import MarkdownString
 from ..chunkers.markdown_chunker import MarkdownChunker
 from ..chunkers.tools.tools import Chunk
 from ..parsers.pdf.pdf_parser import PdfParser
@@ -92,7 +94,7 @@ class PdfPipeline:
         Returns:
             bool : True if detected headers have been found in document.
         """
-        if not self.parser.toc:
+        if len(self.parser.toc) < 3:
             return False
         headers_found = [header for header in self.parser.toc if header.found]
         return len(headers_found) / len(self.parser.toc) > 0.5
@@ -104,31 +106,10 @@ class PdfPipeline:
         Returns:
             Chunks: the list of chunks
         """
-        strings_per_page: dict[int, MarkdownString] = self.parser.to_markdown(
-            keep_track_of_page=True
-        )
         main_title = f"# {self.parser.main_title}\n\n" if self.parser.main_title else ""
-        md_string = MarkdownString(
-            content=main_title
-            + "\n\n".join((string.content for string in strings_per_page.values()))
-        )
-        chunks = self.chunker.chunk_string(md_string)
-        # build map dict[index of line : page_number] to keep track of the line index for each page
-        # Add start line attribute
-        line_to_page_map = {}
-        line_idx = len(main_title.split("\n"))
-        for page_n in sorted(strings_per_page.keys()):
-            line_to_page_map[page_n] = line_idx
-            line_idx += len(strings_per_page[page_n].content.split("\n"))
-        for chunk in chunks:
-            for page_n, line_idx in line_to_page_map.items():
-                if line_idx < chunk.start_line:
-                    chunk.start_page = page_n
-        chunks[0].start_page = min(line_to_page_map.keys())
-        # Add end line attribute
-        for chunk, next_chunk in zip(chunks[:-1], chunks[1:]):
-            chunk.end_page = next_chunk.start_page
-        chunks[-1].end_page = list(strings_per_page.keys())[-1]
+        md_doc = self.parser.to_markdown_doc()
+        md_doc.content.insert(0, MarkdownLine(text=main_title, line_idx=-1, page=0))
+        chunks = self.chunker.chunk(md_doc)
 
         return chunks
 
@@ -138,24 +119,24 @@ class PdfPipeline:
         Returns:
             Chunks: the list of chunks.
         """
-        strings_per_page: dict[int, MarkdownString] = self.parser.to_markdown(
-            keep_track_of_page=True
-        )
         main_title = f"# {self.parser.main_title}\n\n" if self.parser.main_title else ""
+        md_doc = self.parser.to_markdown_doc()
+        lines_per_page: dict[int, list[MarkdownLine]] = {
+            page: list(lines)
+            for page, lines in groupby(md_doc.content, key=attrgetter("page"))
+        }
 
         chunks: list[Chunk] = []
         line_idx = 0
-        for page_n, md_string in strings_per_page.items():
+        for lines in lines_per_page.values():
             chunks.append(
                 Chunk(
-                    headers=[main_title],
-                    content=md_string.content,
-                    start_page=page_n,
-                    end_page=page_n + 1,
+                    headers=[MarkdownLine(text=main_title, line_idx=-1, page=0)],
+                    content=lines,
                     start_line=line_idx,
                 )
             )
-            line_idx += len(md_string.content.split("\n"))
+            line_idx += len("\n".join((line.text for line in lines)).split("\n"))
 
         chunks = self.chunker.split_big_chunks(chunks)
 

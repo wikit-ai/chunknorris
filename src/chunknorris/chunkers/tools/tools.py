@@ -2,35 +2,49 @@ from __future__ import annotations
 from unicodedata import normalize
 from copy import deepcopy
 import re
-from typing import Optional
 import json
+
+from ...parsers.markdown.components import MarkdownLine
 
 
 class Chunk:
-    headers: list[str]
-    content: str
+    headers: list[MarkdownLine]
+    content: list[MarkdownLine]
     start_line: int
-    start_page: Optional[int]
-    end_page: Optional[int]
 
     def __init__(
         self,
-        headers: list[str],
-        content: str,
+        headers: list[MarkdownLine],
+        content: list[MarkdownLine],
         start_line: int,
-        *,
-        start_page: Optional[int] = None,
-        end_page: Optional[int] = None,
     ) -> None:
         self.headers = headers
-        self.content = Chunk._cleanup_text(content)
+        self.content = content
         self.start_line = start_line
-        self.start_page = start_page
-        self.end_page = end_page
 
     @property
     def word_count(self) -> int:
-        return len(self.content.split())
+        """Gets the amount of words in the chunk's content
+        (headers not included)
+        """
+        text_content = "\n".join((line.text for line in self.content))
+        return len(Chunk._cleanup_text(text_content).split())
+
+    @property
+    def start_page(self) -> int | None:
+        pages = [line.page for line in self.content if line.page is not None]
+        if pages:
+            return min(pages)
+        else:
+            return None
+
+    @property
+    def end_page(self) -> int | None:
+        pages = [line.page for line in self.content if line.page is not None]
+        if pages:
+            return max(pages)
+        else:
+            return None
 
     def __str__(self) -> str:
         return self.get_text()
@@ -45,7 +59,8 @@ class Chunk:
         Returns:
             str: the text
         """
-        text = "\n\n".join(self.headers + [self.content])
+        text = "\n\n".join((header.text for header in self.headers))
+        text += "\n\n" + "\n".join((line.text for line in self.content))
         if remove_links:
             text = Chunk.remove_links(text)
 
@@ -80,29 +95,23 @@ class Chunk:
 
 class TocTree:
     id: int
-    text: str
-    level: int
-    line_index: int
-    content: str
+    title: MarkdownLine
+    content: list[MarkdownLine]
     parent: TocTree | None
     children: list[TocTree]
 
     def __init__(
         self,
+        title: MarkdownLine,
         *,
-        title: str = "",
+        content: list[MarkdownLine] | None = None,
         children: list[TocTree] | None = None,
-        content: str = "",
         id: int = -1,
-        line_index: int = -1,
-        level: int = -1,
         parent: TocTree | None = None,
     ) -> None:
         self.title = title
-        self.content = content
+        self.content = [] if content is None else content
         self.id = id
-        self.line_index = line_index
-        self.level = level
         self.parent = parent
         self.children = [] if children is None else children
 
@@ -159,3 +168,17 @@ class TocTree:
         self.parent = None
         for child in self.children:
             child.remove_circular_refs()
+
+    def get_text(self, content_only: bool = False) -> str:
+        """Builds the text content of a toc tree
+
+        Args:
+            content_only (bool): if true, the text won't include headers, only content.
+
+        Returns:
+            str : the text content
+        """
+        text = "" if content_only else self.title.text + "\n\n"
+        text += "\n".join((line.text for line in self.content))
+
+        return text.strip()

@@ -48,3 +48,14 @@ Rex solvo sinu patuit in, Facit et Anaphen exosae eversae tenuit:
 **ales** tuis, igne. **Ab luna** sponte movit eratque. Dextera iuvencae via mihi
 *patrioque*.
 """
+
+MD_WITH_CODE_BLOCK = """
+```This is not a code block```
+This is a text
+
+```py
+This is a code block
+```
+
+This is a text
+"""

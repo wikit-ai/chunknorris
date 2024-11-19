@@ -1,9 +1,11 @@
-import re
 from typing import Literal
+
+
+from ..decorators.decorators import timeit, validate_args
 
 from .abstract_chunker import AbstractChunker
 from .tools.tools import Chunk, TocTree
-from ..types.types import MarkdownString
+from ..parsers.markdown.components import MarkdownDoc, MarkdownLine
 
 
 class MarkdownChunker(AbstractChunker):
@@ -39,77 +41,57 @@ class MarkdownChunker(AbstractChunker):
         self.hard_max_chunk_word_count = hard_max_chunk_word_count
         self.min_chunk_word_count = min_chunk_word_count
 
-    @property
-    def _header_regex_patterns(self) -> dict[str, re.Pattern[str]]:
-        """The header regex patterns for headers."""
-        patterns = {
-            "h1": re.compile(r"^(?:- )?(#{1} .+)", re.MULTILINE),
-            "h2": re.compile(r"^(?:- )?(#{2} .+)", re.MULTILINE),
-            "h3": re.compile(r"^(?:- )?(#{3} .+)", re.MULTILINE),
-            "h4": re.compile(r"^(?:- )?(#{4} .+)", re.MULTILINE),
-            "h5": re.compile(r"^(?:- )?(#{5} .+)", re.MULTILINE),
-        }
+    @timeit
+    @validate_args
+    def chunk(self, content: MarkdownDoc) -> list[Chunk]:
+        """Chunks a parsed Markdown document.
 
-        return patterns
-
-    def chunk_string(self, string: MarkdownString) -> list[Chunk]:
-        """Chunks a Markdown formatted string
+        Args:
+            content (MarkdownDoc): the markdown document to chunk.
+                Might be the output of a chunknorris.Parser.
 
         Returns:
-            Chunks: the chunks
+            list[Chunk]: the chunks
         """
-        toc_tree = self.get_toc_tree(string.content)
+        toc_tree = self.get_toc_tree(content.content)
         chunks = self.get_chunks(toc_tree)
 
         return chunks
 
     def get_toc_tree(
         self,
-        md_string: str,
+        md_lines: list[MarkdownLine],
     ) -> TocTree:
         """Builds the table of content tree based on header
 
         Args:
-            md_string (str): the markdown formatted string
+            md_lines (list[MarkdownLines]): the markdown lines
 
         Returns:
             TocTree: the table of content
         """
-        headers_patterns_to_use = [
-            self._header_regex_patterns[f"h{i}"]
-            for i in range(1, int(self.max_headers_to_use[1]) + 1)
-        ]
-        tree = TocTree()
+        max_header_level_to_use = int(self.max_headers_to_use[1])
+        dummy_line = MarkdownLine("", line_idx=-1)
+        tree = TocTree(title=dummy_line)
         current_node = tree
         id_cntr = 0
-        match = None
-        within_code_block = False
-        for line_idx, line in enumerate(md_string.split("\n")):
-            if line.startswith("```") and not "```" in line[3:]:
-                within_code_block = not within_code_block
-            if not within_code_block:
-                for level, pattern in enumerate(headers_patterns_to_use):
-                    match = re.match(pattern, line)
-                    if match and not within_code_block:
-                        title = match.group(1)
-                        while (
-                            current_node.parent is not None
-                            and level <= current_node.level
-                        ):
-                            current_node = current_node.parent
-                        current_node.add_child(
-                            TocTree(
-                                title=title,
-                                id=id_cntr,
-                                line_index=line_idx,
-                                level=level,
-                            )
-                        )
-                        current_node = current_node.children[-1]
-                        id_cntr += 1
-                        break
-            if within_code_block or not match:
-                current_node.content += line + "\n"
+        for line in md_lines:
+            if line.is_header and line.get_header_level() <= max_header_level_to_use:
+                while (
+                    current_node.parent is not None
+                    and line.get_header_level() <= current_node.title.get_header_level()
+                ):
+                    current_node = current_node.parent
+                current_node.add_child(
+                    TocTree(
+                        title=line,
+                        id=id_cntr,
+                    )
+                )
+                current_node = current_node.children[-1]
+                id_cntr += 1
+            else:
+                current_node.content.append(line)
 
         return tree
 
@@ -150,18 +132,18 @@ class MarkdownChunker(AbstractChunker):
         Returns:
             Chunks: list of chunk's texts
         """
-        if not already_ok_chunks:
+        if already_ok_chunks is None:
             already_ok_chunks = []
 
         current_chunk = MarkdownChunker._build_chunk(toc_tree_element)
 
         if current_chunk.word_count > self.max_chunk_word_count:
-            if toc_tree_element.content.strip():
+            if any(line.text.strip() for line in toc_tree_element.content):
                 parent_headers = MarkdownChunker.get_parents_headers(toc_tree_element)
                 current_chunk = Chunk(
                     headers=parent_headers + [toc_tree_element.title],
                     content=toc_tree_element.content,
-                    start_line=toc_tree_element.line_index,
+                    start_line=toc_tree_element.title.line_idx,
                 )
                 already_ok_chunks.append(current_chunk)
             for child in toc_tree_element.children:
@@ -188,11 +170,11 @@ class MarkdownChunker(AbstractChunker):
         return Chunk(
             headers=parent_headers,
             content=content,
-            start_line=toc_tree_element.line_index,
+            start_line=toc_tree_element.title.line_idx,
         )
 
     @staticmethod
-    def _build_chunk_content(toc_tree_element: TocTree) -> str:
+    def _build_chunk_content(toc_tree_element: TocTree) -> list[MarkdownLine]:
         """Builds a chunk content (i.e without headers above)
         from a toc tree. It uses the toc tree's content, and recursively
         adds the header and content of its children
@@ -201,16 +183,16 @@ class MarkdownChunker(AbstractChunker):
             toc_tree_element (TocTree): the toc tree (or element of toc tree)
 
         Returns:
-            str: the text of the chunk (without the headers of parents)
+            list[MarkdownLine]: the list of lines that belong to the chunk content (without the headers of parents)
         """
-        text = toc_tree_element.title + "\n\n" + toc_tree_element.content
+        content = [toc_tree_element.title] + toc_tree_element.content
         for child in toc_tree_element.children:
-            text += "\n\n" + MarkdownChunker._build_chunk_content(child)
+            content.extend(MarkdownChunker._build_chunk_content(child))
 
-        return text
+        return content
 
     @staticmethod
-    def get_parents_headers(toc_tree_element: TocTree) -> list[str]:
+    def get_parents_headers(toc_tree_element: TocTree) -> list[MarkdownLine]:
         """Gets a list of the titles that are parent
         of the provided toc tree element. The list
         is ordered in descending order in terms of header level.
@@ -219,14 +201,14 @@ class MarkdownChunker(AbstractChunker):
             toc_tree_element (TocTree): the toc tree element
 
         Returns:
-            list[str]: the list of header's text
+            list[MarkdownLine]: the list of line that represent the parent's headers
         """
-        headers: list[str] = []
+        headers: list[MarkdownLine] = []
         while toc_tree_element.parent:
             toc_tree_element = toc_tree_element.parent
             headers.append(toc_tree_element.title)
         # remove empty string header, such as root header
-        headers = [h for h in headers if h]
+        headers = [h for h in headers if h.text]
 
         return list(reversed(headers))
 
@@ -239,7 +221,11 @@ class MarkdownChunker(AbstractChunker):
         Returns:
             Chunks: the chunks with more words than the specified threshold
         """
-        return [c for c in chunks if c.word_count >= self.min_chunk_word_count]
+        return [
+            c
+            for c in chunks
+            if c.word_count >= self.min_chunk_word_count and c.get_text()
+        ]
 
     def split_big_chunks(
         self,
@@ -279,42 +265,36 @@ class MarkdownChunker(AbstractChunker):
         split_word_size = chunk.word_count // split_count
 
         chunks: list[Chunk] = []
-        current_chunk_lines: list[str] = []
-        headers_lines: list[str | None] = [None] * 6  # to store the headers
-        headers_lines_buffer = headers_lines.copy()
-        prev_start_line = chunk.start_line
-        within_code_block = False
-        for line_idx, line in enumerate(chunk.content.split("\n")):
-            if line.startswith("```") and not "```" in line[3:]:
-                within_code_block = not within_code_block
-            if line.startswith("#") and not within_code_block:  # header
-                header_lvl = len(line) - len(line.lstrip("#")) - 1
-                headers_lines[header_lvl:] = [None] * (len(headers_lines) - header_lvl)
-                headers_lines[header_lvl] = line
-            current_chunk_lines.append(line)
-            if len("\n".join(current_chunk_lines).split()) > split_word_size:
-                headers = list(filter(None, headers_lines_buffer))
+        line_buffer: list[MarkdownLine] = []
+        headers_buffer = [None] * 7
+        prev_buffer = headers_buffer.copy()
+        for line in chunk.content:
+            line_buffer.append(line)
+            if line.is_header:
+                header_level = line.get_header_level()
+                headers_buffer[header_level:] = [None] * len(
+                    headers_buffer[header_level:]
+                )
+                headers_buffer[header_level] = line
+                continue
+            # Do not split the chunk at this line to preserve tables, bullet points list and code blocks.
+            elif line.is_bullet_point or line.isin_code_block or line.isin_table:
+                continue
+            current_word_count = len("\n".join(lb.text for lb in line_buffer).split())
+            if current_word_count > split_word_size:
                 new_chunk = Chunk(
-                    headers=chunk.headers,
-                    content="\n\n".join(headers)
-                    + "\n\n"
-                    + "\n".join(current_chunk_lines),
-                    start_line=prev_start_line,
-                    start_page=chunk.start_page,
-                    end_page=chunk.end_page,
+                    headers=chunk.headers + list(filter(None, prev_buffer)),
+                    content=line_buffer,
+                    start_line=line_buffer[0].line_idx,
                 )
                 chunks.append(new_chunk)
-                prev_start_line = chunk.start_line + line_idx
-                current_chunk_lines = []
-                headers_lines_buffer = headers_lines.copy()
-        if current_chunk_lines:
-            headers = list(filter(None, headers_lines))
+                line_buffer = []
+                prev_buffer = headers_buffer
+        if line_buffer:
             new_chunk = Chunk(
                 headers=chunk.headers,
-                content="\n\n".join(headers) + "\n\n" + "\n".join(current_chunk_lines),
-                start_line=prev_start_line,
-                start_page=chunk.start_page,
-                end_page=chunk.end_page,
+                content=line_buffer,
+                start_line=line_buffer[0].line_idx,
             )
             chunks.append(new_chunk)
 

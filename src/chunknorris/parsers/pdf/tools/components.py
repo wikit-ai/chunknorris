@@ -315,7 +315,7 @@ class TextBlock:
         if self.section_title:
             level = self.section_title.level or 0
             return "\n\n#" + "#" * level + " " + md_string.strip() + "\n\n"
-        return md_string + "\n\n"
+        return md_string.strip()
 
     def __str__(self) -> str:
         return self.text

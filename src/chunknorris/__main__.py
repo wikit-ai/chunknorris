@@ -1,13 +1,10 @@
 from argparse import ArgumentParser
-import logging
 import os
 
 from .chunkers import MarkdownChunker
 from .parsers import MarkdownParser, WikitJsonParser, HTMLParser, PdfParser
 from .pipelines import BasePipeline, PdfPipeline, WikitJsonPipeline
-
-LOGGER = logging.getLogger(name="ChunkNorris")
-logging.basicConfig(level=logging.INFO)
+from .core.logger import LOGGER
 
 
 def parse_arguments():

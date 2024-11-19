@@ -1,9 +1,9 @@
+from collections import defaultdict
 import os
 import re
 from operator import attrgetter
-from itertools import groupby
 
-from ....types.types import MarkdownString
+from ....parsers.markdown.components import MarkdownDoc, MarkdownLine
 from .utils import PdfParserState
 
 
@@ -17,48 +17,61 @@ class PdfExport(PdfParserState):
     def to_markdown(
         self,
         keep_track_of_page: bool = False,
-    ) -> MarkdownString | dict[int, MarkdownString]:
+    ) -> str | dict[int, str]:
         """Export parsed content to markdown.
 
         Args:
             keep_track_of_page (bool) : if True, returns a dict with
-                dict[page_number : MarkdownString]. Page number is 1-based
+                dict[page_number : string]. Page number is 1-based
                 and page 0 is reserved for main document title.
                 If False returns a string for the whole document.
                 Defaults to False.
 
         Returns:
-            str | list[str]: the markdown string of the specified page range.
+            str | dict[int, str]: the markdown formatted string, split by page if keep_track_of_page = True.
         """
-        blocks_by_page = {
-            page: list(blocks)
-            for page, blocks in groupby(self.blocks, key=attrgetter("page"))
-        }
-        tables_by_page = {
-            page: list(blocks)
-            for page, blocks in groupby(self.tables, key=attrgetter("page"))
-        }
-
         prefix = f"# {self.main_title}\n\n" if self.main_title else ""
-        string_per_page = {}
-
-        for page_n in range(self.page_start, self.page_end):
-            blocks_on_page = blocks_by_page[page_n] if page_n in blocks_by_page else []
-            tables_on_page = tables_by_page[page_n] if page_n in tables_by_page else []
-            items_to_export = sorted(
-                blocks_on_page + tables_on_page, key=attrgetter("order")
-            )
-            md_string = "\n\n".join(item.to_markdown() for item in items_to_export)
-            md_string = PdfExport._cleanup_md_string(md_string)
-            string_per_page[page_n + 1] = md_string.strip()
+        string_per_page = defaultdict(str)
+        items_to_export = sorted(self.blocks + self.tables, key=attrgetter("order"))
+        for item in items_to_export:
+            string_per_page[item.page] += "\n\n" + item.to_markdown()
+        string_per_page = {
+            page: PdfExport._cleanup_md_string(md_string)
+            for page, md_string in string_per_page.items()
+        }
 
         if keep_track_of_page:
-            return {
-                page_n: MarkdownString(content=md_string)
-                for page_n, md_string in string_per_page.items()
-            }
+            return string_per_page
 
-        return MarkdownString(content=prefix + "\n\n".join(string_per_page.values()))
+        return prefix + "\n\n".join(string_per_page.values())
+
+    def to_markdown_doc(self) -> MarkdownDoc:
+        """Generated the markdown doc to be fed in the
+        MarkdownChunker.
+
+        Returns:
+            MarkdownDoc: the formatted markdown doc
+        """
+
+        items_to_export = sorted(self.blocks + self.tables, key=attrgetter("order"))
+        md_lines: list[MarkdownLine] = []
+        line_idx_counter = 0
+        for item in items_to_export:
+            line_text = (
+                "\n\n" + PdfExport._cleanup_md_string(item.to_markdown()) + "\n\n"
+            )
+            line_count = len(line_text.split("\n"))
+            md_lines.append(
+                MarkdownLine(
+                    text=line_text,
+                    line_idx=line_count,
+                    isin_code_block=False,
+                    page=item.page,
+                )
+            )
+            line_idx_counter += line_count
+
+        return MarkdownDoc(content=md_lines)
 
     @staticmethod
     def _cleanup_md_string(md_string: str) -> str:
@@ -75,7 +88,7 @@ class PdfExport(PdfParserState):
         md_string = md_string.replace(" ** ", "**\n")
         md_string = re.sub(r"\n{3,}", "\n\n", md_string)
 
-        return md_string
+        return md_string.strip()
 
     def save_markdown(self, output_filepath: str = "./output.md") -> None:
         """Generates the markdown export of the pdf
@@ -89,13 +102,3 @@ class PdfExport(PdfParserState):
             os.makedirs(os.path.dirname(output_filepath))
         with open(output_filepath, "w", encoding="utf-8") as f:
             f.write(md_string)
-
-    def to_text(self) -> str:
-        """
-        Converts the parsed document to a text string
-        without formatting
-
-        Returns:
-            str: the raw text string
-        """
-        raise NotImplementedError()
