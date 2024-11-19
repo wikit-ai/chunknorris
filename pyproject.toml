@@ -22,7 +22,7 @@ chunknorris = "chunknorris.__main__:main"
 
 [project]
 name = "chunknorris"
-version = "1.0.1"
+version = "1.0.2"
 authors = [
   { name="Wikit", email="dev@wikit.ai" },
 ]

@@ -3,7 +3,7 @@ default:
 
 stages:
 - app-checks
-
+- deploy
 
 ################################
 ## CHECKS STAGE ################
@@ -20,3 +20,14 @@ black:
   script:
   - black --version
   - black --check src/
+
+deploy-prod:
+  stage: deploy
+  when: manual
+  image: registry.gitlab.com/wikit/wikit-ci-utils/wikit-ci-python3.10
+  only:
+  - main
+  script:
+  - pip install --upgrade pip setuptools wheel build twine
+  - python3 -m build
+  - TWINE_USERNAME=$TWINE_USERNAME TWINE_PASSWORD=$TWINE_PASSWORD python3 -m twine upload --repository pypi dist/*
