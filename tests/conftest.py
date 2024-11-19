@@ -135,6 +135,11 @@ def md_standard_setext_out() -> str:
     return md_parser_strings.MD_STANDARD_SETEXT_OUT
 
 
+@pytest.fixture(scope="session")
+def md_with_code_block() -> str:
+    return md_parser_strings.MD_WITH_CODE_BLOCK
+
+
 ### Chunk ###
 
 

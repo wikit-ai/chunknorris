@@ -1,18 +1,33 @@
 from chunknorris.parsers import MarkdownParser
-from chunknorris.types import MarkdownString
+from chunknorris.parsers.markdown.components import MarkdownDoc
+
+
+def test_MarkdownDoc(md_strings_in: list[str]):
+    for string in md_strings_in:
+        assert MarkdownDoc.from_string(string).to_string() == string
+
+
+def test_MarkdownDoc_from_string(md_with_code_block: str):
+    doc = MarkdownDoc.from_string(md_with_code_block)
+    for line in doc.content:
+        print(line.isin_code_block, line.text)
+
+    assert sum((line.isin_code_block for line in doc.content)) == 3
 
 
 def test_parse_string(
-    md_parser: MarkdownParser, md_standard_setext_in: str, md_standard_setext_out: str
+    md_parser: MarkdownParser,
+    md_standard_setext_in: str,
+    md_standard_setext_out: str,
 ):
-    md_string = md_parser.parse_string(md_standard_setext_in)
-    assert isinstance(md_string, MarkdownString)
-    assert md_string.content == md_standard_setext_out
+    parser_output = md_parser.parse_string(md_standard_setext_in)
+    assert isinstance(parser_output, MarkdownDoc)
+    assert parser_output.to_string() == md_standard_setext_out
 
 
 def test_parse_file(md_parser: MarkdownParser, md_filepath: str):
-    md_string = md_parser.parse_file(md_filepath)
-    assert isinstance(md_string, MarkdownString)
+    parser_output = md_parser.parse_file(md_filepath)
+    assert isinstance(parser_output, MarkdownDoc)
 
 
 def test_convert_setext_to_atx(md_standard_setext_in: str, md_standard_setext_out: str):

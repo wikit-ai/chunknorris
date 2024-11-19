@@ -15,7 +15,7 @@ class BasePipeline(AbstractPipeline):
             list[Chunk]: A list of chunks.
         """
         parsed_string = self.parser.parse_string(string)
-        return self.chunker.chunk_string(parsed_string)
+        return self.chunker.chunk(parsed_string)
 
     def chunk_file(self, filepath: str) -> list[Chunk]:
         """Parses and chunks a string based on the provided
@@ -28,4 +28,4 @@ class BasePipeline(AbstractPipeline):
             list[Chunk]: A list of chunks.
         """
         parsed_string = self.parser.parse_file(filepath)
-        return self.chunker.chunk_string(parsed_string)
+        return self.chunker.chunk(parsed_string)

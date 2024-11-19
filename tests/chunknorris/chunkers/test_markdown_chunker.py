@@ -1,6 +1,6 @@
-from chunknorris.types import MarkdownString
 from chunknorris.chunkers import MarkdownChunker
 from chunknorris.chunkers.tools import Chunk
+from chunknorris.parsers.markdown.components import MarkdownDoc
 
 
 def test_chunk_string(
@@ -9,8 +9,8 @@ def test_chunk_string(
     md_strings_out: list[list[str]],
 ):
     for input, output in zip(md_strings_in, md_strings_out):
-        typed_string = MarkdownString(content=input)
-        chunks = md_chunker.chunk_string(typed_string)
+        typed_input = MarkdownDoc.from_string(input)
+        chunks = md_chunker.chunk(typed_input)
         assert [chunk.get_text() for chunk in chunks] == output
 
 

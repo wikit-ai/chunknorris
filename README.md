@@ -32,11 +32,11 @@ ChunkNorris relies on 3 components :
 ### Parsers
 
 The role of parsers is to take a file or a string as input, and output a clean formated string suited for a chunker. As of today, **3 parsers are available** : 
-- ``MarkdownParser`` : for parsing markdown strings.
-- ``HTMLParser`` : for parsing html-formated strings.
+- ``MarkdownParser`` : for parsing markdown files/strings.
+- ``HTMLParser`` : for parsing html-formated files/strings.
 - ``PdfParser`` : for parsing PDF files.
 
-For now, all parsers will output a Markdown string. Indeed, markdown is a great format to be use in RAG application as it is very well understood by LLMs.
+All parsers will output a markdown-formatted string. Indeed, markdown is a great format to be use in RAG application as it is very well understood by LLMs.
 
 ### Chunkers
 
@@ -56,7 +56,7 @@ Pipelines are the glue that sticks together a parser and a chunker. They use bot
 
 ## Usage
 
-You may find more details examples in the [examples section](link) of the repo. Nevertheless, here is a basic example to get you started, assuming you need to chunk Mardown files.
+You may find more detailed examples in the [examples section](link) of the repo. Nevertheless, here is a basic example to get you started, assuming you need to chunk Mardown files.
 
 ```py
 from chunknorris.parsers import MarkdownParser

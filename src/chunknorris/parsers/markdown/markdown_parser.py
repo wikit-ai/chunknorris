@@ -1,11 +1,12 @@
 from pathlib import Path
-from ...types.types import MarkdownString
+
+from .components import MarkdownDoc
 from ..abstract_parser import AbstractParser
 
 
 class MarkdownParser(AbstractParser):
 
-    def parse_string(self, string: str) -> MarkdownString:
+    def parse_string(self, string: str) -> MarkdownDoc:
         """Parses a markdown-formatted string.
         Ensures that the formatting is suited to be passed
         to the MarkdownChunker.
@@ -18,11 +19,9 @@ class MarkdownParser(AbstractParser):
         """
         formatted_string = MarkdownParser.convert_setext_to_atx(string)
 
-        return MarkdownString(
-            content=formatted_string,
-        )
+        return MarkdownDoc.from_string(formatted_string)
 
-    def parse_file(self, filepath: str) -> MarkdownString:
+    def parse_file(self, filepath: str) -> MarkdownDoc:
         """Reads and parses a markdown-formatted string.
         Ensures that the formatting is suited to be passed
         to the MarkdownChunker.

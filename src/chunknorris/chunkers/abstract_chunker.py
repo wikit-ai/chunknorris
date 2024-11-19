@@ -3,25 +3,19 @@ import json
 import os
 from typing import Any
 
-from pydantic import validate_call
-
 from .tools.tools import Chunk
 
 
 class AbstractChunker(ABC):
 
-    @validate_call
     @abstractmethod
-    def chunk_string(self, string: Any) -> list[Chunk]:
+    def chunk(self, content: Any) -> list[Chunk]:
         """Considering the output of a specified parser,
-        must contain all the logic for parsing a string.
-
-        One might use the output of the parser: string.content
+        must contain all the logic for chunking a string.
 
         Args:
-            string (Any): the string output from the
-                provided parser. Can be any type that inherits
-                AbstractInOutType.
+            content (Any): the content to chunk. Might correspond to the
+                output from the provided parser.
 
         Returns:
             list[Chunk]: A list of chunks
@@ -29,8 +23,8 @@ class AbstractChunker(ABC):
         pass
 
     def __call__(self, string: Any) -> list[Chunk]:
-        """Shortcut to call chunk_string() method."""
-        return self.chunk_string(string)
+        """Shortcut to call chunk() method."""
+        return self.chunk(string)
 
     def save_chunks(
         self, chunks: list[Chunk], output_filename: str, remove_links: bool = False

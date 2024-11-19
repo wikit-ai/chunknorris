@@ -255,6 +255,10 @@ class PdfTocExtraction(PdfParserState):
                     if s.fontsize > main_body_fontsize * 1.1
                     and s.fontsize in first_page_biggest_fontsizes
                 )
-                return " ".join((s.text for s in title_spans))[:100].strip()
+                main_title = " ".join((s.text for s in title_spans)).strip()
+
+                return (
+                    main_title[:100] + "[...]" if len(main_title) > 100 else main_title
+                )
 
         return ""

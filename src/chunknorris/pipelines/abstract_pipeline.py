@@ -17,7 +17,7 @@ class AbstractPipeline(ABC):
         """Given a string, returns a list of chunks.
         Leverages the provided chunker and parser.
         Might use self.parser.parse_string() and self.parser.parse_file()
-        along with self.chunker.chunk_string().
+        along with self.chunker.chunk().
         """
         pass
 

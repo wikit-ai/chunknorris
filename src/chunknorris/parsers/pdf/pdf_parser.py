@@ -1,24 +1,25 @@
 import os
-from collections import Counter
-from copy import deepcopy
+from collections import Counter, defaultdict
 from itertools import groupby
 from pathlib import Path
 from typing import Literal
-from pydantic import validate_call
+
 import pymupdf  # type: ignore : no stubs
 
+from ...decorators.decorators import validate_args, timeit
+from ...parsers.markdown.components import MarkdownDoc
 from ...exceptions.exceptions import (
     PageNotFoundException,
     PdfParserException,
     TextNotFoundException,
 )
-from ...types.types import MarkdownString
+
 from .tools import (
     TextSpan,
     TextLine,
     TextBlock,
-    Link,
     PdfPlotter,
+    PdfLinkExtraction,
     PdfTableExtraction,
     PdfTocExtraction,
     PdfExport,
@@ -28,9 +29,10 @@ from .tools import (
 
 
 class PdfParser(
+    PdfLinkExtraction,
     PdfTableExtraction,
-    PdfPlotter,
     PdfTocExtraction,
+    PdfPlotter,
     PdfExport,
     PdfParserUtilities,
     PdfParserState,
@@ -79,13 +81,14 @@ class PdfParser(
         if self.use_ocr != "never":
             self.check_ocr_config_is_valid()
 
-    @validate_call
+    @timeit
+    @validate_args
     def parse_file(
         self,
         filepath: str,
         page_start: int = 0,
         page_end: int | None = None,
-    ) -> MarkdownString:
+    ) -> MarkdownDoc:
         """Parses a pdf document and returns
         its corresponding Markdown formatted string.
 
@@ -95,7 +98,7 @@ class PdfParser(
             page_end (int, optional): the page to stop parsing. None to parse until last page. Defaults to None.
 
         Returns:
-            MarkdownString: The markdown string.
+            MarkdownDoc: The MarkdownDoc to be passed to MarkdownChunker.
         """
         self.filepath = filepath
         if Path(filepath).suffix != ".pdf":
@@ -105,12 +108,13 @@ class PdfParser(
 
         self.parse_document()
 
-        return self.to_markdown()
+        return self.to_markdown_doc()
 
-    @validate_call
+    @timeit
+    @validate_args
     def parse_string(
         self, string: bytes, page_start: int = 0, page_end: int | None = None
-    ) -> MarkdownString:
+    ) -> MarkdownDoc:
         """Parses a byte string obtained from a pdf document
         and returns its corresponding Markdown formatted string.
 
@@ -120,14 +124,14 @@ class PdfParser(
             page_end (int, optional): the page to stop parsing. None to parse until last page. Defaults to None.
 
         Returns:
-            MarkdownString: the markdown formatted string.
+            MarkdownDoc: The MarkdownDoc to be passed to MarkdownChunker.
         """
         self.document = pymupdf.open(stream=string, filetype="pdf")
         self._set_page_range(page_start, page_end)
 
         self.parse_document()
 
-        return self.to_markdown()
+        return self.to_markdown_doc()
 
     def _set_page_range(self, page_start: int, page_end: int | None) -> None:
         """Initializes the self.page_start and self.page_end
@@ -232,19 +236,14 @@ class PdfParser(
         Returns:
             list[TextSpan]: a list of textspan objects
         """
-        spans: list[TextSpan] = []
         page_dict: dict[str, str] = textpage.extractDICT()  # type: ignore : missing typing in pymupdf
-        for block in page_dict["blocks"]:
-            for line in block["lines"]:
-                for span in line["spans"]:
-                    spans.append(
-                        TextSpan(
-                            page=page_number,
-                            **span,
-                        )
-                    )
 
-        return spans
+        return [
+            TextSpan(page=page_number, **span)
+            for block in page_dict["blocks"]
+            for line in block["lines"]
+            for span in line["spans"]
+        ]
 
     def _flag_table_spans(self, spans: list[TextSpan]) -> list[TextSpan]:
         """Flags the span if it belongs to any table
@@ -257,11 +256,13 @@ class PdfParser(
         Returns:
             list[TextSpan] : the list of spans with added attribute "isin_table"
         """
+        page_tables = defaultdict(list[pymupdf.Rect])
+        for table in self.tables:
+            page_tables[table.page].append(table.bbox)
+
         for span in spans:
             span.isin_table = any(
-                pymupdf.Rect(table.bbox).contains(span.origin)  # type: ignore : missing typing in pymupdf | Rect.contains(x) : bool
-                and span.page == table.page
-                for table in self.tables
+                rect.contains(span.origin) for rect in page_tables[span.page]  # type: ignore : missing typing in pymupdf | Rect.contains(x) : bool
             )
 
         return spans
@@ -278,7 +279,7 @@ class PdfParser(
             spans (TextSpan): the list of spans with attribute is_header_footer updated.
 
         """
-        if not self.document.page_count > 3:  # type: ignore : missing typing in pymupdf | document.page_count : int
+        if not self.document.page_count > 2:  # type: ignore : missing typing in pymupdf | document.page_count : int
             return spans
 
         bbox_location_counts = Counter((span.bbox) for span in spans)
@@ -291,76 +292,6 @@ class PdfParser(
             span.is_header_footer = span.bbox in header_footer_bboxes
 
         return spans
-
-    def _bind_links_to_spans(self, spans: list[TextSpan]) -> list[TextSpan]:
-        """In a pdf, links are just an invisible clickable box
-        layered on top of a span.
-        This method gets the links of the pdf
-        and binds them to their corresponding span.
-
-        Args:
-            spans (list[TextSpan]): the list of spans
-
-        Returns:
-            list[TextSpan]: the list of spans, with the "link" and "has_link" attributes updated
-        """
-        spans_per_page_map = {
-            page: list(spans_on_page)
-            for page, spans_on_page in groupby(spans, key=lambda span: span.page)
-        }
-        for page_idx, spans_on_page in spans_per_page_map.items():
-            page = self.document.load_page(page_idx)  # type: ignore : missing typing in pymupdf | document.load_page(page_id : int) -> Page
-            for link in page.links(kinds=(pymupdf.LINK_URI,)):  # type: ignore : missing typing in pymupdf | page.links(kinds : Literal) -> generator
-                link = Link(uri=link["uri"], bbox=link["from"])
-                corresponding_span_idx = PdfParser._get_span_corresponding_to_link(
-                    link, spans_on_page
-                )
-                if corresponding_span_idx is not None:
-                    spans_on_page[corresponding_span_idx].link = link
-
-        return spans
-
-    @staticmethod
-    def _get_span_corresponding_to_link(
-        link: Link, spans: list[TextSpan]
-    ) -> int | None:
-        """Given a link and a list of spans, it finds the
-        span corresponding to this link. It returns the
-        index of that span in the list.
-
-        To find the span a link is bound to, we consider the area of the
-        intersection of the link's bbox and the span's bbox.
-        Two different situations:
-        - 1) there is only one span with a high bbox intersection value with the link
-            => this span is the one of the link
-        - 2) there are multiple spans with a high bbox intersection.
-            => for some reason, the span corresponding to the link is not the one
-            with the biggest bbox intersection area, but the one with the second biggest.
-        Args:
-            link (Link): the link to find the corresponding span to
-            spans (list[TextSpan]): a list of spans
-
-        WARNING : MAY return None if no span with bbox intersection with the link's bbox has been found
-
-        Returns:
-            int: the index of the corresponding span in the list
-        """
-        # build list of (span_index, bbox_interect_area)
-        intersect_areas: list[tuple[int, float]] = [
-            (i, deepcopy(link.bbox).intersect(span.bbox).get_area())  # type: ignore : missing typing in pymupdf | Rect.intersect(r: Rect) -> Rect
-            for i, span in enumerate(spans)
-        ]
-        intersect_areas = sorted(intersect_areas, key=lambda x: x[1], reverse=True)
-        best_idx, best_area = intersect_areas[0]
-        if len(intersect_areas) == 1:
-            return None if best_area == 0 else best_idx
-        elif best_area / 2 > intersect_areas[1][1]:
-            return best_idx
-        else:
-            intersect_areas = [item for item in intersect_areas if item[1] < best_area]
-            if intersect_areas:
-                return intersect_areas[0][0]
-            return None
 
     @staticmethod
     def _create_lines(spans: list[TextSpan]) -> list[TextLine]:

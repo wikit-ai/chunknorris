@@ -1,5 +1,9 @@
+from functools import wraps
 from inspect import signature
+import time
 from typing import Any, Callable
+
+from ..core.logger import LOGGER
 
 
 def validate_args(function: Callable[..., Any]) -> Any:
@@ -17,6 +21,7 @@ def validate_args(function: Callable[..., Any]) -> Any:
         Any: the return of the function.
     """
 
+    @wraps(function)
     def wrapper(*args: tuple[Any], **kwargs: dict[Any, Any]) -> Any:
         sig = signature(function)
         for arg_name, arg_value in zip(sig.parameters, args):
@@ -29,6 +34,32 @@ def validate_args(function: Callable[..., Any]) -> Any:
                         f"Argument '{arg_name}' must be of type {sig.parameters[arg_name].annotation.__name__}."
                     )
         result = function(*args, **kwargs)
+
+        return result
+
+    return wrapper
+
+
+def timeit(function: Callable[..., Any]) -> Any:
+    """Meant to be used as a decorator using @timeit
+    in order to measure the execution time of a function.
+
+    Args:
+        function (Callable[..., Any]): the function to measure exec time for.
+
+    Returns:
+        Any: the return of the function.
+    """
+
+    @wraps(function)
+    def wrapper(*args: tuple[Any], **kwargs: dict[Any, Any]) -> Any:
+        start_time = time.perf_counter()
+        result = function(*args, **kwargs)
+        end_time = time.perf_counter()
+        total_time = end_time - start_time
+        # print(f'Function {function.__name__}{args} {kwargs} Took {total_time:.4f} seconds')
+        LOGGER.info('Function "%s" took %.4f seconds', function.__name__, total_time)
+
         return result
 
     return wrapper

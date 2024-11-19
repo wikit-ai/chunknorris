@@ -2,13 +2,14 @@ from pathlib import Path
 import re
 from markdownify import markdownify  # type: ignore : no stub file
 
-from ...types.types import MarkdownString
+
+from ...parsers.markdown.components import MarkdownDoc
 from ..abstract_parser import AbstractParser
 
 
 class HTMLParser(AbstractParser):
 
-    def parse_string(self, string: str) -> MarkdownString:
+    def parse_string(self, string: str) -> MarkdownDoc:
         """Parses a markdown-formatted string.
         Ensures that the formatting is suited to be passed
         to the MarkdownChunker.
@@ -22,11 +23,9 @@ class HTMLParser(AbstractParser):
         formatted_string = HTMLParser.apply_markdownify(string)
         formatted_string = HTMLParser.cleanup_string(formatted_string)
 
-        return MarkdownString(
-            content=formatted_string,
-        )
+        return MarkdownDoc.from_string(formatted_string)
 
-    def parse_file(self, filepath: str) -> MarkdownString:
+    def parse_file(self, filepath: str) -> MarkdownDoc:
         """Reads and parses a markdown-formatted string.
         Ensures that the formatting is suited to be passed
         to the MarkdownChunker.
@@ -69,15 +68,20 @@ class HTMLParser(AbstractParser):
         Returns:
             str: the markdownified string
         """
-        md_string = markdownify(
-            html_string,
-            heading_style="ATX",
-            strip=["figure", "img"],
-            bullets="-*+",
-            escape_asterisks=False,
-            escape_underscores=False,
-            escape_misc=False,
-        )
+        md_string = html_string
+        initial_len, new_len = len(md_string), 0
+        while new_len < initial_len:
+            initial_len = len(md_string)
+            md_string = markdownify(
+                md_string,
+                heading_style="ATX",
+                strip=["figure", "img"],
+                bullets="-*+",
+                escape_asterisks=False,
+                escape_underscores=False,
+                escape_misc=False,
+            )
+            new_len = len(md_string)
 
         return md_string
 

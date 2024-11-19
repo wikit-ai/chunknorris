@@ -1,12 +1,12 @@
 import re
 import pymupdf  # type: ignore -> no stubs
 from chunknorris.parsers import PdfParser
-from chunknorris.types import MarkdownString
+from chunknorris.parsers.markdown.components import MarkdownDoc
 
 
 def test_parse_file(pdf_parser: PdfParser, pdf_filepath: str):
-    md_string = pdf_parser.parse_file(pdf_filepath)
-    assert isinstance(md_string, MarkdownString)
+    parser_output = pdf_parser.parse_file(pdf_filepath)
+    assert isinstance(parser_output, MarkdownDoc)
     # Assert header and footers have been detected
     assert len([span for span in pdf_parser.spans if span.is_header_footer]) > 0
     ### Table parsing ###
@@ -31,4 +31,4 @@ def test_parse_file(pdf_parser: PdfParser, pdf_filepath: str):
 def test_parse_string(pdf_parser: PdfParser, pdf_filepath: str):
     byte_string = pymupdf.open(pdf_filepath).tobytes()  # type: ignore -> missing typing : pymupdf.open() -> pymupdf.Document
     md_string = pdf_parser.parse_string(byte_string)
-    assert isinstance(md_string, MarkdownString)
+    assert isinstance(md_string, MarkdownDoc)
