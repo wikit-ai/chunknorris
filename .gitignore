@@ -1,0 +1,34 @@
+ovh
+.env
+ovh.conf
+
+# Datas
+data
+
+# Chroma related stuff
+ChromaDB
+
+# python related stuff
+__pycache__
+pylintrc
+python_env
+
+# pytest stuff
+.coverage
+file_md-chunked.json
+
+# specific files
+WikitPDFParser_Output.pdf
+output.html
+
+# vs-code stuff
+*code-workspace
+.vscode
+
+# package build files
+dist/
+chunknorris.egg-info
+build
+
+.mypy_cache
+.pytest_cache
