@@ -2,12 +2,12 @@ from chunknorris.parsers import MarkdownParser
 from chunknorris.parsers.markdown.components import MarkdownDoc
 
 
-def test_MarkdownDoc(md_strings_in: list[str]):
+def test_markdowndoc(md_strings_in: list[str]):
     for string in md_strings_in:
         assert MarkdownDoc.from_string(string).to_string() == string
 
 
-def test_MarkdownDoc_from_string(md_with_code_block: str):
+def test_markdowndoc_from_string(md_with_code_block: str):
     doc = MarkdownDoc.from_string(md_with_code_block)
     for line in doc.content:
         print(line.isin_code_block, line.text)

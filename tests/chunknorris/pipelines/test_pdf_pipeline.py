@@ -1,8 +1,8 @@
+import pytest
+
 from chunknorris.chunkers import MarkdownChunker
 from chunknorris.parsers import PdfParser
 from chunknorris.pipelines import PdfPipeline
-
-import pytest
 
 
 def test_init(

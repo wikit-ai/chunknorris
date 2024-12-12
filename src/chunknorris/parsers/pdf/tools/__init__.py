@@ -1,4 +1,5 @@
-from .components import TextSpan, TextLine, TextBlock, Link, Cell, PdfTable
+from .components import TextSpan, TextLine, TextBlock, Link
+from .components_tables import Cell, PdfTable, TableFinder
 from .utils import PdfParserState, PdfParserUtilities
 from .extract_links import PdfLinkExtraction
 from .extract_tables import PdfTableExtraction

@@ -28,6 +28,18 @@ def test_parse_file(pdf_parser: PdfParser, pdf_filepath: str):
     assert pdf_parser.main_title == "DUMMY  DOCUMENT  TITLE  Dummy subtitle"
 
 
+def test_parse_tables(pdf_parser: PdfParser, pdf_tables_filepath: str):
+    _ = pdf_parser.parse_file(pdf_tables_filepath)
+    assert len(pdf_parser.tables) == 1
+    # Check tables 0 is valid
+    assert len(pdf_parser.tables[0].cells) == 18
+    assert pdf_parser.tables[0].to_pandas().shape == (4, 5)
+    table_0_as_md = pdf_parser.tables[0].to_markdown()
+    assert len(re.findall("Col2", table_0_as_md)) == 4
+    assert len(re.findall("Col3 Col4", table_0_as_md)) == 4
+    assert len(re.findall("Col5", table_0_as_md)) == 4
+
+
 def test_parse_string(pdf_parser: PdfParser, pdf_filepath: str):
     byte_string = pymupdf.open(pdf_filepath).tobytes()  # type: ignore -> missing typing : pymupdf.open() -> pymupdf.Document
     md_string = pdf_parser.parse_string(byte_string)

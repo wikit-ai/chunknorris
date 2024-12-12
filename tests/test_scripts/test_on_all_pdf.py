@@ -6,7 +6,8 @@ from src.chunknorris.parsers import PdfParser
 from src.chunknorris.pipelines import PdfPipeline
 from src.chunknorris.chunkers import MarkdownChunker
 
-"""python -m tests.test_scripts.test_on_all_pdf"""
+# To run this test, use the following :
+# python -m tests.test_scripts.test_on_all_pdf
 
 # disable chunknorris logging INFO
 logger = logging.getLogger()
@@ -31,7 +32,7 @@ for filepath in tqdm(pdf_files):
         print("No page found")
     except Exception as e:
         pdf_with_errors.append(filepath)
-        raise (e)
+        raise e
 
 print(f"Correct : {len(pdf_files) - len(pdf_with_errors)} / {len(pdf_files)} !")
 if pdf_with_errors:

@@ -25,6 +25,7 @@ from .tools import (
     PdfExport,
     PdfParserUtilities,
     PdfParserState,
+    TableFinder,
 )
 
 
@@ -39,16 +40,19 @@ class PdfParser(
 ):
     """Class that parses the document."""
 
+    table_finder: TableFinder = TableFinder()
     extract_tables: bool = True
     add_headers: bool = True
     use_ocr: Literal["always", "auto", "never"] = "auto"
     ocr_language: str = "fra+eng"
     body_line_spacing: float | None = None
 
+    @validate_args
     def __init__(
         self,
         *,
         extract_tables: bool = True,
+        table_finder: TableFinder = TableFinder(),
         add_headers: bool = True,
         use_ocr: Literal["always", "auto", "never"] = "auto",
         ocr_language: str = "fra+eng",
@@ -71,12 +75,15 @@ class PdfParser(
             body_line_spacing (float, optional) : the size of the space between 2 lines of the body
                 of the document. Generally around 1. If None, an automatic method will try to find it.
                 Tweak this parameter for better merging of lines into blocks.
+            table_finder (TableFinder | None, optionnal): the table finder to use for parsing the tables.
+                If None, defauts to a table finderwith default parameters.
         """
         self.add_headers = add_headers
         self.extract_tables = extract_tables
         self.use_ocr = use_ocr
         self.ocr_language = ocr_language
         self.body_line_spacing = body_line_spacing
+        self.table_finder = table_finder
 
         if self.use_ocr != "never":
             self.check_ocr_config_is_valid()
@@ -184,6 +191,7 @@ class PdfParser(
                     f"Tesseract's {lang}.traineddata file not found at {tessdata_location}. You might need to download the corresponding file from https://github.com/tesseract-ocr/tessdata and place it in {tessdata_location}",
                 )
 
+    @timeit
     def _create_spans(self) -> list[TextSpan]:
         """Prepares the parsed spans
 
@@ -213,7 +221,10 @@ class PdfParser(
                     page_spans = PdfParser._extract_spans_from_textpage(
                         textpage, page.number  # type: ignore : missing typing in pymupdf -> page.number: int
                     )
-                    if not page_spans:
+                    if page_spans:
+                        spans.extend(page_spans)
+                        continue
+                    else:
                         textpage: pymupdf.TextPage = page.get_textpage_ocr(  # type: ignore : missing typing in pymupdf
                             language=self.ocr_language, dpi=72, full=False
                         )
