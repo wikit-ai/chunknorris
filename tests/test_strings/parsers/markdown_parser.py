@@ -59,3 +59,9 @@ This is a code block
 
 This is a text
 """
+
+MD_WITH_METADATA = """---
+metadatakey: metadatavalue
+---
+markdown content
+"""
