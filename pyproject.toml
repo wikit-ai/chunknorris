@@ -6,15 +6,13 @@ build-backend = "setuptools.build_meta"
 where = ["src", "images"]
 include = ["*"]
 exclude = ["__pycache__"]
-namespaces = true  # true by default
+namespaces = true         # true by default
 
 [tool.mypy]
 mypy_path = "src-stubs"
 
 [tool.pytest.ini_options]
-pythonpath = [
-  "src"
-]
+pythonpath = ["src"]
 addopts = "--ignore=tests/test_scripts"
 
 [project.scripts]
@@ -22,27 +20,34 @@ chunknorris = "chunknorris.__main__:main"
 
 [project]
 name = "chunknorris"
-version = "1.0.2"
-authors = [
-  { name="Wikit", email="dev@wikit.ai" },
-]
+version = "1.0.3"
+authors = [{ name = "Wikit", email = "dev@wikit.ai" }]
 description = "A package for chunking documents from various formats"
-keywords = ["chunk", "document", "split", "html", "markdown", "pdf", "header", "RAG"]
-readme = {file = "README.md", content-type = "text/markdown"}
+keywords = [
+  "chunk",
+  "document",
+  "split",
+  "html",
+  "markdown",
+  "pdf",
+  "header",
+  "RAG",
+]
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 classifiers = [
-    "Natural Language :: English",
-    "Programming Language :: Python :: 3.10",
-    "Framework :: Pytest",
-    "License :: OSI Approved :: GNU Affero General Public License v3",
-    "Topic :: Text Processing :: Markup :: Markdown",
-    "Topic :: Text Processing :: Markup :: HTML",
-    "Operating System :: OS Independent"
+  "Natural Language :: English",
+  "Programming Language :: Python :: 3.10",
+  "Framework :: Pytest",
+  "License :: OSI Approved :: GNU Affero General Public License v3",
+  "Topic :: Text Processing :: Markup :: Markdown",
+  "Topic :: Text Processing :: Markup :: HTML",
+  "Operating System :: OS Independent",
 ]
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+dependencies = { file = ["requirements.txt"] }
 
 [project.urls]
 Homepage = "https://gitlab.com/wikit/research-and-development/chunk-norris"

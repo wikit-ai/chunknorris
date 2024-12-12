@@ -1,4 +1,6 @@
 from pathlib import Path
+from typing import Any
+import yaml
 
 from .components import MarkdownDoc
 from ..abstract_parser import AbstractParser
@@ -17,9 +19,12 @@ class MarkdownParser(AbstractParser):
         Returns:
             TypedString: the formatted markdown string
         """
-        formatted_string = MarkdownParser.convert_setext_to_atx(string)
+        formatted_string, metadata = MarkdownParser.parse_metadata(string)
+        formatted_string = MarkdownParser.convert_setext_to_atx(formatted_string)
+        md_doc = MarkdownDoc.from_string(formatted_string)
+        md_doc.metadata = metadata
 
-        return MarkdownDoc.from_string(formatted_string)
+        return md_doc
 
     def parse_file(self, filepath: str) -> MarkdownDoc:
         """Reads and parses a markdown-formatted string.
@@ -85,3 +90,39 @@ class MarkdownParser(AbstractParser):
             prev_line = line
 
         return "\n".join(output_lines)
+
+    @staticmethod
+    def parse_metadata(md_string: str) -> tuple[str, dict[str, Any]]:
+        """Parses the metadatas of a markdown string.
+        Assumes the metadata are in YAML format, with '---' as first line.
+        Example :
+        ```md
+        ---
+        metakey : metavalue
+        ---
+
+        Content of document...
+        ```
+        Args:
+            md_string (str): the string to get the metadata from
+
+        Returns:
+            str: the content of the docu, with the metadata section removed
+            dict[str, Any]: the parsed metadata, as dict
+        """
+        if not md_string[:3] == "---":  # no metadata
+            return md_string, {}
+        # find idx of lines belonging to metadata
+        lines = md_string.split("\n")
+        try:
+            end_idx = lines[1:].index("---") + 1
+        except ValueError:
+            return md_string, {}
+        metadata = "\n".join(lines[1:end_idx]).strip()
+        content = "\n".join(lines[end_idx + 1 :]).strip()
+        try:
+            metadata_as_json = yaml.safe_load(metadata) or {}
+        except yaml.YAMLError:
+            metadata_as_json = {}
+
+        return content, metadata_as_json

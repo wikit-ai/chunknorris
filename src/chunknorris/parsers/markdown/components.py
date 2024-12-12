@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 
@@ -12,6 +13,7 @@ class MarkdownDoc(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
     content: list[MarkdownLine]
+    metadata: dict[str, Any] = {}
 
     def to_string(self) -> str:
         """Get the markdown string corresponding to the document's content"""

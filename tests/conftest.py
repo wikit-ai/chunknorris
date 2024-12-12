@@ -145,6 +145,11 @@ def md_with_code_block() -> str:
     return md_parser_strings.MD_WITH_CODE_BLOCK
 
 
+@pytest.fixture(scope="session")
+def md_with_metadata() -> str:
+    return md_parser_strings.MD_WITH_METADATA
+
+
 ### Chunk ###
 
 

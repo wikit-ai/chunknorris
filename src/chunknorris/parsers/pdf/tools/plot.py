@@ -146,7 +146,7 @@ class PdfPlotter(PdfParserState):
             }
 
     def plot_drawings(
-        self, items_to_draw: list[Literal["l", "c", "re", "qu"]] | None = None
+        self, items_to_draw: list[Literal["l", "c", "re", "qu", "p"]] | None = None
     ):
         """Draws the raw drawings extracted from the page.
         Mainly used for debug.
@@ -157,7 +157,7 @@ class PdfPlotter(PdfParserState):
                 See pymupdf.get_drawing() documentation for more info.
                 Defaults to None meaning all elements are drawn.
         """
-        items_to_draw = items_to_draw or ["l", "c", "re", "qu"]
+        items_to_draw = items_to_draw or ["l", "c", "re", "qu", "p"]
         doc_to_draw_on = self.get_doc_to_draw_on()
 
         for page in doc_to_draw_on.pages():  # type: ignore : missing typing in pymupdf | Document.pages() -> Generator(Page)
@@ -186,8 +186,6 @@ class PdfPlotter(PdfParserState):
                             page.draw_quad(item[1], color=(0, 0, 1))  # type: ignore : missing typing in pymupdf
                         case "p":
                             page.draw_circle(item, 3)  # type: ignore : missing typing in pymupdf
-                        case _:
-                            pass
 
             PdfPlotter.show_page(page)
 
