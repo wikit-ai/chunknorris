@@ -10,7 +10,7 @@ def test_init(
     md_chunker: MarkdownChunker,
 ):
     # Should pass
-    wikit_pipeline = WikitJsonPipeline(wikit_parser, md_chunker)  # type: ignore : just instanciated to validate init.
+    _ = WikitJsonPipeline(wikit_parser, md_chunker)  # type: ignore : just instanciated to validate init.
     # Should not pass (test succeed if ValueError)
     with pytest.raises(ValueError):
         WikitJsonPipeline(md_parser, md_chunker)

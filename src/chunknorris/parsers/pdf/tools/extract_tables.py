@@ -4,7 +4,10 @@ from copy import deepcopy
 
 import pymupdf  # type: ignore : no stubs
 
-from .components import Cell, TextSpan, PdfTable
+from chunknorris.decorators.decorators import timeit
+
+from .components import TextSpan
+from .components_tables import Cell, PdfTable
 from .utils import PdfParserState
 
 
@@ -14,6 +17,7 @@ class PdfTableExtraction(PdfParserState):
     the attributes of PdfParser, such as self.spans and self.document
     """
 
+    @timeit
     def get_tables(self) -> list[PdfTable]:
         """Parses the table of the document. For this to work, tables
         must have visible "lines".
@@ -28,94 +32,33 @@ class PdfTableExtraction(PdfParserState):
         # get tables on all pages
         tables = []
         for page in self.document.pages(start=self.page_start, stop=self.page_end):  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
-            raw_tables: pymupdf.table.TableFinder = page.find_tables(  # type: ignore : missing typing in pymupdf -> Page.find_tables() -> pymupdf.TableFinder
-                horizontal_strategy="lines_strict",
-                vertical_strategy="lines_strict",
-            ).tables
-            for raw_table in raw_tables:  # type: ignore : missing typing in pymupdf -> TableFinder.tables  : list[pymupdf.table.Table]
-                raw_table = PdfTableExtraction.sanitize_table(raw_table)
-                cells = self._get_table_cells(raw_table, spans_per_page[page.number])  # type: ignore : missing typing in pymupdf -> Page.number -> int
+            tables_on_page = self.table_finder.build_tables(page)
+            for _, _, tab_cells in tables_on_page:
+                if page.number not in spans_per_page or tab_cells.shape[0] == 1:  # type: ignore : missing typing in pymupdf -> Page.number -> int
+                    continue  # no spans available, or only one cell -> not a table
+                cells = self._get_table_cells(tab_cells, spans_per_page[page.number])  # type: ignore : missing typing in pymupdf -> Page.number -> int
                 # if the table contains at least 1 span
                 if any(cell.spans for cell in cells):
                     tables.append(PdfTable(cells, page.number))  # type: ignore : missing typing in pymupdf -> Page.number -> int
 
         return sorted(tables, key=attrgetter("order"))
 
-    @staticmethod
-    def sanitize_table(
-        table: pymupdf.table.Table, wordcount_threshold: int = 60
-    ) -> pymupdf.table.Table:
-        """Sanitize the table by removing columns that are
-        likely to be false detection. Column is considered
-        a wrong detection if:
-        - all cells are empty
-        - one cell as more words than wordcount_threshold
-
-        Args:
-            table (pymupdf.table.Table): a pymupdf table
-            wordcount_threshold (int) : columns that have at least one cell that contains
-                more words than wordcount_threshold will be discarded. Defaults to 60.
-        """
-        df = table.to_pandas().fillna("")  # type: ignore : missing typing in pymupdf table.to_pandas() -> pandas.DataFrame
-        # Get the idx of cols that only have empty cells
-        idx_of_cols_to_remove_empty = [
-            i for i, col in enumerate(df.columns) if (df[col] != "").sum() == 0  # type: ignore : missing typing in pandas sum()
-        ]
-        # Get the idx of cols that have at least on cell with a lonf text
-        ## Set the header as last raow to include it in word count
-        df.loc[-1] = df.columns
-        ## Count words in each cell
-        wordcount_per_cell = df.map(lambda x: len(str(x).split()))  # type: ignore : missing typing in pandas map()
-        idx_of_cols_to_remove_wordcount = [
-            i
-            for i, col_name in enumerate(wordcount_per_cell.columns)
-            if (wordcount_per_cell[col_name] > wordcount_threshold).any()  # type: ignore : missing typing in pandas any()
-        ]
-        # Get all the x positions of the columns that must be removed
-        idx_of_cols_to_remove = set(
-            idx_of_cols_to_remove_empty + idx_of_cols_to_remove_wordcount
-        )
-        ## Get the x0 positions of the columns
-        cols_x0_pos = list(set(bbox[0] for bbox in table.cells))
-        pos_to_discard = [cols_x0_pos[i] for i in idx_of_cols_to_remove]
-        # Remove all cells corresponding to those columns
-        table.cells = [
-            cell
-            for cell in table.cells
-            if cell is not None and cell[0] not in pos_to_discard
-        ]
-        table.header.cells = [  # type: ignore : missing typing in pymupdf header : pymupdf.table.TableHeader
-            cell
-            for cell in table.header.cells  # type: ignore : missing typing in pymupdf header : pymupdf.table.TableHeader
-            if cell is not None and cell[0] not in idx_of_cols_to_remove
-        ]
-        table.header.names = [  # type: ignore : missing typing in pymupdf header : pymupdf.table.TableHeader
-            name
-            for i, name in enumerate(table.header.names)  # type: ignore : missing typing in pymupdf header : pymupdf.table.TableHeader
-            if i not in idx_of_cols_to_remove
-        ]
-
-        return table
-
     def _get_table_cells(
-        self, raw_table: pymupdf.table.Table, spans_on_page: list[TextSpan]
+        self, raw_cells: list[pymupdf.Rect], spans_on_page: list[TextSpan]
     ) -> list[Cell]:
-        """From a pymupdf table,
+        """From a cells detected by the TableFinder,
         builds a list of Cell objects and binds each
         of them the spans that they contain.
 
-        In pymupdf, the "cell" attribute of the Table class
-        is just a list of tuple representing (x0, y0, x1, y1)
-        coordinates.
         From this we want to build a list of "Cell" objects
         and binds them their corresponding text.
 
         Args:
-            raw_table (pymupdf.table.Table): a table directly extracted from pymupdf's find_table() method.
+            raw_cells (list[pymupdf.Rect]): a list of rects that are cell of a table.
             spans_on_page (list[TextSpan]): a list of spans that are on the same page of the table.
         """
         cells: list[Cell] = []
-        for cell_coords in raw_table.cells:
+        for cell_coords in raw_cells:
             cell = Cell(*cell_coords)
             spans_to_bind: list[TextSpan] = []
             for span in spans_on_page:

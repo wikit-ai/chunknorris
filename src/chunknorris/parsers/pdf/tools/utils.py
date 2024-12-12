@@ -2,7 +2,8 @@ from typing import Literal
 import pymupdf  # type: ignore : no stubs
 
 from ....exceptions.exceptions import PdfParserException
-from .components import PdfTable, TextBlock, TextLine, TextSpan
+from .components import TextBlock, TextLine, TextSpan
+from .components_tables import PdfTable, TableFinder
 
 
 class PdfParserState:
@@ -18,6 +19,7 @@ class PdfParserState:
     lines: list[TextLine] = []
     blocks: list[TextBlock] = []
     tables: list[PdfTable] = []
+    table_finder: TableFinder = TableFinder()
     main_title: str = ""
 
     @property

@@ -57,7 +57,6 @@ def timeit(function: Callable[..., Any]) -> Any:
         result = function(*args, **kwargs)
         end_time = time.perf_counter()
         total_time = end_time - start_time
-        # print(f'Function {function.__name__}{args} {kwargs} Took {total_time:.4f} seconds')
         LOGGER.info('Function "%s" took %.4f seconds', function.__name__, total_time)
 
         return result
