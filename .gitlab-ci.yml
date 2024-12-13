@@ -2,8 +2,8 @@ default:
   image: registry.gitlab.com/wikit/wikit-ci-utils/wikit-ci-node20
 
 stages:
-- app-checks
-- deploy
+  - app-checks
+  - deploy
 
 ################################
 ## CHECKS STAGE ################
@@ -12,22 +12,35 @@ lint:
   stage: app-checks
   image: registry.gitlab.com/wikit/wikit-ci-utils/wikit-ci-python3.10
   script:
-  - pylint ./src --output-format=parseable --rcfile=./.pylintrc
+    - pylint ./src --output-format=parseable --rcfile=./.pylintrc
 
 black:
   stage: app-checks
   image: registry.gitlab.com/wikit/wikit-ci-utils/wikit-ci-python3.10
   script:
-  - black --version
-  - black --check src/
+    - black --version
+    - black --check src/
 
 deploy-prod:
   stage: deploy
   when: manual
   image: registry.gitlab.com/wikit/wikit-ci-utils/wikit-ci-python3.10
   only:
-  - main
+    - main
   script:
-  - pip install --upgrade pip setuptools wheel build twine
-  - python3 -m build
-  - TWINE_USERNAME=$TWINE_USERNAME TWINE_PASSWORD=$TWINE_PASSWORD python3 -m twine upload --repository pypi dist/*
+    - pip install --upgrade pip setuptools wheel build twine
+    - python3 -m build
+    - TWINE_USERNAME=$TWINE_USERNAME TWINE_PASSWORD=$TWINE_PASSWORD python3 -m twine upload --repository pypi dist/*
+
+# CI deplot site
+pages:
+  stage: deploy
+  image: python:latest
+  script:
+    - pip install mkdocs-material
+    - mkdocs build --site-dir public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
