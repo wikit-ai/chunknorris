@@ -1,6 +1,6 @@
 # ⬇️ Installation
 
-You can simply install chunknorris in your python environment by using pip. You may as well want to install from source in order to get the latest developpments.
+You can simply install chunknorris in your python environment by using pip. You may as well want to install from source in order to get the latest developments.
 
 === "Pip"
 
@@ -16,7 +16,7 @@ You can simply install chunknorris in your python environment by using pip. You 
     pip install .
     ```
 
-## 🤝 Devellopment setup
+## 🤝 Development setup
 
 Every contribution to ``chunknorris`` is welcome ! If you which to develop extra features, or just fix a bug, just clone the repository to your machine and install the extra dev dependencies : 
 

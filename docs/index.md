@@ -8,12 +8,12 @@ In a nutshell, ``chunknorris`` is a python package that aims at drastically <spa
 
 ## Why should I use it ?
 
-In the context of Retrieval Augmented Generation (RAG), an optimized chunking method might lead to smaller chunks, meaning :
+In the context of Retrieval Augmented Generation (RAG), an optimized chunking strategy leads to :
 
-- **Better relevancy of chunks** (and thus easier identification of useful chunks through embedding cosine similarity)
+- **Better relevancy of chunks** and thus easier identification of useful chunks through more expressive embeddings.
 - **Less hallucinations** of generation models because of superfluous information in the prompt
-- **Less errors** because of chunks exceeding the API limit in terms of number of tokens
-- **Reduced cost** as the prompt would have reduced size
+- **Less errors** because of chunks exceeding the API limits in terms of number of tokens
+- **Reduced cost** as the prompt can have reduced size
 
 As of today, many packages exist with the intent of parsing documents. Though the vast majority of them :
 

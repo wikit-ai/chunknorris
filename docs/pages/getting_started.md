@@ -88,4 +88,4 @@ If you prefer, you may also run ``chunknorris`` in a terminal. In that case, the
 chunknorris --filepath "path/to/myfile.pdf" # .pdf, .md or .html
 ```
 
-You may also pass arguments to influence chunknorris' behavior. See ``chunknorris -h`` for available options. Feel free to experiment 🧪 !
+You may also pass arguments to influence ``chunknorris``' behavior. Enter ``chunknorris -h`` in a terminal to see available options. Feel free to experiment 🧪 !
