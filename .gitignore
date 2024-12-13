@@ -1,12 +1,8 @@
-ovh
+# env
 .env
-ovh.conf
 
 # Datas
 data
-
-# Chroma related stuff
-ChromaDB
 
 # python related stuff
 __pycache__
@@ -30,5 +26,9 @@ dist/
 chunknorris.egg-info
 build
 
+# cache
 .mypy_cache
 .pytest_cache
+
+# docs
+/site
