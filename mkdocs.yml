@@ -7,23 +7,23 @@ theme:
   name: material
   language: en
   palette:
-    # Palette toggle for light mode
-    - media: "(prefers-color-scheme: light)"
-      scheme: slate
-      primary: deep orange
-      accent: cyan
-      toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
-      scheme: default
+      scheme: slate
       primary: deep orange
       accent: cyan
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep orange
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
 
   logo: assets/chunknorris_logo_1024.png # ?
   favicon: assets/chunknorris_logo_1024.png # ?
