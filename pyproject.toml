@@ -44,10 +44,12 @@ classifiers = [
   "Topic :: Text Processing :: Markup :: HTML",
   "Operating System :: OS Independent",
 ]
-dynamic = ["dependencies"]
+
+dynamic = ["dependencies", "optional-dependencies"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
+optional-dependencies.dev = { file = ["requirements.dev.txt"] }
 
 [project.urls]
 Homepage = "https://gitlab.com/wikit/research-and-development/chunk-norris"

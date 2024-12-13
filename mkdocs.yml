@@ -1,0 +1,103 @@
+site_name: ChunkNorris
+site_url: https://wikit-ai.github.io/chunknorris/
+repo_name: wikit-ai/chunknorris
+repo_url: https://github.com/wikit-ai/chunknorris
+
+theme:
+  name: material
+  language: en
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: slate
+      primary: deep orange
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: default
+      primary: deep orange
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+  logo: assets/chunknorris_logo_1024.png # ?
+  favicon: assets/chunknorris_logo_1024.png # ?
+  custom_dir: docs/overrides
+  features:
+    - content.tabs.link # ?
+    - content.code.annotate # ?
+    - content.code.copy # ?
+    - announce.dismiss # ?
+    - navigation.footer # ?
+    - navigation.tabs # ?
+    - navigation.indexes # <= if set, each "section" can have its own page, if index.md is used
+    - navigation.instant # ?
+    - navigation.instant.prefetch # ?
+    # - navigation.instant.preview # ?
+    - navigation.instant.progress # ?
+    - navigation.path # ?
+    - navigation.sections # ?
+    - navigation.top # ?
+    - navigation.tracking # ?
+    - search.suggest # ?
+    - toc.follow
+    - toc.integrate
+    - header.autohide
+nav: # TODO
+  - Home:
+      - "ChunkNorris": index.md
+      - Installation: pages/installation.md # TODO
+      - Getting Started: pages/getting_started.md # TODO
+      - How it works: how_it_works.md
+      - Performance report: performance_report.md # TODO
+      - Current limitations: current_limitations.md # TODO
+      - Contributing: contributing.md # TODO
+      - FAQ: faq.md # TODO
+  - Examples:
+      - Chunking:
+          - Markdown files: examples/md_chunking.md # TODO
+          - PDF files: examples/pdf_chunking.md # TODO
+          - HTML files: examples/html_chunking.md # TODO
+      - Parsing PDF documents:
+          - "Basic PDF Parsing Example": examples/example1.ipynb # TODO
+          - "Parsing tables": examples/example2.ipynb # TODO
+      - Building my own pipeline:
+          - "Exemple": examples/example1.ipynb # TODO
+  - Reference:
+      - Python API:
+          - Any Class: reference/any.md # TODO
+      - CLI:
+          - CLI reference: reference/cli.md # TODO
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.details
+  - attr_list
+  - mkdocs-click
+plugins:
+  - search
+  - mkdocs-jupyter
+  - mkdocstrings:
+      default_handler: python
+      options:
+        extensions:
+          - griffe_pydantic:
+              schema: true
+        preload_modules:
+          - chunknorris
+
+extra_css:
+  - stylesheets/extra.css
+extra:
+  homepage: https://wikit-ai.github.io/chunknorris/

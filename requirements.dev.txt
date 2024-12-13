@@ -4,3 +4,8 @@ pylint
 mypy
 build
 twine
+mkdocs
+mkdocs-click
+mkdocs-jupyter
+pymdown-extensions
+mkdocstrings
