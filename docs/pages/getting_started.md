@@ -82,10 +82,12 @@ Here are code examples for chunking documents each file type using python:
 
 ## Using the CLI 
 
-If you prefer, you may also run ``chunknorris`` in a terminal. In that case, the chunks will be saved in a JSON file, named ``<name_of_you_file>-chunks.json``.
+If you prefer, you may also run ``chunknorris`` in a terminal using:
 
 ```bash
 chunknorris --filepath "path/to/myfile.pdf" # .pdf, .md or .html
 ```
+
+In that case, the chunks will be saved in a JSON file, named ``<name_of_you_file>-chunks.json``.
 
 You may also pass arguments to influence ``chunknorris``' behavior. Enter ``chunknorris -h`` in a terminal to see available options. Feel free to experiment 🧪 !

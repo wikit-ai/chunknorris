@@ -25,6 +25,6 @@ jobs:
           path: .cache
           restore-keys: |
             mkdocs-material-
-      - run: pip install mkdocs-material mkdocs-click mkdocs-jupyter mkdocstrings
+      - run: pip install mkdocs-material mkdocs-click mkdocs-jupyter mkdocstrings-python
       - run: pip install pymdown-extensions
       - run: mkdocs gh-deploy --force

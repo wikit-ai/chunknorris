@@ -8,4 +8,4 @@ mkdocs
 mkdocs-click
 mkdocs-jupyter
 pymdown-extensions
-mkdocstrings
+mkdocstrings-python

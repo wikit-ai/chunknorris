@@ -16,6 +16,7 @@ file_md-chunked.json
 # specific files
 WikitPDFParser_Output.pdf
 output.html
+tests.ipynb
 
 # vs-code stuff
 *code-workspace

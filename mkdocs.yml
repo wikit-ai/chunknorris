@@ -16,63 +16,61 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
 
-    # Palette toggle for light mode
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: deep orange
-      accent: cyan
-      toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-
-  logo: assets/chunknorris_logo_1024.png # ?
-  favicon: assets/chunknorris_logo_1024.png # ?
+  logo: assets/chunknorris_logo_1024.png # TODO : improve logo
+  favicon: assets/chunknorris_logo_1024.png # TODO : improve logo
   custom_dir: docs/overrides
   features:
-    - content.tabs.link # ?
-    - content.code.annotate # ?
-    - content.code.copy # ?
-    - announce.dismiss # ?
-    - navigation.footer # ?
-    - navigation.tabs # ?
-    - navigation.indexes # <= if set, each "section" can have its own page, if index.md is used
-    - navigation.instant # ?
-    - navigation.instant.prefetch # ?
-    # - navigation.instant.preview # ?
-    - navigation.instant.progress # ?
-    - navigation.path # ?
-    - navigation.sections # ?
-    - navigation.top # ?
-    - navigation.tracking # ?
-    - search.suggest # ?
+    - content.tabs.link
+    - content.code.annotate
+    - content.code.copy
+    - announce.dismiss
+    - navigation.footer
+    - navigation.tabs
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.path
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - search.suggest
     - toc.follow
     - toc.integrate
     - header.autohide
-nav: # TODO
+nav:
   - Home:
       - "ChunkNorris": index.md
-      - Installation: pages/installation.md # TODO
-      - Getting Started: pages/getting_started.md # TODO
-      - How it works: how_it_works.md
-      - Performance report: performance_report.md # TODO
-      - Current limitations: current_limitations.md # TODO
-      - Contributing: contributing.md # TODO
+      - Installation: pages/installation.md
+      - Getting Started: pages/getting_started.md
+      - How it works: pages/how_it_works.md
+      - Performance report: pages/performance_report.md # TODO
+      - Roadmap: pages/roadmap.md # -> chunknorris image
+      - Current limitations: pages/current_limitations.md
+      - Contributing: pages/how_to_contribute.md # TODO -> chunknorris image
       - FAQ: faq.md # TODO
   - Examples:
+      - "Examples": examples/index.md # -> missing chunknorris image
       - Chunking:
-          - Markdown files: examples/md_chunking.md # TODO
-          - PDF files: examples/pdf_chunking.md # TODO
-          - HTML files: examples/html_chunking.md # TODO
-      - Parsing PDF documents:
-          - "Basic PDF Parsing Example": examples/example1.ipynb # TODO
-          - "Parsing tables": examples/example2.ipynb # TODO
-      - Building my own pipeline:
-          - "Exemple": examples/example1.ipynb # TODO
+          - Markdown files: examples/markdown_chunking.ipynb
+          - PDF files: examples/pdf_chunking.ipynb
+          - HTML files: examples/html_chunking.ipynb
+          - Influence chunking behavior: examples/advanced_chunking.ipynb
+      - Parsing:
+          - PDF:
+              - "In-depth usage of PdfParser": examples/pdf_parsing.ipynb
+              - "Parsing tables": examples/example2.ipynb # TODO
+      - Customize:
+          - "Implement my own parser": examples/custom_parser.ipynb
+          - "Implement my own pipeline": examples/example1.ipynb # TODO
   - Reference:
-      - Python API:
-          - Any Class: reference/any.md # TODO
-      - CLI:
-          - CLI reference: reference/cli.md # TODO
+      - "API reference": reference/index.md
+      - Chunkers: # add more
+          - MarkdownChunker: reference/markdown_chunker.md
+      - Parsers: # add more
+          - HTMLParser: reference/html_parser.md
+          - PdfParser: reference/pdf_parser.md
+      - Pipelines:
+          - Any Class: todo.md # TODO
 
 markdown_extensions:
   - admonition
@@ -90,6 +88,11 @@ plugins:
   - mkdocs-jupyter
   - mkdocstrings:
       default_handler: python
+      handlers:
+        python:
+          load_external_modules: false
+          paths: [src]
+          show_inheritance_diagramm: true
       options:
         extensions:
           - griffe_pydantic:
