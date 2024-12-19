@@ -1,0 +1,6 @@
+Training id;Algo;Accuracy;Successful;Trees;Comments
+1;RF;0.87;False;200;Crashed
+2;RF;0.85;True;100;Good accuracy, better for small datasets.
+3;RF;0.92;;400;Overfitting risk, regularization needed.
+4;XGboost;0.78;;;Lower accuracy on larger datasets.
+5;RF;0.89;;50;High variance, tuning required.
