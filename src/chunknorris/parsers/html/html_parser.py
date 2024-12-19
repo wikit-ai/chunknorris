@@ -18,7 +18,7 @@ class HTMLParser(AbstractParser):
             string (str): the markdown formatted string
 
         Returns:
-            TypedString: the formatted markdown string
+            MarkdownDoc: the formatted markdown string
         """
         formatted_string = HTMLParser.apply_markdownify(string)
         formatted_string = HTMLParser.cleanup_string(formatted_string)
@@ -34,7 +34,7 @@ class HTMLParser(AbstractParser):
             filepath (FilePath): the path to a .md file
 
         Returns:
-            TypedString: the typed string
+            MarkdownDoc: the parsed document. Can be fed to chunker.
         """
         html_string = HTMLParser.read_file(filepath)
 
