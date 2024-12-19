@@ -47,7 +47,6 @@ class PdfParser(
     ocr_language: str = "fra+eng"
     body_line_spacing: float | None = None
 
-    @validate_args
     def __init__(
         self,
         *,
@@ -58,7 +57,8 @@ class PdfParser(
         ocr_language: str = "fra+eng",
         body_line_spacing: float | None = None,
     ) -> None:
-        """Initializes a pdf parser
+        """Initializes a pdf parser.
+
         Args:
             extract_tables (bool, optional): whether or not tables should be extracted.
                 Defaults to True.
@@ -97,7 +97,7 @@ class PdfParser(
         page_end: int | None = None,
     ) -> MarkdownDoc:
         """Parses a pdf document and returns
-        its corresponding Markdown formatted string.
+        the parsed MarkdownDoc object.
 
         Args:
             filepath (str): the path to the file to parse.
@@ -113,7 +113,7 @@ class PdfParser(
         self.document = pymupdf.open(filepath, filetype="pdf")
         self._set_page_range(page_start, page_end)
 
-        self.parse_document()
+        self._parse_document()
 
         return self.to_markdown_doc()
 
@@ -136,7 +136,7 @@ class PdfParser(
         self.document = pymupdf.open(stream=string, filetype="pdf")
         self._set_page_range(page_start, page_end)
 
-        self.parse_document()
+        self._parse_document()
 
         return self.to_markdown_doc()
 
@@ -157,7 +157,7 @@ class PdfParser(
         if self.page_start >= self.page_end:  # type: ignore : missing typing in pymupdf -> document.page_count : int
             raise ValueError("Arg 'page_end' must be greater than 'page_start'.")
 
-    def parse_document(self) -> None:
+    def _parse_document(self) -> None:
         """Parses a pdf document.
 
         Returns:
@@ -191,7 +191,6 @@ class PdfParser(
                     f"Tesseract's {lang}.traineddata file not found at {tessdata_location}. You might need to download the corresponding file from https://github.com/tesseract-ocr/tessdata and place it in {tessdata_location}",
                 )
 
-    @timeit
     def _create_spans(self) -> list[TextSpan]:
         """Prepares the parsed spans
 
