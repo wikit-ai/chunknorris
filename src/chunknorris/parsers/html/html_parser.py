@@ -18,7 +18,7 @@ class HTMLParser(AbstractParser):
             string (str): the markdown formatted string
 
         Returns:
-            MarkdownDoc: the formatted markdown string
+            MarkdownDoc: the parsed document. Can be fed to chunker.
         """
         formatted_string = HTMLParser.apply_markdownify(string)
         formatted_string = HTMLParser.cleanup_string(formatted_string)
