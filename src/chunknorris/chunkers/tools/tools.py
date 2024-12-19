@@ -1,8 +1,9 @@
 from __future__ import annotations
-from unicodedata import normalize
-from copy import deepcopy
-import re
+
 import json
+import re
+from copy import deepcopy
+from unicodedata import normalize
 
 from ...parsers.markdown.components import MarkdownLine
 
@@ -156,6 +157,7 @@ class TocTree:
                 default=lambda o: o.__dict__,
                 sort_keys=True,
                 ensure_ascii=False,
+                indent=4,
             )
 
     def remove_circular_refs(self):

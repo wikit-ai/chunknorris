@@ -1,13 +1,13 @@
 import glob
-import os
 import json
+import os
 from argparse import ArgumentParser
 
 from ..chunkers.markdown_chunker import MarkdownChunker
 from ..chunkers.tools.tools import Chunk
+from ..decorators.decorators import validate_args
 from ..parsers.json.wikit_parser import WikitJsonParser
 from ..schemas.schemas import WikitJSONDocument, WikitJSONDocumentChunk
-from ..decorators.decorators import validate_args
 
 
 class WikitJsonPipeline:
@@ -97,7 +97,7 @@ class WikitJsonPipeline:
             os.makedirs(output_dir)
 
         with open(out_filepath, "w", encoding="utf-8") as file:
-            json.dump(content.model_dump(), file, ensure_ascii=False)
+            json.dump(content.model_dump(), file, ensure_ascii=False, indent=4)
 
     def _format_chunks(self, chunks: list[Chunk]) -> list[WikitJSONDocumentChunk]:
         """Formats the chunks according to the input json file

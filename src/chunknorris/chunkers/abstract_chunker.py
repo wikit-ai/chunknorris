@@ -1,6 +1,6 @@
-from abc import ABC, abstractmethod
 import json
 import os
+from abc import ABC, abstractmethod
 from typing import Any
 
 from .tools.tools import Chunk
@@ -49,4 +49,4 @@ class AbstractChunker(ABC):
             for chunk in chunks
         ]
         with open(output_filename, "w", encoding="utf8") as f:
-            json.dump(content, f, ensure_ascii=False)
+            json.dump(content, f, ensure_ascii=False, indent=4)

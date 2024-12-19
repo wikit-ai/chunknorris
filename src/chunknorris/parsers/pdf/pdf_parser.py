@@ -6,26 +6,25 @@ from typing import Literal
 
 import pymupdf  # type: ignore : no stubs
 
-from ...decorators.decorators import validate_args, timeit
-from ...parsers.markdown.components import MarkdownDoc
+from ...decorators.decorators import timeit, validate_args
 from ...exceptions.exceptions import (
     PageNotFoundException,
     PdfParserException,
     TextNotFoundException,
 )
-
+from ...parsers.markdown.components import MarkdownDoc
 from .tools import (
-    TextSpan,
-    TextLine,
-    TextBlock,
-    PdfPlotter,
+    PdfExport,
     PdfLinkExtraction,
+    PdfParserState,
+    PdfParserUtilities,
+    PdfPlotter,
     PdfTableExtraction,
     PdfTocExtraction,
-    PdfExport,
-    PdfParserUtilities,
-    PdfParserState,
     TableFinder,
+    TextBlock,
+    TextLine,
+    TextSpan,
 )
 
 
@@ -75,8 +74,8 @@ class PdfParser(
             body_line_spacing (float, optional) : the size of the space between 2 lines of the body
                 of the document. Generally around 1. If None, an automatic method will try to find it.
                 Tweak this parameter for better merging of lines into blocks.
-            table_finder (TableFinder | None, optionnal): the table finder to use for parsing the tables.
-                If None, defauts to a table finderwith default parameters.
+            table_finder (TableFinder | None, optional): the table finder to use for parsing the tables.
+                If None, defauts to a TableFinder with default parameters.
         """
         self.add_headers = add_headers
         self.extract_tables = extract_tables
@@ -158,11 +157,7 @@ class PdfParser(
             raise ValueError("Arg 'page_end' must be greater than 'page_start'.")
 
     def _parse_document(self) -> None:
-        """Parses a pdf document.
-
-        Returns:
-            str: the pymupdf object
-        """
+        """Parses a pdf document."""
         self.spans = self._create_spans()
         if not self.spans or all(span.is_header_footer for span in self.spans):
             raise TextNotFoundException(
@@ -176,7 +171,7 @@ class PdfParser(
         self.toc = self.get_toc() if self.add_headers else []
 
     def check_ocr_config_is_valid(self):
-        """Check that the OCR configuration is valid"""
+        """Check that the OCR configuration is valid."""
         tessdata_location = os.environ.get("TESSDATA_PREFIX")
         if not tessdata_location:
             raise PdfParserException(
@@ -192,10 +187,10 @@ class PdfParser(
                 )
 
     def _create_spans(self) -> list[TextSpan]:
-        """Prepares the parsed spans
+        """Prepares the parsed spans.
 
         Returns:
-            list[textSpan]: the spans, after preprocessing
+            list[textSpan]: the spans, after preprocessing.
         """
         spans = self._extract_spans()
         for i, span in enumerate(spans):
@@ -206,7 +201,7 @@ class PdfParser(
         return spans
 
     def _extract_spans(self) -> list[TextSpan]:
-        """Get the spans of the pages"""
+        """Get the spans of the pages."""
 
         spans: list[TextSpan] = []
         for page in self.document.pages(start=self.page_start, stop=self.page_end):  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
@@ -237,7 +232,7 @@ class PdfParser(
     def _extract_spans_from_textpage(
         textpage: pymupdf.TextPage, page_number: int
     ) -> list[TextSpan]:
-        """Extracts a list of spans from a TextPage
+        """Extracts a list of spans from a TextPage.
 
         Args:
             textpage (pymupdf.TextPage): the TextPage to extract the spans from.
@@ -258,13 +253,13 @@ class PdfParser(
     def _flag_table_spans(self, spans: list[TextSpan]) -> list[TextSpan]:
         """Flags the span if it belongs to any table
         already parsed in the tables.
-        Stores the value in span.isin_table attribute
+        Stores the value in span.isin_table attribute.
 
         Args:
-            spans (list[TextSpan]) : the list of spans
+            spans (list[TextSpan]) : the list of spans.
 
         Returns:
-            list[TextSpan] : the list of spans with added attribute "isin_table"
+            list[TextSpan] : the list of spans with added attribute "isin_table".
         """
         page_tables = defaultdict(list[pymupdf.Rect])
         for table in self.tables:
@@ -287,7 +282,6 @@ class PdfParser(
 
         Args:
             spans (TextSpan): the list of spans with attribute is_header_footer updated.
-
         """
         if not self.document.page_count > 2:  # type: ignore : missing typing in pymupdf | document.page_count : int
             return spans
@@ -307,14 +301,14 @@ class PdfParser(
     def _create_lines(spans: list[TextSpan]) -> list[TextLine]:
         """Consolidate the consecutive spans by grouping them together
         in a TextLine when possible if they belong to the same line.
-        Spans can be merged if :
+        Spans can be merged if:
         - they do not belong to table or header/footer
         - they have the same y positions
         Args:
-            spans (list[TextSpan]): the list of spans
+            spans (list[TextSpan]): the list of spans.
 
         Returns:
-            list[TextLine]: the list of lines
+            list[TextLine]: the list of lines.
         """
         if len(spans) == 0:
             return []
@@ -349,10 +343,10 @@ class PdfParser(
         This linespace can be used to merge the lines together into blocks.
 
         Args:
-            lines (list[TextLine]): the parsed lines
+            lines (list[TextLine]): the parsed lines.
 
         Returns:
-            float: the value of the linespace
+            float: the value of the linespace.
         """
         linespace_counts = Counter(
             (
@@ -369,12 +363,12 @@ class PdfParser(
         For example, it can be a paragraph, or the title of a section.
 
         Args:
-            lines (list[TextLine]): the lines to group
-            body_linespacing (float): the distance between the bboxes of two
-                consecutive lines below which 2 lines are considered belonging to the same block
+            lines (list[TextLine]): the lines to group.
+            body_linespacing (float): the distance between the bboxes of two.
+                consecutive lines below which 2 lines are considered belonging to the same block.
 
         Returns:
-            list[TextBlock]: the blocks
+            list[TextBlock]: the blocks.
         """
         if len(lines) == 0:
             return []
@@ -405,7 +399,7 @@ class PdfParser(
         return blocks
 
     def cleanup_memory(self):
-        """Cleans up memory"""
+        """Cleans up memory by reseting all objects created to parse the document."""
         self.document.close()
         self._document = None
         self.filepath = None

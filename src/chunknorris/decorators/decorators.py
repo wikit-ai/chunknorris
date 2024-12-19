@@ -1,6 +1,6 @@
+import time
 from functools import wraps
 from inspect import signature
-import time
 from typing import Any, Callable
 
 from ..core.logger import LOGGER

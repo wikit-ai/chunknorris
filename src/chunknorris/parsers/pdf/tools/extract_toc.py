@@ -1,11 +1,11 @@
+import re
 from collections import Counter
 from itertools import groupby
-import re
 
 from thefuzz import fuzz  # type: ignore : no stubs
 
-from .utils import PdfParserState
 from .components import TocTitle
+from .utils import PdfParserState
 
 
 class PdfTocExtraction(PdfParserState):

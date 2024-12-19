@@ -1,6 +1,6 @@
-from collections import defaultdict
 import os
 import re
+from collections import defaultdict
 from operator import attrgetter
 
 from ....parsers.markdown.components import MarkdownDoc, MarkdownLine

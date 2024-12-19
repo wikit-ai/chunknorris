@@ -1,6 +1,7 @@
 import pytest
+
 from chunknorris.chunkers import MarkdownChunker
-from chunknorris.parsers import WikitJsonParser, MarkdownParser
+from chunknorris.parsers import MarkdownParser, WikitJsonParser
 from chunknorris.pipelines import WikitJsonPipeline
 
 

@@ -20,7 +20,7 @@ chunknorris = "chunknorris.__main__:main"
 
 [project]
 name = "chunknorris"
-version = "1.0.3"
+version = "1.0.4"
 authors = [{ name = "Wikit", email = "dev@wikit.ai" }]
 description = "A package for chunking documents from various formats"
 keywords = [
@@ -31,6 +31,7 @@ keywords = [
   "markdown",
   "pdf",
   "header",
+  "parsing",
   "RAG",
 ]
 readme = { file = "README.md", content-type = "text/markdown" }

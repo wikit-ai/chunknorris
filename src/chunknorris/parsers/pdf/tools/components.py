@@ -1,7 +1,8 @@
 from collections import defaultdict
 from typing import Literal
-from pydantic import BaseModel, Field
+
 import pymupdf  # type: ignore : no stubs
+from pydantic import BaseModel, Field
 
 # TODO : Find list of special bullet-list caracters
 INVALID_CHAR_MAP = {
