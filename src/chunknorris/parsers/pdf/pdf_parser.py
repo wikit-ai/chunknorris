@@ -107,7 +107,7 @@ class PdfParser(
             MarkdownDoc: The MarkdownDoc to be passed to MarkdownChunker.
         """
         self.filepath = filepath
-        if Path(filepath).suffix != ".pdf":
+        if Path(filepath).suffix.lower() != ".pdf":
             raise PdfParserException("Only .pdf files can be passed to PdfParser.")
         self.document = pymupdf.open(filepath, filetype="pdf")
         self._set_page_range(page_start, page_end)

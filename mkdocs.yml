@@ -71,8 +71,8 @@ nav:
           - PdfParser: reference/parser_pdf.md
           - MarkdownParser: reference/parser_markdown.md
       - Pipelines:
-          - BasePipeline: pipeline_base.md
-          - PdfPipeline: pipeline_pdf.md
+          - BasePipeline: reference/pipeline_base.md
+          - PdfPipeline: reference/pipeline_pdf.md
 
 markdown_extensions:
   - admonition
