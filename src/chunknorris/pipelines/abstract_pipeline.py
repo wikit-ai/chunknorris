@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+
 from ..chunkers.abstract_chunker import AbstractChunker
 from ..chunkers.tools import Chunk
 from ..parsers.abstract_parser import AbstractParser

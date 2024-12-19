@@ -1,5 +1,5 @@
 from chunknorris.chunkers import MarkdownChunker
-from chunknorris.parsers import MarkdownParser, HTMLParser
+from chunknorris.parsers import HTMLParser, MarkdownParser
 from chunknorris.pipelines import BasePipeline
 
 

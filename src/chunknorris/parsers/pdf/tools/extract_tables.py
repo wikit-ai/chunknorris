@@ -1,6 +1,6 @@
+from copy import deepcopy
 from itertools import groupby
 from operator import attrgetter
-from copy import deepcopy
 
 import pymupdf  # type: ignore : no stubs
 

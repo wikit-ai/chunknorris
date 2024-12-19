@@ -1,5 +1,7 @@
 import re
+
 import pymupdf  # type: ignore -> no stubs
+
 from chunknorris.parsers import PdfParser
 from chunknorris.parsers.markdown.components import MarkdownDoc
 

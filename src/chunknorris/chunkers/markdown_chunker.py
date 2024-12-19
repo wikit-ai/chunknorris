@@ -1,11 +1,9 @@
 from typing import Literal
 
-
 from ..decorators.decorators import timeit, validate_args
-
+from ..parsers.markdown.components import MarkdownDoc, MarkdownLine
 from .abstract_chunker import AbstractChunker
 from .tools.tools import Chunk, TocTree
-from ..parsers.markdown.components import MarkdownDoc, MarkdownLine
 
 
 class MarkdownChunker(AbstractChunker):

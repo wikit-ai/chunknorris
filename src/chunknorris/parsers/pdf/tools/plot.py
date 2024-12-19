@@ -1,14 +1,14 @@
-from itertools import groupby
 import random
+from itertools import groupby
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pymupdf  # type: ignore : not stubs
 
-from .utils import PdfParserState
+from .components import TextBlock, TextLine, TextSpan
 from .extract_tables import PdfTable
-from .components import TextSpan, TextLine, TextBlock
+from .utils import PdfParserState
 
 
 class PdfPlotter(PdfParserState):

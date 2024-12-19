@@ -1,14 +1,19 @@
 import pytest
-
-import test_strings.parsers.markdown_parser as md_parser_strings
-import test_strings.parsers.html_parser as html_parser_strings
-import test_strings.parsers.wikit_parser as wikit_parser_strings
 import test_strings.chunkers.markdown_chunker as md_chunker_strings
 import test_strings.chunkers.tools.tools as chunker_tools_strings
+import test_strings.parsers.html_parser as html_parser_strings
+import test_strings.parsers.markdown_parser as md_parser_strings
+import test_strings.parsers.wikit_parser as wikit_parser_strings
 
-from chunknorris.parsers import MarkdownParser, WikitJsonParser, HTMLParser, PdfParser
 from chunknorris.chunkers import MarkdownChunker
 from chunknorris.chunkers.tools import Chunk
+from chunknorris.parsers import (
+    HTMLParser,
+    JupyterNotebookParser,
+    MarkdownParser,
+    PdfParser,
+    WikitJsonParser,
+)
 
 ################
 #   Chunkers   #
@@ -47,6 +52,11 @@ def pdf_parser() -> PdfParser:
     return PdfParser()
 
 
+@pytest.fixture(scope="session")
+def jupyter_notebook_parser() -> JupyterNotebookParser:
+    return JupyterNotebookParser()
+
+
 ###############
 #  filepaths  #
 ###############
@@ -80,6 +90,11 @@ def pdf_filepath() -> str:
 @pytest.fixture(scope="session")
 def pdf_tables_filepath() -> str:
     return "./tests/test_files/tables.pdf"
+
+
+@pytest.fixture(scope="session")
+def jupyter_notebook_filepath() -> str:
+    return "./tests/test_files/file.ipynb"
 
 
 #############

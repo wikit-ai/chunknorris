@@ -1,7 +1,7 @@
-from pathlib import Path
 import re
-from markdownify import markdownify  # type: ignore : no stub file
+from pathlib import Path
 
+from markdownify import markdownify  # type: ignore : no stub file
 
 from ...parsers.markdown.components import MarkdownDoc
 from ..abstract_parser import AbstractParser

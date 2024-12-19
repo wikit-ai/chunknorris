@@ -1,4 +1,5 @@
 from typing import Literal
+
 import pymupdf  # type: ignore : no stubs
 
 from ....exceptions.exceptions import PdfParserException

@@ -1,10 +1,10 @@
-from argparse import ArgumentParser
 import os
+from argparse import ArgumentParser
 
 from .chunkers import MarkdownChunker
-from .parsers import MarkdownParser, WikitJsonParser, HTMLParser, PdfParser
-from .pipelines import BasePipeline, PdfPipeline, WikitJsonPipeline
 from .core.logger import LOGGER
+from .parsers import HTMLParser, MarkdownParser, PdfParser, WikitJsonParser
+from .pipelines import BasePipeline, PdfPipeline, WikitJsonPipeline
 
 
 def parse_arguments():

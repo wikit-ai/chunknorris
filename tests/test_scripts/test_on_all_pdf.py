@@ -1,10 +1,12 @@
-import os
 import logging
+import os
+
 from tqdm import tqdm
-from src.chunknorris.exceptions import TextNotFoundException, PageNotFoundException
+
+from src.chunknorris.chunkers import MarkdownChunker
+from src.chunknorris.exceptions import PageNotFoundException, TextNotFoundException
 from src.chunknorris.parsers import PdfParser
 from src.chunknorris.pipelines import PdfPipeline
-from src.chunknorris.chunkers import MarkdownChunker
 
 # To run this test, use the following :
 # python -m tests.test_scripts.test_on_all_pdf
