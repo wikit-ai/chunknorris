@@ -64,13 +64,15 @@ nav:
           - "Implement my own pipeline": examples/example1.ipynb # TODO
   - Reference:
       - "API reference": reference/index.md
-      - Chunkers: # add more
-          - MarkdownChunker: reference/markdown_chunker.md
-      - Parsers: # add more
-          - HTMLParser: reference/html_parser.md
-          - PdfParser: reference/pdf_parser.md
+      - Chunkers:
+          - MarkdownChunker: reference/chunker_markdown.md
+      - Parsers:
+          - HTMLParser: reference/parser_html.md
+          - PdfParser: reference/parser_pdf.md
+          - MarkdownParser: reference/parser_markdown.md
       - Pipelines:
-          - Any Class: todo.md # TODO
+          - BasePipeline: pipeline_base.md
+          - PdfPipeline: pipeline_pdf.md
 
 markdown_extensions:
   - admonition
