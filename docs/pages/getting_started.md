@@ -6,7 +6,7 @@ After you install ``chunknorris``, you can start getting your chunks either usin
 
 ## Using Python
 
-Here are code examples for chunking documents each file type using python:
+Here are code examples for chunking documents according to their file type:
 
 === ".md"
 
@@ -79,6 +79,80 @@ Here are code examples for chunking documents each file type using python:
     for chunk in chunks:
         print(chunk.get_text())
     ```
+
+=== ".csv"
+
+    ```py
+    from chunknorris.parsers import CSVParser
+    from chunknorris.chunkers import MarkdownChunker
+    from chunknorris.pipelines import BasePipeline
+
+    # Instanciate components
+    pipeline = BasePipeline(
+        parser=CSVParser(),
+        chunker=MarkdownChunker()
+        )
+
+    # Get some chunks !
+    chunks = pipeline.chunk_file(filepath="myfile.csv")
+
+    # Save chunks
+    pipeline.save_chunks(chunks)
+
+    # Print chunks:
+    for chunk in chunks:
+        print(chunk.get_text())
+    ```
+
+=== ".xlsx"
+
+    ```py
+    from chunknorris.parsers import ExcelParser
+    from chunknorris.chunkers import MarkdownChunker
+    from chunknorris.pipelines import BasePipeline
+
+    # Instanciate components
+    pipeline = BasePipeline(
+        parser=ExcelParser(),
+        chunker=MarkdownChunker()
+        )
+
+    # Get some chunks !
+    chunks = pipeline.chunk_file(filepath="myfile.xslx") #  .xls, .odt or any excel-like file is compatible.
+
+    # Save chunks
+    pipeline.save_chunks(chunks)
+
+    # Print chunks:
+    for chunk in chunks:
+        print(chunk.get_text())
+    ```
+
+=== ".ipynb"
+
+    ```py
+    from chunknorris.parsers import JupyterNotebookParser
+    from chunknorris.chunkers import MarkdownChunker
+    from chunknorris.pipelines import BasePipeline
+
+    # Instanciate components
+    pipeline = BasePipeline(
+        parser=JupyterNotebookParser(),
+        chunker=MarkdownChunker()
+        )
+
+    # Get some chunks !
+    chunks = pipeline.chunk_file(filepath="myfile.ipynb")
+
+    # Save chunks
+    pipeline.save_chunks(chunks)
+
+    # Print chunks:
+    for chunk in chunks:
+        print(chunk.get_text())
+    ```
+
+Once you have your ``chunks``, you can easily print them of save them:
 
 ## Using the CLI 
 
