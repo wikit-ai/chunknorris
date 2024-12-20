@@ -73,6 +73,10 @@ def csv_parser() -> CSVParser:
 #  filepaths  #
 ###############
 
+@pytest.fixture(scope="session")
+def dir_filepath() -> str:
+    return "./tests/test_files"
+
 
 @pytest.fixture(scope="session")
 def md_filepath() -> str:
