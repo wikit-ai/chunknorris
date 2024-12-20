@@ -43,11 +43,11 @@ nav:
       - Installation: pages/installation.md
       - Getting Started: pages/getting_started.md
       - How it works: pages/how_it_works.md
-      - Performance report: pages/performance_report.md # TODO
+      #- Performance report: pages/performance_report.md # TODO
       - Roadmap: pages/roadmap.md # -> chunknorris image
       - Current limitations: pages/current_limitations.md
-      - Contributing: pages/how_to_contribute.md # TODO -> chunknorris image
-      - FAQ: faq.md # TODO
+      #- Contributing: pages/how_to_contribute.md # TODO -> chunknorris image
+      #- FAQ: faq.md # TODO
   - Examples:
       - "Examples": examples/index.md # -> missing chunknorris image
       - Chunking:
@@ -61,18 +61,21 @@ nav:
               - "Parsing tables": examples/example2.ipynb # TODO
       - Customize:
           - "Implement my own parser": examples/custom_parser.ipynb
-          - "Implement my own pipeline": examples/example1.ipynb # TODO
+          #- "Implement my own pipeline": examples/example1.ipynb # TODO
   - Reference:
       - "API reference": reference/index.md
       - Chunkers:
-          - MarkdownChunker: reference/chunker_markdown.md
+          - MarkdownChunker: reference/chunkers/chunker_markdown.md
       - Parsers:
-          - HTMLParser: reference/parser_html.md
-          - PdfParser: reference/parser_pdf.md
-          - MarkdownParser: reference/parser_markdown.md
+          - CSVParser: reference/parsers/parser_csv.md
+          - ExcelParser: reference/parsers/parser_excel.md
+          - HTMLParser: reference/parsers/parser_html.md
+          - JupyterNotebookParser: reference/parsers/parser_jupyter_notebook.md
+          - MarkdownParser: reference/parsers/parser_markdown.md
+          - PdfParser: reference/parsers/parser_pdf.md
       - Pipelines:
-          - BasePipeline: reference/pipeline_base.md
-          - PdfPipeline: reference/pipeline_pdf.md
+          - BasePipeline: reference/pipelines/pipeline_base.md
+          - PdfPipeline: reference/pipelines/pipeline_pdf.md
 
 markdown_extensions:
   - admonition

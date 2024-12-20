@@ -278,7 +278,7 @@ class PdfParser(
         on more that 33% of the pages of the document, it is a header or footer.
         Process:
         - Count the bbox locations of all spans.
-        - Remove spans having bbox location count superior to document's page count / 2
+        - Remove spans having bbox location count superior to document's page count / 3
 
         Args:
             spans (TextSpan): the list of spans with attribute is_header_footer updated.
