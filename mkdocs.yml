@@ -56,9 +56,8 @@ nav:
           - HTML files: examples/html_chunking.ipynb
           - Influence chunking behavior: examples/advanced_chunking.ipynb
       - Parsing:
-          - PDF:
-              - "In-depth usage of PdfParser": examples/pdf_parsing.ipynb
-              - "Parsing tables": examples/example2.ipynb # TODO
+          - "In-depth usage of PdfParser": examples/pdf_parsing.ipynb
+          # - "Parsing tables": examples/example2.ipynb # TODO
       - Customize:
           - "Implement my own parser": examples/custom_parser.ipynb
           #- "Implement my own pipeline": examples/example1.ipynb # TODO
