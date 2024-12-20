@@ -31,7 +31,7 @@ def validate_args(function: Callable[..., Any]) -> Any:
             ):
                 if not isinstance(arg_value, sig.parameters[arg_name].annotation):
                     raise ValueError(
-                        f"Argument '{arg_name}' must be of type {sig.parameters[arg_name].annotation.__name__}."
+                        f"Argument '{arg_name}' must be of type {sig.parameters[arg_name].annotation.__name__}. Got {arg_value}."
                     )
         result = function(*args, **kwargs)
 
