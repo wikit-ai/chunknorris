@@ -8,6 +8,8 @@ import test_strings.parsers.wikit_parser as wikit_parser_strings
 from chunknorris.chunkers import MarkdownChunker
 from chunknorris.chunkers.tools import Chunk
 from chunknorris.parsers import (
+    CSVParser,
+    ExcelParser,
     HTMLParser,
     JupyterNotebookParser,
     MarkdownParser,
@@ -57,6 +59,16 @@ def jupyter_notebook_parser() -> JupyterNotebookParser:
     return JupyterNotebookParser()
 
 
+@pytest.fixture(scope="session")
+def excel_parser() -> ExcelParser:
+    return ExcelParser()
+
+
+@pytest.fixture(scope="session")
+def csv_parser() -> CSVParser:
+    return CSVParser()
+
+
 ###############
 #  filepaths  #
 ###############
@@ -95,6 +107,16 @@ def pdf_tables_filepath() -> str:
 @pytest.fixture(scope="session")
 def jupyter_notebook_filepath() -> str:
     return "./tests/test_files/file.ipynb"
+
+
+@pytest.fixture(scope="session")
+def excel_filepath() -> str:
+    return "./tests/test_files/file.xlsx"
+
+
+@pytest.fixture(scope="session")
+def csv_filepath() -> str:
+    return "./tests/test_files/file.csv"
 
 
 #############
