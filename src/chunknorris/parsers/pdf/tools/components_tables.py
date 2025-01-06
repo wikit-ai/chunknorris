@@ -164,9 +164,35 @@ class TableFinder:
                     - coordinates of intersections between lines, where each row is (x, y). Shape : (n_intersections, 2).
                     - coordinates of cells, where each row is coordinates of rectangles as where each row is (x1, y1, x2, y2). Shape : (n_cells, 2).
         """
-        # Get coordinates of all lines
+        lines_coordinates = self._get_table_lines(page)
+        if not lines_coordinates.size:
+            return []
+        lines_grouped_by_table = self.group_lines_by_table(lines_coordinates)
+        # tuples of (line_coord, intersections and cells) for each table. We might only need the cells later if we do not need plotting
+        parsed_tables = [
+            self.build_table(table_lines) for table_lines in lines_grouped_by_table
+        ]
+        # remove tables with no cells
+        return [tab for tab in parsed_tables if tab[2].size]
+
+    def _get_table_lines(self, page: pymupdf.Page) -> npt.NDArray[np.float32]:
+        """Gets the lines that are likely to belong to a table. Proceed like so:
+        - Get the drawings on the page (vectors)
+        - Removes the drawings that are due to annotations (i.e. rectangles used to highlight text)
+        - Convert rectangles coordinates to 4 lines coordinates
+        - Remove very short lines that are likely to belong to vector designs
+
+        Args:
+            page (pymupdf.Page): the page to get the drawings from.
+
+        Returns:
+            npt.NDArray[np.float32]: an array of line coordinates of shape (n_lines, 4)
+                where each row is x1, y1, x2, y2.
+        """
         drawings = page.get_drawings()  # type: ignore missing typing in pymupdf
+        drawings = TableFinder._remove_drawings_from_annotations(drawings, page)
         drawings = self._convert_rectangles_to_lines(drawings)
+        # Get coordinates of all lines
         line_coordinates = np.array(
             [
                 (item[1].x, item[1].y, item[2].x, item[2].y)
@@ -176,16 +202,72 @@ class TableFinder:
             ]
         ).round()
         if not line_coordinates.size:
-            return []
-        # Group lines by tables and find intersections
+            return np.empty(shape=(0, 4))
         line_coordinates = TableFinder._filter_lines(line_coordinates)
-        lines_grouped_by_table = self.group_lines_by_table(line_coordinates)
-        # tuples of (line_coord, intersections and cells) for each table. We might only need the cells later if we do not need plotting
-        parsed_tables = [
-            self.build_table(table_lines) for table_lines in lines_grouped_by_table
-        ]
-        # remove tables with no cells
-        return [tab for tab in parsed_tables if tab[2].size]
+
+        return line_coordinates
+
+    @staticmethod
+    def _remove_drawings_from_annotations(
+        drawings: list[dict[str, Any]], page: pymupdf.Page
+    ) -> list[dict[str, Any]]:
+        """Removes the drawings that are likely to be due to annotations, i.e rectangles
+        used to highlight text.
+
+        Args:
+            drawings (list[dict[Any]]): the drawings obtained from Page.get_drawings()
+            page (pymupdf.Page): the page to get the drawings from.
+
+        Returns:
+            list[dict[Any]]: the drawings that are not due to annotations.
+        """
+        annotations = list(page.annots())  # type: ignore :: missing typing in pymupdf -> Page.annots() -> Generator[Annots]
+        if not annotations:
+            return drawings
+
+        filtered_drawings: list[dict[str, Any]] = [
+            drawing for drawing in drawings
+            if not any(annotation.rect.contains(drawing["rect"]) for annotation in annotations) # type: ignore :: missing typing in pymupdf -> Rect.contains() -> bool
+            ]
+
+        return filtered_drawings
+
+    def _convert_rectangles_to_lines(
+        self, drawings: list[tuple[Any]]
+    ) -> list[dict[str, list[tuple[Any]]]]:
+        """Converts the rectangles to lines if their width
+        is below self.line_width_threshold.
+
+        Args:
+            drawings (list[tuple[Any]]): the drawings extracted from a pymupdf.Page.
+
+        Returns:
+            list[dict[str, list[tuple[Any]]]]: the drawings, same format as pumupdf.Page.get_cdrawings()'s return,
+                with some rectangles converted to lines.
+        """
+        processed_drawings: list[dict[str, list[tuple[Any]]]] = []
+        for drawing in drawings:
+            drawing_items: list[tuple[Any]] = []
+            for item in drawing["items"]:
+                if item[0] == "re":
+                    if item[1].width < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.witdh : float
+                        mid_x = (item[1].x1 - item[1].x0) / 2 + item[1].x0  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
+                        item = (
+                            "l",
+                            pymupdf.Point(mid_x, item[1].y0),  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
+                            pymupdf.Point(mid_x, item[1].y1),  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
+                        )
+                    elif item[1].height < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.height : float
+                        mid_y = (item[1].y1 - item[1].y0) / 2 + item[1].y0  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
+                        item = (
+                            "l",
+                            pymupdf.Point(item[1].x0, mid_y),  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
+                            pymupdf.Point(item[1].x1, mid_y),  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
+                        )
+                drawing_items.append(item)
+            processed_drawings.append({"items": drawing_items})
+
+        return processed_drawings
 
     @staticmethod
     def _filter_lines(
@@ -241,43 +323,6 @@ class TableFinder:
             return lines_coordinates, intersections, np.empty((0, 4))
 
         return lines_coordinates, intersections, cells
-
-    def _convert_rectangles_to_lines(
-        self, drawings: list[tuple[Any]]
-    ) -> list[dict[str, list[tuple[Any]]]]:
-        """Converts the rectangles to lines if their width
-        is below self.line_width_threshold.
-
-        Args:
-            drawings (list[tuple[Any]]): the drawings extracted from a pymupdf.Page.
-
-        Returns:
-            list[dict[str, list[tuple[Any]]]]: the drawings, same format as pumupdf.Page.get_cdrawings()'s return,
-                with some rectangles converted to lines.
-        """
-        processed_drawings: list[dict[str, list[tuple[Any]]]] = []
-        for drawing in drawings:
-            drawing_items: list[tuple[Any]] = []
-            for item in drawing["items"]:
-                if item[0] == "re":
-                    if item[1].width < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.witdh : float
-                        mid_x = (item[1].x1 - item[1].x0) / 2 + item[1].x0  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
-                        item = (
-                            "l",
-                            pymupdf.Point(mid_x, item[1].y0),  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
-                            pymupdf.Point(mid_x, item[1].y1),  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
-                        )
-                    elif item[1].height < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.height : float
-                        mid_y = (item[1].y1 - item[1].y0) / 2 + item[1].y0  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
-                        item = (
-                            "l",
-                            pymupdf.Point(item[1].x0, mid_y),  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
-                            pymupdf.Point(item[1].x1, mid_y),  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
-                        )
-                drawing_items.append(item)
-            processed_drawings.append({"items": drawing_items})
-
-        return processed_drawings
 
     def get_line_intersections(
         self, coordinates: npt.NDArray[np.float32]

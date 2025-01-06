@@ -33,3 +33,5 @@ build
 
 # docs
 /site
+
+.codegpt
