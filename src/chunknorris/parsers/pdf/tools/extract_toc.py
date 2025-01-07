@@ -193,32 +193,41 @@ class PdfTocExtraction(PdfParserState):
                 title.found = True
                 best_block.section_title = title
 
+
     def _set_block_issectiontitle_with_fontsize(self) -> None:
-        """Uses the fontize attribute of blocks to assign
-        them a header level.
+        """Uses the fontize attribute of lines to assign
+        them a header level to blocks.
         We assume that bigger fontsize means higher level header.
-        All block having a fontisze greater than the fontsize of body
+        All block having a fontsize greater than the fontsize of body
         will be assigned a level based on their fontsize.
         """
-        fontsize_counts = Counter(
-            block.fontsize for block in self.blocks if not block.is_empty
+        # Get header fontsizes
+        if not self.main_body_fontsizes:
+            return
+        biggest_body_fontsize = max(self.main_body_fontsizes)
+        header_fontsizes = (
+            fontsize
+            for fontsize in self.document_fontsizes
+            if fontsize > biggest_body_fontsize
         )
-        if fontsize_counts:
-            main_body_fontsize = max(fontsize_counts, key=fontsize_counts.get)
-            fontsizes = (
-                fontsize
-                for fontsize in fontsize_counts.keys()
-                if fontsize > main_body_fontsize
-            )
-            fontsizes = sorted(fontsizes, reverse=True)[:5]
-            for block in self.blocks:
-                if block.fontsize in fontsizes:
-                    block.section_title = TocTitle(
-                        text=block.text,
-                        level=fontsizes.index(block.fontsize) + 1,
-                        page=block.page,
-                        source="fontsize",
-                    )
+        header_fontsizes = sorted(header_fontsizes, reverse=True)[:5]
+        for block in self.blocks:
+            if block.orientation != (1.0, 0.0): # do not consider non-horizontal text
+                continue
+            elif block.fontsize in header_fontsizes:
+                block.section_title = TocTitle(
+                    text=block.text,
+                    level=header_fontsizes.index(block.fontsize) + 1,
+                    page=block.page,
+                    source="fontsize",
+                )
+            elif block.fontsize == biggest_body_fontsize and block.is_bold and not self.main_body_is_bold:
+                block.section_title = TocTitle(
+                    text=block.text,
+                    level=len(header_fontsizes) + 1,
+                    page=block.page,
+                    source="fontsize",
+                )
 
     def _get_document_main_title(self) -> str:
         """
@@ -230,35 +239,29 @@ class PdfTocExtraction(PdfParserState):
         Returns :
             (str) : the main title of the document
         """
-        fontsize_counts = Counter(
-            span.fontsize for span in self.spans if not span.is_empty
-        )
-        if fontsize_counts:
-            main_body_fontsize = max(fontsize_counts, key=fontsize_counts.get)
-            spans_on_first_page = [
-                s for s in self.spans if s.page == 0 and not s.is_empty
-            ]
+        spans_on_first_page = [
+            s for s in self.spans if s.page == 0 and not s.is_empty
+        ]
+        if spans_on_first_page and self.main_body_fontsizes:
+            # Get the 2 biggest fontsizes of 1st page
+            first_page_biggest_fontsizes = sorted(
+                Counter(
+                    span.fontsize
+                    for span in spans_on_first_page
+                    if not span.is_empty and span.orientation == (1.0, 0.0)
+                ),
+                reverse=True,
+            )[:2]
+            title_spans = (
+                s
+                for s in spans_on_first_page
+                if s.fontsize not in self.main_body_fontsizes
+                and s.fontsize in first_page_biggest_fontsizes
+            )
+            main_title = " ".join((s.text for s in title_spans)).strip()
 
-            if spans_on_first_page:
-                # Get the 2 biggest fontsizes of 1st page
-                first_page_biggest_fontsizes = sorted(
-                    Counter(
-                        span.fontsize
-                        for span in spans_on_first_page
-                        if not span.is_empty
-                    ),
-                    reverse=True,
-                )[:2]
-                title_spans = (
-                    s
-                    for s in spans_on_first_page
-                    if s.fontsize > main_body_fontsize * 1.1
-                    and s.fontsize in first_page_biggest_fontsizes
-                )
-                main_title = " ".join((s.text for s in title_spans)).strip()
-
-                return (
-                    main_title[:100] + "[...]" if len(main_title) > 100 else main_title
-                )
+            return (
+                main_title[:100] + "[...]" if len(main_title) > 100 else main_title
+            )
 
         return ""

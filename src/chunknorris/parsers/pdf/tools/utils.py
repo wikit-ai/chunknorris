@@ -22,6 +22,9 @@ class PdfParserState:
     tables: list[PdfTable] = []
     table_finder: TableFinder = TableFinder()
     main_title: str = ""
+    main_body_fontsizes: list[float] = []
+    document_fontsizes: list[float] = []
+    main_body_is_bold: bool = False
 
     @property
     def document(self) -> pymupdf.Document:

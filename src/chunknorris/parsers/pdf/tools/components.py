@@ -58,7 +58,7 @@ class TextSpan:
     text: str
     font: str
     fontcolor: int
-    fontsize: float
+    raw_fontsize: float
     flags: int
     ascender: float
     descender: float
@@ -83,17 +83,19 @@ class TextSpan:
         descender: float,
         origin: tuple[float],
         page: int,
+        orientation: tuple[float, float]
     ) -> None:
         self._bbox = pymupdf.Rect(bbox)
         self.text = TextSpan._remove_invalid_characters(text)
         self.font = font
         self.fontcolor = color
-        self.fontsize = size
+        self.raw_fontsize = size
         self.flags = flags
         self.ascender = ascender
         self.descender = descender
         self.origin = pymupdf.Point(origin)
         self.page = page
+        self.orientation = orientation
 
         self.order = 0
         self.isin_table = False
@@ -103,6 +105,10 @@ class TextSpan:
     @property
     def bbox(self) -> pymupdf.Rect:
         return self._bbox
+    
+    @property
+    def fontsize(self) -> float:
+        return round(self.raw_fontsize)
 
     @property
     def is_superscripted(self) -> bool:
@@ -228,10 +234,18 @@ class TextLine:
     @property
     def page(self) -> int:
         return self.spans[0].page
+    
+    @property
+    def orientation(self) -> tuple[float, float]:
+        return self.spans[0].orientation
 
     @property
     def is_empty(self) -> bool:
         return all(span.is_empty for span in self.spans)
+
+    @property
+    def is_bold(self) -> bool:
+        return all(span.is_bold for span in self.spans)
 
     @property
     def is_bullet_point(self) -> bool:
@@ -281,6 +295,10 @@ class TextBlock:
     @property
     def page(self) -> int:
         return self.lines[0].page
+    
+    @property
+    def orientation(self) -> tuple[float, float]:
+        return self.lines[0].orientation
 
     @property
     def order(self) -> int:
@@ -289,6 +307,10 @@ class TextBlock:
     @property
     def is_empty(self) -> bool:
         return all(line.is_empty for line in self.lines)
+
+    @property
+    def is_bold(self) -> bool:
+        return all(line.is_bold for line in self.lines)
 
     @property
     def fontsize(self) -> float:
