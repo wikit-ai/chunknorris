@@ -17,7 +17,7 @@ from .tools import (
     PdfExport,
     PdfLinkExtraction,
     PdfParserState,
-    PdfParserUtilities,
+    DocSpecsExtraction,
     PdfPlotter,
     PdfTableExtraction,
     PdfTocExtraction,
@@ -34,7 +34,7 @@ class PdfParser(
     PdfTocExtraction,
     PdfPlotter,
     PdfExport,
-    PdfParserUtilities,
+    DocSpecsExtraction,
     PdfParserState,
 ):
     """Class that parses the document."""
@@ -167,7 +167,7 @@ class PdfParser(
         self.spans = self._flag_table_spans(self.spans)
         self.lines = PdfParser._create_lines(self.spans)
         self.blocks = self._create_blocks(self.lines)
-        self._get_doc_layout_specs()
+        self._set_document_specifications()
         self.main_title = self._get_document_main_title()
         self.toc = self.get_toc() if self.add_headers else []
 
@@ -399,32 +399,6 @@ class PdfParser(
 
         return blocks
 
-    def _get_doc_layout_specs(self):
-        """Get the specifications fo the text constituting the main body.
-        Stores the attributes in :
-        - self.main_body_fontsizes -> the fontsizes used for the body content of the document
-        - self.document_fonsizes -> a sorted list of fontsizes in the document (bigger than body)
-        - self.main_body_is_bold -> whethter or not the main body is written in bold
-        """
-        fontsize_counts = Counter(
-            line.fontsize for line in self.lines\
-            if not line.is_empty and line.orientation == (1.0, 0.0)
-        )
-        if not fontsize_counts:
-            return
-        self.document_fontsizes = [fontsize for fontsize in fontsize_counts.keys()]
-        self.main_body_fontsizes = [
-            fontsize
-            for fontsize, occurence in fontsize_counts.items()
-            if occurence > len(self.lines) * 0.1
-        ]
-        if not self.main_body_fontsizes:
-            return
-        # determine whether or not the body of document is written in bold (if 30% of the lines are bold, we consider the main body is bold)
-        bold_main_body_lines = [line.is_bold for line in self.lines if line.fontsize in self.main_body_fontsizes]
-        self.main_body_is_bold = sum(bold_main_body_lines) / len(bold_main_body_lines) > .3
-
-
     def cleanup_memory(self):
         """Cleans up memory by reseting all objects created to parse the document."""
         self.document.close()
@@ -437,3 +411,6 @@ class PdfParser(
         self.blocks = []
         self.tables = []
         self.main_title = ""
+        self.document_fontsizes = []
+        self.main_body_fontsizes = []
+        self.main_body_is_bold = False

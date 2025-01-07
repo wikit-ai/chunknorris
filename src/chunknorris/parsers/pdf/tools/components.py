@@ -83,7 +83,7 @@ class TextSpan:
         descender: float,
         origin: tuple[float],
         page: int,
-        orientation: tuple[float, float]
+        orientation: tuple[float, float],
     ) -> None:
         self._bbox = pymupdf.Rect(bbox)
         self.text = TextSpan._remove_invalid_characters(text)
@@ -105,7 +105,7 @@ class TextSpan:
     @property
     def bbox(self) -> pymupdf.Rect:
         return self._bbox
-    
+
     @property
     def fontsize(self) -> float:
         return round(self.raw_fontsize)
@@ -167,12 +167,13 @@ class TextSpan:
         if not self.text:
             return ""
         text = self.text.strip() if not self.link else f"[{self.text}]({self.link.uri})"
-        if self.is_superscripted:
-            text = f"<sup>{text}</sup>"
-        if self.is_bold:
-            text = f" **{text}** "
-        if self.is_italic:
-            text = f" *{text}* "
+        if not self.is_empty:
+            if self.is_superscripted:
+                text = f"<sup>{text}</sup>"
+            if self.is_bold:
+                text = f" **{text}** "
+            if self.is_italic:
+                text = f" *{text}* "
 
         return text
 
@@ -201,7 +202,7 @@ class TextLine:
 
     @property
     def text(self) -> str:
-        return "".join((span.text for span in self.spans))
+        return "".join((span.text for span in self.spans)).strip()
 
     @property
     def bbox(self) -> pymupdf.Rect:
@@ -234,7 +235,7 @@ class TextLine:
     @property
     def page(self) -> int:
         return self.spans[0].page
-    
+
     @property
     def orientation(self) -> tuple[float, float]:
         return self.spans[0].orientation
@@ -245,11 +246,15 @@ class TextLine:
 
     @property
     def is_bold(self) -> bool:
-        return all(span.is_bold for span in self.spans)
+        return all(span.is_bold for span in self.spans if not span.is_empty)
 
     @property
     def is_bullet_point(self) -> bool:
         return self.text.startswith("- ")
+
+    @property
+    def is_header_footer(self) -> bool:
+        return all(span.is_header_footer for span in self.spans)
 
     @property
     def order(self) -> int:
@@ -295,10 +300,14 @@ class TextBlock:
     @property
     def page(self) -> int:
         return self.lines[0].page
-    
+
     @property
     def orientation(self) -> tuple[float, float]:
         return self.lines[0].orientation
+
+    @property
+    def is_header_footer(self) -> bool:
+        return all(line.is_header_footer for line in self.lines)
 
     @property
     def order(self) -> int:
@@ -310,7 +319,7 @@ class TextBlock:
 
     @property
     def is_bold(self) -> bool:
-        return all(line.is_bold for line in self.lines)
+        return all(line.is_bold for line in self.lines if not line.is_empty)
 
     @property
     def fontsize(self) -> float:
