@@ -324,7 +324,7 @@ class TableFinder:
         )
         # Get cells
         cells = self._get_cells(intersections, lines_coordinates)
-        if not cells.size:
+        if not cells.size or not TableFinder._table_sanity_check(cells):
             return lines_coordinates, intersections, np.empty((0, 4))
 
         return lines_coordinates, intersections, cells
@@ -948,3 +948,29 @@ class TableFinder:
             )
 
         return lines_coordinates
+
+    @staticmethod
+    def _table_sanity_check(cells_coords: npt.NDArray[np.float32]) -> bool:
+        """Perfoms a sanity check of the parsed table.
+        Checks that the area of the table is equal to the sum of the area of its cells.
+
+        Args:
+            cells (npt.NDArray[np.float32]): the cells of the table detected.
+                Array of shape (n_cells, 4) where each row is x0, y0, x1, y1 coordinates of the cell.
+
+        Returns:
+            bool: returns True if the sanity check is passed, and False if the table
+                is likely to be a false detection.
+        """
+        x0, y0, x1, y1 = (
+            cells_coords[:, 0],
+            cells_coords[:, 1],
+            cells_coords[:, 2],
+            cells_coords[:, 3],
+        )
+
+        table_area = (np.max(x1) - np.min(x0)) * (np.max(y1) - np.min(y0))
+        cells_areas = np.abs((x1 - x0) * (y1 - y0))
+        total_cells_area = np.sum(cells_areas)
+
+        return np.isclose(table_area, total_cells_area, rtol=0.02)
