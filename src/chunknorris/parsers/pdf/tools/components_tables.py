@@ -55,6 +55,10 @@ class PdfTable:
         )
 
     @property
+    def is_header_footer(self) -> bool:
+        return all(span.is_header_footer for cell in self.cells for span in cell.spans)
+
+    @property
     def order(self) -> int:
         return min(
             (span for cell in self.cells for span in cell.spans),
@@ -226,9 +230,10 @@ class TableFinder:
             return drawings
 
         filtered_drawings: list[dict[str, Any]] = [
-            drawing for drawing in drawings
-            if not any(annotation.rect.contains(drawing["rect"]) for annotation in annotations) # type: ignore :: missing typing in pymupdf -> Rect.contains() -> bool
-            ]
+            drawing
+            for drawing in drawings
+            if not any(annotation.rect.contains(drawing["rect"]) for annotation in annotations)  # type: ignore :: missing typing in pymupdf -> Rect.contains() -> bool
+        ]
 
         return filtered_drawings
 

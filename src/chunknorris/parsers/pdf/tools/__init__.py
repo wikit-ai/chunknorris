@@ -5,4 +5,4 @@ from .extract_links import PdfLinkExtraction
 from .extract_tables import PdfTableExtraction
 from .extract_toc import PdfTocExtraction
 from .plot import PdfPlotter
-from .utils import PdfParserState, PdfParserUtilities
+from .utils import PdfParserState, DocSpecsExtraction

@@ -34,7 +34,8 @@ class PdfExport(PdfParserState):
         string_per_page = defaultdict(str)
         items_to_export = sorted(self.blocks + self.tables, key=attrgetter("order"))
         for item in items_to_export:
-            string_per_page[item.page] += "\n\n" + item.to_markdown()
+            if not item.is_header_footer:
+                string_per_page[item.page] += "\n\n" + item.to_markdown()
         string_per_page = {
             page: PdfExport._cleanup_md_string(md_string)
             for page, md_string in string_per_page.items()
@@ -52,11 +53,12 @@ class PdfExport(PdfParserState):
         Returns:
             MarkdownDoc: the formatted markdown doc
         """
-
         items_to_export = sorted(self.blocks + self.tables, key=attrgetter("order"))
         md_lines: list[MarkdownLine] = []
         line_idx_counter = 0
         for item in items_to_export:
+            if item.is_header_footer:
+                continue
             line_text = (
                 "\n\n" + PdfExport._cleanup_md_string(item.to_markdown()) + "\n\n"
             )

@@ -23,6 +23,10 @@ for root, dirs, files in os.walk(ROOT_DIR):
         if file.endswith(".pdf"):
             pdf_files.append(os.path.abspath(os.path.join(root, file)))
 
+parser = PdfParser(
+    use_ocr="auto",
+    extract_tables=True,
+)
 pipe = PdfPipeline(PdfParser(), MarkdownChunker())
 pdf_with_errors: list[str] = []
 for filepath in tqdm(pdf_files):
@@ -33,6 +37,7 @@ for filepath in tqdm(pdf_files):
     except PageNotFoundException:
         print("No page found")
     except Exception as e:
+        print(filepath)
         pdf_with_errors.append(filepath)
         raise e
 

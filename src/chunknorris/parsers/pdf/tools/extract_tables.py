@@ -148,6 +148,7 @@ class PdfTableExtraction(PdfParserState):
             descender=span.descender,
             origin=pymupdf.Point(intersect.x0, span.origin.y),  # type: ignore : missing typing in pymuPdf | Rect.x0 : float, Point.y : float
             page=span.page,
+            orientation=span.orientation,
         )
         new_span.order = span.order
 

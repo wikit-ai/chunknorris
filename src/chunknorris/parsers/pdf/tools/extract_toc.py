@@ -14,6 +14,15 @@ class PdfTocExtraction(PdfParserState):
     Intended to be a component inherited by pdfParser => PdfParser(PdfTocExtraction)
     """
 
+    @property
+    def header_patterns(self) -> list[tuple[int, re.Pattern[str]]]:
+        """A list of tuple (level, pattern) used to match the potential headers"""
+        return [
+            (3, re.compile(r"^(\d+)[\s\.\)]+(\d+)[\s\.\)]+(\d+)")),
+            (2, re.compile(r"^(\d+)[\s\.\)]+(\d+)")),
+            (1, re.compile(r"^(\d+)[\s\.\)]*")),
+        ]
+
     def get_toc(self) -> list[TocTitle]:
         """Gets the table of content of a document.
         The process:
@@ -32,15 +41,27 @@ class PdfTocExtraction(PdfParserState):
         # and we want to flag the lines that belong to it
         toc_from_document = self.get_toc_from_document()
 
-        toc = toc_from_metadata if toc_from_metadata else toc_from_document
-        if toc:
-            self._set_block_issectiontitle_with_toc(toc)
-        else:
-            self._set_block_issectiontitle_with_fontsize()
+        toc = None
+        if toc_from_metadata:
+            self._set_block_issectiontitle_with_toc(toc_from_metadata)
+            # sometime, the toc in metadata doesn't represent the toc in document.
+            # So, if less than half of toc are found in doc, find toc in doc.
+            if sum(title.found for title in toc_from_metadata) > 0.5 * len(
+                toc_from_metadata
+            ):
+                toc = toc_from_metadata
+        if toc is None and toc_from_document:
+            self._set_block_issectiontitle_with_toc(toc_from_document)
+            if sum(title.found for title in toc_from_document) > 0.5 * len(
+                toc_from_document
+            ):
+                toc = toc_from_document
+        if toc is None:
+            toc = self._set_block_issectiontitle_with_fontsize()
 
         return toc
 
-    def get_toc_from_metadata(self) -> list[TocTitle] | None:
+    def get_toc_from_metadata(self) -> list[TocTitle]:
         """Uses pymupdf.get_toc() to try to get the table of
         content of the document from the metadatas.
         If it exists, builds the table of content from it
@@ -50,7 +71,7 @@ class PdfTocExtraction(PdfParserState):
         """
         toc = self.document.get_toc() if self.document is not None else []  # type: ignore : missing typing in pymupdf | Document.get_toc() -> list[tuple[int, str, int, dict[str, Any]]]
         if not toc:
-            return
+            return []
 
         return [
             TocTitle(text=item[1], level=item[0], page=item[2], source="metadata")
@@ -67,7 +88,7 @@ class PdfTocExtraction(PdfParserState):
         """
         toc = self._find_toc_titles()
         if toc:
-            toc = PdfTocExtraction._infer_level_with_schema(toc)
+            toc = self._infer_level_with_schema(toc)
             if not all(t.level for t in toc):
                 toc = PdfTocExtraction._infer_level_with_offset(toc)
 
@@ -144,13 +165,9 @@ class PdfTocExtraction(PdfParserState):
 
         return new_toc_titles
 
-    @staticmethod
-    def _infer_level_with_schema(toc_titles: list[TocTitle]) -> list[TocTitle]:
+    def _infer_level_with_schema(self, toc_titles: list[TocTitle]) -> list[TocTitle]:
         """Tries to infer the titles levels based on the
-        schema of the title sections. Like so:
-        1. H1 title
-        1.1 H2 title
-        1.1.1 H3 title
+        schema of the title sections.
 
         Args:
             toc_titles (list[TocTitle]): The list of toc title
@@ -158,18 +175,26 @@ class PdfTocExtraction(PdfParserState):
         Returns:
             list[TocTitle]: the list of toc title with the level set (if schema found)
         """
-        h1_pattern = re.compile(r"^(\d+)[\s\.\)]*")
-        h2_pattern = re.compile(r"^(\d+)[\s\.\)]+(\d+)")
-        h3_pattern = re.compile(r"^(\d+)[\s\.\)]+(\d+)[\s\.\)]+(\d+)")
-
         for t in toc_titles:
-            for pattern, level in zip((h3_pattern, h2_pattern, h1_pattern), (3, 2, 1)):
-                match = re.match(pattern, t.text)
-                if match:
-                    t.level = level
-                    break
+            t.level = self._get_header_level_using_schema(t.text)
 
         return toc_titles
+
+    def _get_header_level_using_schema(self, header_text: str) -> int | None:
+        """Detects the header level according to specific schema such as :
+        1. H1 title
+        1.1 H2 title
+        1.1.1 H3 title
+
+        Args:
+            header_text (str): the text to get the header level from
+
+        Returns:
+            int | None: the header level. Returns None if the regex didn't match any level
+        """
+        for level, pattern in self.header_patterns:
+            if re.match(pattern, header_text):
+                return level
 
     def _set_block_issectiontitle_with_toc(self, toc: list[TocTitle]) -> None:
         """After finding the toc, this modifies
@@ -193,32 +218,58 @@ class PdfTocExtraction(PdfParserState):
                 title.found = True
                 best_block.section_title = title
 
-    def _set_block_issectiontitle_with_fontsize(self) -> None:
-        """Uses the fontize attribute of blocks to assign
-        them a header level.
+    def _set_block_issectiontitle_with_fontsize(self) -> list[TocTitle]:
+        """Uses the fontize attribute of lines to assign
+        them a header level to blocks.
         We assume that bigger fontsize means higher level header.
-        All block having a fontisze greater than the fontsize of body
+        All block having a fontsize greater than the fontsize of body
         will be assigned a level based on their fontsize.
         """
-        fontsize_counts = Counter(
-            block.fontsize for block in self.blocks if not block.is_empty
+        toc: list[TocTitle] = []
+        # Get header fontsizes
+        if not self.main_body_fontsizes or not self.document_fontsizes:
+            return toc
+        biggest_body_fontsize = max(self.main_body_fontsizes)
+        header_fontsizes = (
+            fontsize
+            for fontsize in self.document_fontsizes
+            if fontsize > biggest_body_fontsize
         )
-        if fontsize_counts:
-            main_body_fontsize = max(fontsize_counts, key=fontsize_counts.get)
-            fontsizes = (
-                fontsize
-                for fontsize in fontsize_counts.keys()
-                if fontsize > main_body_fontsize
-            )
-            fontsizes = sorted(fontsizes, reverse=True)[:5]
-            for block in self.blocks:
-                if block.fontsize in fontsizes:
-                    block.section_title = TocTitle(
-                        text=block.text,
-                        level=fontsizes.index(block.fontsize) + 1,
-                        page=block.page,
-                        source="fontsize",
-                    )
+        header_fontsizes = sorted(header_fontsizes, reverse=True)[:5]
+        for block in self.blocks:
+            supposed_header_level = None
+            if (
+                block.orientation != (1.0, 0.0)
+                or block.is_empty
+                or len(block.text) > 100
+            ):
+                # do not consider non-horizontal text or long texts as they are unlikely to be headers
+                continue
+            elif block.fontsize in header_fontsizes:  # likely to be a header
+                supposed_header_level = header_fontsizes.index(block.fontsize) + 1
+            elif (
+                block.fontsize == biggest_body_fontsize
+                and block.is_bold
+                and not self.main_body_is_bold
+            ):  # likely to be a header
+                supposed_header_level = len(header_fontsizes) + 1
+
+            if supposed_header_level:
+                header_level = (
+                    self._get_header_level_using_schema(block.text)
+                    or supposed_header_level
+                )
+                toc_title = TocTitle(
+                    text=block.text,
+                    level=header_level,
+                    page=block.page,
+                    source="fontsize",
+                    found=True,
+                )
+                block.section_title = toc_title
+                toc.append(toc_title)
+
+        return toc
 
     def _get_document_main_title(self) -> str:
         """
@@ -230,35 +281,25 @@ class PdfTocExtraction(PdfParserState):
         Returns :
             (str) : the main title of the document
         """
-        fontsize_counts = Counter(
-            span.fontsize for span in self.spans if not span.is_empty
-        )
-        if fontsize_counts:
-            main_body_fontsize = max(fontsize_counts, key=fontsize_counts.get)
-            spans_on_first_page = [
-                s for s in self.spans if s.page == 0 and not s.is_empty
-            ]
+        spans_on_first_page = [s for s in self.spans if s.page == 0 and not s.is_empty]
+        if spans_on_first_page and self.main_body_fontsizes:
+            # Get the 2 biggest fontsizes of 1st page
+            first_page_biggest_fontsizes = sorted(
+                Counter(
+                    span.fontsize
+                    for span in spans_on_first_page
+                    if not span.is_empty and span.orientation == (1.0, 0.0)
+                ),
+                reverse=True,
+            )[:2]
+            title_spans = (
+                s
+                for s in spans_on_first_page
+                if s.fontsize not in self.main_body_fontsizes
+                and s.fontsize in first_page_biggest_fontsizes
+            )
+            main_title = " ".join((s.text for s in title_spans)).strip()
 
-            if spans_on_first_page:
-                # Get the 2 biggest fontsizes of 1st page
-                first_page_biggest_fontsizes = sorted(
-                    Counter(
-                        span.fontsize
-                        for span in spans_on_first_page
-                        if not span.is_empty
-                    ),
-                    reverse=True,
-                )[:2]
-                title_spans = (
-                    s
-                    for s in spans_on_first_page
-                    if s.fontsize > main_body_fontsize * 1.1
-                    and s.fontsize in first_page_biggest_fontsizes
-                )
-                main_title = " ".join((s.text for s in title_spans)).strip()
-
-                return (
-                    main_title[:100] + "[...]" if len(main_title) > 100 else main_title
-                )
+            return main_title[:100] + "[...]" if len(main_title) > 100 else main_title
 
         return ""

@@ -10,7 +10,7 @@ Each feature is developed with **``chunknorris``' main motivation in mind: findi
 | Build documentation and usage examples | 🔵 |
 | [DOCX] Parsing of .docx documents to markdown | 🟡 |
 | [PDF] Title tree detection when no table of contents is present in the document | 🟡 |
-| [PDF] Fix typos induces by tesseract (c.f. note 1) | 🟡 |
+| [PDF] Fix typos induced by tesseract (c.f. note 1) | 🟡 |
 
 🔵 = ongoing
 🟡 = in focus

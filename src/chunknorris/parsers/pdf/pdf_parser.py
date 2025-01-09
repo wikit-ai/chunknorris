@@ -17,7 +17,7 @@ from .tools import (
     PdfExport,
     PdfLinkExtraction,
     PdfParserState,
-    PdfParserUtilities,
+    DocSpecsExtraction,
     PdfPlotter,
     PdfTableExtraction,
     PdfTocExtraction,
@@ -34,7 +34,7 @@ class PdfParser(
     PdfTocExtraction,
     PdfPlotter,
     PdfExport,
-    PdfParserUtilities,
+    DocSpecsExtraction,
     PdfParserState,
 ):
     """Class that parses the document."""
@@ -167,6 +167,7 @@ class PdfParser(
         self.spans = self._flag_table_spans(self.spans)
         self.lines = PdfParser._create_lines(self.spans)
         self.blocks = self._create_blocks(self.lines)
+        self._set_document_specifications()
         self.main_title = self._get_document_main_title()
         self.toc = self.get_toc() if self.add_headers else []
 
@@ -175,7 +176,7 @@ class PdfParser(
         tessdata_location = os.environ.get("TESSDATA_PREFIX")
         if not tessdata_location:
             raise PdfParserException(
-                'To use OCR, the "TESSDATA_PREFIX" must be set as environment variable in order to locate traineddata files. For more info see https://pymupdf.readthedocs.io/en/latest/installation.html#enabling-integrated-ocr-support\nYou may otherwise want to deactivate OCR : PdfParser(use_ocr=False).',
+                'To use OCR, the "TESSDATA_PREFIX" must be set as environment variable in order to locate traineddata files. For more info see https://pymupdf.readthedocs.io/en/latest/installation.html#enabling-integrated-ocr-support\nYou may otherwise want to deactivate OCR : PdfParser(use_ocr="never").',
             )
         language_list = self.ocr_language.split("+")
         for lang in language_list:
@@ -244,7 +245,7 @@ class PdfParser(
         page_dict: dict[str, str] = textpage.extractDICT()  # type: ignore : missing typing in pymupdf
 
         return [
-            TextSpan(page=page_number, **span)
+            TextSpan(page=page_number, orientation=line["dir"], **span)
             for block in page_dict["blocks"]
             for line in block["lines"]
             for span in line["spans"]
@@ -355,7 +356,7 @@ class PdfParser(
             )
         )
 
-        return max(linespace_counts, key=linespace_counts.get) + 0.2
+        return max(linespace_counts, key=linespace_counts.get) + 0.3
 
     def _create_blocks(self, lines: list[TextLine]) -> list[TextBlock]:
         """Groups lines together into blocks.
@@ -410,3 +411,6 @@ class PdfParser(
         self.blocks = []
         self.tables = []
         self.main_title = ""
+        self.document_fontsizes = []
+        self.main_body_fontsizes = []
+        self.main_body_is_bold = False
