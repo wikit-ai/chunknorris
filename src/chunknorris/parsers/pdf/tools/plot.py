@@ -38,6 +38,8 @@ class PdfPlotter(PdfParserState):
         Plots the span's bboxes and tables grid
 
         Args:
+            page_start (int | None): the first page to consider.
+            page_end (int | None): the last page to consider.
             items_to_plot (list[str]) : the list of types of elements to plot.
                 Can be any subset of ["span", "line", "block", "table"].
             dpi (int): the resolution of the generated image
@@ -146,21 +148,29 @@ class PdfPlotter(PdfParserState):
             }
 
     def plot_drawings(
-        self, items_to_draw: list[Literal["l", "c", "re", "qu", "p"]] | None = None
+        self,
+        items_to_draw: list[Literal["l", "c", "re", "qu", "p"]] | None = None,
+        page_start: int | None = None,
+        page_end: int | None = None,
+        dpi: int = 100,
     ):
         """Draws the raw drawings extracted from the page.
         Mainly used for debug.
 
         Args:
-            page (pymupdf.Page): a pdf page.
             items_to_draw (list[Literal["l", "c", "re", "qu"]], optional): the elements to draw.
                 See pymupdf.get_drawing() documentation for more info.
                 Defaults to None meaning all elements are drawn.
+            page_start (int | None): the first page to consider.
+            page_end (int | None): the last page to consider.
+            dpi (int) : the resolution. Defaults to 100.
         """
         items_to_draw = items_to_draw or ["l", "c", "re", "qu", "p"]
         doc_to_draw_on = self.get_doc_to_draw_on()
+        page_start = page_start or self.page_start
+        page_end = page_end or self.page_end
 
-        for page in doc_to_draw_on.pages():  # type: ignore : missing typing in pymupdf | Document.pages() -> Generator(Page)
+        for page in doc_to_draw_on.pages(page_start, page_end):  # type: ignore : missing typing in pymupdf | Document.pages() -> Generator(Page)
             drawings: list[dict[str, tuple[str, tuple[Any]]]] = page.get_drawings()  # type: ignore : missing typing in pymupdf | Page.get_drawings() -> list[dict[Any]]
             for i, drawing in enumerate(drawings):
                 for j, item in enumerate(drawing["items"]):
@@ -187,7 +197,7 @@ class PdfPlotter(PdfParserState):
                         case "p":
                             page.draw_circle(item, 3)  # type: ignore : missing typing in pymupdf
 
-            PdfPlotter.show_page(page)
+            PdfPlotter.show_page(page, dpi=dpi)
 
     def plot_parsed_tables(
         self, page_start: int | None = None, page_end: int | None = None, dpi: int = 100
