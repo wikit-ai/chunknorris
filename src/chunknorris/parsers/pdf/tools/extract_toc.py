@@ -208,6 +208,10 @@ class PdfTocExtraction(PdfParserState):
             )
             best_ratio, best_block = 0, None
             for block in blocks_to_consider:
+                # if block.text.startswith(title.text):
+                #     best_ratio = 100
+                #     best_block = block
+                #     break  # TODO : split block
                 ratio = fuzz.ratio(  # type: ignore : missing typing in fuzz | fuzz.ratio(s1 : str, s2: str) -> int
                     title.text.lower(), block.text.lower()
                 )

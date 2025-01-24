@@ -16,8 +16,8 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
 
-  logo: assets/chunknorris_logo_1024.png # TODO : improve logo
-  favicon: assets/chunknorris_logo_1024.png # TODO : improve logo
+  logo: assets/chunknorris_logo.png
+  favicon: assets/chunknorris_logo.png
   custom_dir: docs/overrides
   features:
     - content.tabs.link
@@ -46,7 +46,7 @@ nav:
       #- Performance report: pages/performance_report.md # TODO
       - Roadmap: pages/roadmap.md # -> chunknorris image
       - Current limitations: pages/current_limitations.md
-      #- Contributing: pages/how_to_contribute.md # TODO -> chunknorris image
+      - Contributing: pages/how_to_contribute.md
       #- FAQ: faq.md # TODO
   - Examples:
       - "Examples": examples/index.md # -> missing chunknorris image
@@ -97,12 +97,12 @@ plugins:
           load_external_modules: false
           paths: [src]
           show_inheritance_diagramm: true
-      options:
-        extensions:
-          - griffe_pydantic:
-              schema: true
-        preload_modules:
-          - chunknorris
+      # options:
+      #   extensions:
+      #     - griffe_pydantic:
+      #         schema: true
+      #   preload_modules:
+      #     - chunknorris
 
 extra_css:
   - stylesheets/extra.css

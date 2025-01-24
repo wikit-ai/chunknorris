@@ -37,8 +37,8 @@ pages:
   stage: deploy
   image: python:latest
   script:
-    - pip install mkdocs-material mkdocs-click mkdocs-jupyter mkdocstrings[python]
-    - pip install pymdown-extensions
+    - pip install mkdocs-material==9.5.48 mkdocs-click==0.8.1 mkdocs-jupyter==0.25.1 mkdocstrings[python]==1.12.2
+    - pip install pymdown-extensions==10.12
     - mkdocs build --site-dir public
   artifacts:
     paths:

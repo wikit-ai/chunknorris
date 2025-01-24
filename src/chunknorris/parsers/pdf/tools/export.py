@@ -22,7 +22,7 @@ class PdfExport(PdfParserState):
 
         Args:
             keep_track_of_page (bool) : if True, returns a dict with
-                dict[page_number : string]. Page number is 1-based
+                dict[page_number : string]. Page number is 0-based
                 and page 0 is reserved for main document title.
                 If False returns a string for the whole document.
                 Defaults to False.

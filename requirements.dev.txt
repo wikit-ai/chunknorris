@@ -5,8 +5,9 @@ pylint==3.3.1
 mypy
 build
 twine
-mkdocs
-mkdocs-click
-mkdocs-jupyter
-pymdown-extensions
-mkdocstrings-python
+mkdocs==1.6.1
+mkdocs-click==0.8.1
+mkdocs-jupyter==0.25.1
+pymdown-extensions==10.12
+mkdocstrings-python==1.12.2
+mkdocs-material==9.5.48
