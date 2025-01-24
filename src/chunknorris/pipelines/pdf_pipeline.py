@@ -59,7 +59,10 @@ class PdfPipeline:
             Chunks: the chunks
         """
         _ = self.parser.parse_file(filepath, page_start, page_end)
-        return self._get_chunks_using_strategy()
+        chunks = self._get_chunks_using_strategy()
+        self.parser.cleanup_memory()
+
+        return chunks
 
     def _get_chunks_using_strategy(self) -> list[Chunk]:
         """Handles the routing toward the adequate chunking
@@ -80,8 +83,6 @@ class PdfPipeline:
         # In the future, a method will be implemented to detect TOC using advanced techniques.
         else:
             chunks = self.chunk_with_headers()
-
-        self.parser.cleanup_memory()
 
         return chunks
 
