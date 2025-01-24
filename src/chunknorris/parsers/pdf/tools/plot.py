@@ -268,3 +268,32 @@ class PdfPlotter(PdfParserState):
             )
 
         return page_to_draw_on
+
+    def plot_reading_order(
+        self, page_start: int | None = None, page_end: int | None = None, dpi: int = 100
+    ):
+        """Plots the detected reading order of the blocks"""
+        page_start = page_start or self.page_start
+        page_end = page_end or self.page_end
+        doc_to_draw_on = self.get_doc_to_draw_on()
+
+        blocks_per_page: dict[int, list[TextBlock]] = PdfPlotter._get_items_per_page(
+            self.blocks
+        )
+        for page in doc_to_draw_on.pages(page_start, page_end):  # type: ignore : missing typing in pymupdf | Document.pages() -> Generator(Page)
+            if not page.number in blocks_per_page:  # type: ignore : missing typing in pymupdf | Page.number -> int
+                continue
+
+            prev_block_location = (0, 0)
+            for block in blocks_per_page[page.number]:
+                block_location = (
+                    block.bbox.x1 - (block.bbox.x1 - block.bbox.x0) / 2,  # type: ignore : missing typing in pymupdf
+                    block.bbox.y1 - (block.bbox.y1 - block.bbox.y0) / 2,  # type: ignore : missing typing in pymupdf
+                )
+                page.draw_rect(list(block.bbox), fill=(0.6, 0.6, 0.8), width=2)  # type: ignore : missing typing in pymupdf
+                page.insert_text(block_location, f"{block.order}", fontsize=30)  # type: ignore : missing typing in pymupdf
+                page.draw_line(prev_block_location, block_location, color=(0.8, 0.3, 0.3), width=4)  # type: ignore : missing typing in pymupdf
+                page.draw_circle(block_location, 6, fill=(0.5, 0.2, 0.2), color=(0.1, 0.1, 0.1))  # type: ignore : missing typing in pymupdf
+                prev_block_location = block_location
+
+            PdfPlotter.show_page(page, dpi=dpi)

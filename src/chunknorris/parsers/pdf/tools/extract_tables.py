@@ -37,8 +37,8 @@ class PdfTableExtraction(PdfParserState):
                 if page.number not in spans_per_page or tab_cells.shape[0] == 1:  # type: ignore : missing typing in pymupdf -> Page.number -> int
                     continue  # no spans available, or only one cell -> not a table
                 cells = self._get_table_cells(tab_cells, spans_per_page[page.number])  # type: ignore : missing typing in pymupdf -> Page.number -> int
-                # if the table contains at least 1 span
-                if any(cell.spans for cell in cells):
+                # if at least 50% of cells contain a span
+                if sum(bool(cell.spans) for cell in cells) / len(cells) > 0.5:
                     tables.append(PdfTable(cells, page.number))  # type: ignore : missing typing in pymupdf -> Page.number -> int
 
         return sorted(tables, key=attrgetter("order"))
