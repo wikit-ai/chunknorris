@@ -1,4 +1,5 @@
 from operator import attrgetter
+import re
 from typing import Any
 
 import numpy as np
@@ -113,9 +114,12 @@ class PdfTable:
                 row_text.append(cell_text)
             df_constructor.append(row_text)
 
-        df = pd.DataFrame(
-            df_constructor[1:], columns=df_constructor[0]
-        ).drop_duplicates()
+        df = (
+            pd.DataFrame(df_constructor[1:], columns=df_constructor[0])
+            .drop_duplicates()
+            .dropna(axis=0, how="all") # type: ignore | type of dropna in partially unknown 
+            .dropna(axis=1, how="all") # type: ignore | type of dropna in partially unknown 
+        )
 
         return df
 
@@ -125,7 +129,11 @@ class PdfTable:
         Returns:
             str: the markdown string
         """
-        return self.to_pandas().to_markdown(index=False)
+        table_as_md = self.to_pandas().to_markdown(index=False)
+        table_as_md = re.sub(r"\s{3,}", "  ", table_as_md)
+        table_as_md = re.sub(r"-{3,}", "---", table_as_md)
+
+        return table_as_md
 
     def __str__(self) -> str:
         return self.to_markdown()
