@@ -97,12 +97,12 @@ plugins:
           load_external_modules: false
           paths: [src]
           show_inheritance_diagramm: true
-      # options:
-      #   extensions:
-      #     - griffe_pydantic:
-      #         schema: true
-      #   preload_modules:
-      #     - chunknorris
+      options:
+        extensions:
+          - griffe_pydantic:
+              schema: true
+        preload_modules:
+          - chunknorris
 
 extra_css:
   - stylesheets/extra.css
