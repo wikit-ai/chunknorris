@@ -24,10 +24,10 @@ for root, dirs, files in os.walk(ROOT_DIR):
             pdf_files.append(os.path.abspath(os.path.join(root, file)))
 
 parser = PdfParser(
-    use_ocr="auto",
+    use_ocr="never",
     extract_tables=True,
 )
-pipe = PdfPipeline(PdfParser(), MarkdownChunker())
+pipe = PdfPipeline(parser, MarkdownChunker())
 pdf_with_errors: list[str] = []
 for filepath in tqdm(pdf_files):
     try:
