@@ -339,7 +339,7 @@ class TextBlock:
         md_string = ""
         for line in self.lines:
             if line.is_bullet_point or line.is_toc_element:
-                md_string += "\n\n" + line.to_markdown().strip()
+                md_string += "\n\n" + line.to_markdown().strip() + "\n\n"
             else:
                 md_string += " " + line.to_markdown().strip()
         if self.section_title:
