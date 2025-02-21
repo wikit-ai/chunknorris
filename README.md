@@ -33,16 +33,13 @@ ChunkNorris relies on 3 components :
 
 ### Parsers
 
-The role of parsers is to take a file or a string as input, and output a clean formated string suited for a chunker. As of today, **3 parsers are available** : 
-- ``MarkdownParser`` : for parsing markdown files/strings.
-- ``HTMLParser`` : for parsing html-formated files/strings.
-- ``PdfParser`` : for parsing PDF files.
+The role of parsers is to take a file or a string as input, and output a clean formated string suited for a chunker. As of today, **each file type relies on a dedicated parser**. For example, you may use ``MarkdownParser`` : for parsing markdown files/strings or ``PdfParser`` : for parsing PDF files.
 
 All parsers will output a markdown-formatted string. Indeed, markdown is a great format to be use in RAG application as it is very well understood by LLMs.
 
 ### Chunkers
 
-![](images/chunk_method.png)
+![](./docs/assets/chunking_method.png)
 
 The role of chunkers is to process the output of parsers in order to obtain relevant chunks of the document. As of today, only ``MarkdownChunker`` is available. Used in conjunction with parsers, it allows to process a various inputs.
 
@@ -54,11 +51,11 @@ The chunking strategy of chunkers is based on several principles:
 
 ### Pipelines
 
-Pipelines are the glue that sticks together a parser and a chunker. They use both to process documents and ensure constant output quality.
+Pipelines are the glue that **sticks together a parser and a chunker**. They use both to process documents and ensure constant output quality.
 
 ## Usage
 
-You may find more detailed examples in the [examples section](link) of the repo. Nevertheless, here is a basic example to get you started, assuming you need to chunk Mardown files.
+You may find more detailed examples in the [examples section](./docs/examples) of the repo. Nevertheless, here is a basic example to get you started, assuming you need to chunk Mardown files.
 
 ```py
 from chunknorris.parsers import MarkdownParser
@@ -107,7 +104,7 @@ Feel free to experiment with various combinations, or even to implement your the
 
 ### Advanced usage
 
-Additionally, the chunkers and parsers can take a number of argument allowing to modifiy their behavior:
+Additionally, the chunkers and parsers can take a number of argument allowing to modifiy their behavior. For example:
 
 ```py
 from chunknorris.chunkers import MarkdownChunker
@@ -131,8 +128,3 @@ chunker = MarkdownChunker(
 
 ***min_chunk_word_count***
 (int): Minimum number of words to consider keeping the chunks. Chunks with less words will be discarded. Defaults to 15.
-
-
-### Implementing your own pipeline
-
-#### TODO

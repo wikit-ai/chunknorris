@@ -20,7 +20,7 @@ chunknorris = "chunknorris.__main__:main"
 
 [project]
 name = "chunknorris"
-version = "1.0.5"
+version = "1.0.6"
 authors = [{ name = "Wikit", email = "dev@wikit.ai" }]
 description = "A package for chunking documents from various formats"
 keywords = [
@@ -38,7 +38,7 @@ readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 classifiers = [
   "Natural Language :: English",
-  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
   "Framework :: Pytest",
   "License :: OSI Approved :: GNU Affero General Public License v3",
   "Topic :: Text Processing :: Markup :: Markdown",
@@ -53,5 +53,6 @@ dependencies = { file = ["requirements.txt"] }
 optional-dependencies.dev = { file = ["requirements.dev.txt"] }
 
 [project.urls]
-Homepage = "https://gitlab.com/wikit/research-and-development/chunk-norris"
-Issues = "https://gitlab.com/wikit/research-and-development/chunk-norris/-/issues"
+Homepage = "https://github.com/wikit-ai/chunknorris"
+Issues = "https://github.com/wikit-ai/chunknorris/issues"
+Documentation = "https://wikit-ai.github.io/chunknorris/"

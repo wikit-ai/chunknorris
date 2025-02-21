@@ -1,4 +1,5 @@
 markdownify==0.13.1
+html5lib==1.1
 termcolor==2.4
 PyMuPDF==1.24.10
 matplotlib==3.9.2
@@ -8,3 +9,4 @@ openpyxl==3.1.5
 thefuzz==0.22.1
 tabulate==0.9.0
 nbformat==5.10.4
+mammoth==1.9.0

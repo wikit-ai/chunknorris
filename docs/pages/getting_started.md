@@ -80,6 +80,30 @@ Here are code examples for chunking documents according to their file type:
         print(chunk.get_text())
     ```
 
+=== ".docx"
+
+    ```py
+    from chunknorris.parsers import DocxParser
+    from chunknorris.chunkers import MarkdownChunker
+    from chunknorris.pipelines import BasePipeline
+
+    # Instanciate components
+    pipeline = BasePipeline(
+        parser=DocxParser(),
+        chunker=MarkdownChunker()
+        )
+
+    # Get some chunks !
+    chunks = pipeline.chunk_file(filepath="myfile.docx")
+
+    # Save chunks
+    pipeline.save_chunks(chunks)
+
+    # Print chunks:
+    for chunk in chunks:
+        print(chunk.get_text())
+    ```
+
 === ".csv"
 
     ```py
