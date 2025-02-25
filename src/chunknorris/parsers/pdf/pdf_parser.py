@@ -1,4 +1,5 @@
 import os
+from math import isclose
 from collections import Counter, defaultdict
 from itertools import groupby
 from pathlib import Path
@@ -327,7 +328,7 @@ class PdfParser(
         for spans_on_page in spans_grouped_per_page:
             buffer = [spans_on_page[0]]
             for span in spans_on_page[1:]:
-                if span.origin.y == buffer[-1].origin.y or span.is_superscripted:  # type: ignore : missing typing in pymupdf | Point.y : float
+                if isclose(span.origin.y, buffer[-1].origin.y, abs_tol=3) or span.is_superscripted:  # type: ignore : missing typing in pymupdf | Point.y : float
                     buffer.append(span)
                 else:
                     lines.append(TextLine(buffer))
@@ -381,9 +382,9 @@ class PdfParser(
         for line in lines[1:]:
             # if previous line was emtpy ("\n") => new block
             # or if new line "far away" from previous line => new block
-            if buffer[-1].is_empty or (
-                line.bbox.y0 - self.body_line_spacing > buffer[-1].bbox.y1  # type: ignore : missing typing in pymupdf | Rect.y0 : float
-            ):
+            if buffer[-1].is_empty\
+            or line.fontsize != buffer[-1].fontsize\
+            or line.bbox.y0 - self.body_line_spacing > buffer[-1].bbox.y1: # type: ignore : missing typing in pymupdf | Rect.y0 : float
                 blocks.append(TextBlock(buffer))
                 buffer = [line]
             # new line is close to previous line
