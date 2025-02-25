@@ -10,7 +10,7 @@ from src.chunknorris.parsers import PdfParser, DocxParser
 from src.chunknorris.pipelines import PdfPipeline, BasePipeline
 
 # To run this test, use the following :
-# python -m tests.test_scripts.test_on_all_pdf --file_type pdf
+# python -m tests.test_scripts.test_on_all_files --file_type pdf
 
 argparser = ArgumentParser(
     description="Tools to test the package on a specific file type."

@@ -107,10 +107,10 @@ class PdfTocExtraction(PdfParserState):
 
         toc_titles: list[TocTitle] = []
         until_last_match_counter = 0
-        # browse through lines up to page 10 to get those which might be TOC
-        for i, line in enumerate(filter(lambda x: x.page<10, self.lines)):
+        # browse through lines up to page 15 to get those which might be TOC
+        for i, line in enumerate(filter(lambda x:x.page<15, self.lines)):
             until_last_match_counter += 1
-            if until_last_match_counter > 5 and len(toc_titles) > 3:
+            if len(toc_titles) > 3 and until_last_match_counter > 10:
                 break # likely we have found a TOC and are now browsing through document
             match = re.match(toc_pattern, line.text)
             # regex may match ZIP codes or phone numbers => check page is less than 3 numbers
