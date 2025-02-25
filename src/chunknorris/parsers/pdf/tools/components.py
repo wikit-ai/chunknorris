@@ -288,7 +288,7 @@ class TextBlock:
 
     @property
     def text(self):
-        return "".join((line.text for line in self.lines))
+        return " ".join((line.text for line in self.lines))
 
     @property
     def bbox(self) -> pymupdf.Rect:

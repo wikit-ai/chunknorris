@@ -52,6 +52,7 @@ class PdfTocExtraction(PdfParserState):
                 toc = toc_from_metadata
         if toc is None and toc_from_document:
             self._set_block_issectiontitle_with_toc(toc_from_document)
+            print(toc_from_document)
             if sum(title.found for title in toc_from_document) > 0.5 * len(
                 toc_from_document
             ):
@@ -106,10 +107,16 @@ class PdfTocExtraction(PdfParserState):
         )
 
         toc_titles: list[TocTitle] = []
-        for i, line in enumerate(self.lines):
+        until_last_match_counter = 0
+        # browse through lines up to page 15 to get those which might be TOC
+        for i, line in enumerate(filter(lambda x:x.page<15, self.lines)):
+            until_last_match_counter += 1
+            if len(toc_titles) > 3 and until_last_match_counter > 10:
+                break # likely we have found a TOC and are now browsing through document
             match = re.match(toc_pattern, line.text)
             # regex may match ZIP codes or phone numbers => check page is less than 3 numbers
             if match and len(match[2]) < 4:
+                until_last_match_counter = 0
                 line.is_toc_element = True
                 # multiline toc title
                 if i > 2 and (
@@ -209,7 +216,7 @@ class PdfTocExtraction(PdfParserState):
             best_ratio, best_block = 0, None
             for block in blocks_to_consider:
                 # if the first line of the block corresponds to the title text -> toc title
-                if block.lines[0].text == title.text:
+                if block.lines[0].text.lower() == title.text.lower():
                     block.lines[0].is_toc_element = True
                     best_ratio = 100
                     best_block = block
