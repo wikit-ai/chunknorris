@@ -1,4 +1,5 @@
 from .abstract_parser import AbstractParser
+from .docx.docx_parser import DocxParser
 from .html.html_parser import HTMLParser
 from .json.wikit_parser import WikitJsonParser
 from .markdown.markdown_parser import MarkdownParser

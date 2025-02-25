@@ -1,14 +1,15 @@
 import pytest
-import test_strings.chunkers.markdown_chunker as md_chunker_strings
-import test_strings.chunkers.tools.tools as chunker_tools_strings
-import test_strings.parsers.html_parser as html_parser_strings
-import test_strings.parsers.markdown_parser as md_parser_strings
-import test_strings.parsers.wikit_parser as wikit_parser_strings
+import tests.test_strings.chunkers.markdown_chunker as md_chunker_strings
+import tests.test_strings.chunkers.tools.tools as chunker_tools_strings
+import tests.test_strings.parsers.html_parser as html_parser_strings
+import tests.test_strings.parsers.markdown_parser as md_parser_strings
+import tests.test_strings.parsers.wikit_parser as wikit_parser_strings
 
 from chunknorris.chunkers import MarkdownChunker
 from chunknorris.chunkers.tools import Chunk
 from chunknorris.parsers import (
     CSVParser,
+    DocxParser,
     ExcelParser,
     HTMLParser,
     JupyterNotebookParser,
@@ -69,6 +70,11 @@ def csv_parser() -> CSVParser:
     return CSVParser()
 
 
+@pytest.fixture(scope="session")
+def docx_parser() -> DocxParser:
+    return DocxParser()
+
+
 ###############
 #  filepaths  #
 ###############
@@ -117,6 +123,16 @@ def excel_filepath() -> str:
 @pytest.fixture(scope="session")
 def csv_filepath() -> str:
     return "./tests/test_files/file.csv"
+
+
+@pytest.fixture(scope="session")
+def docx_filepath() -> str:
+    return "./tests/test_files/file.docx"
+
+
+@pytest.fixture(scope="session")
+def docx_tables_filepath() -> str:
+    return "./tests/test_files/tables.docx"
 
 
 #############

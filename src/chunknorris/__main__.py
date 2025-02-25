@@ -3,7 +3,7 @@ from argparse import ArgumentParser
 
 from .chunkers import MarkdownChunker
 from .core.logger import LOGGER
-from .parsers import HTMLParser, MarkdownParser, PdfParser, WikitJsonParser
+from .parsers import DocxParser, HTMLParser, MarkdownParser, PdfParser, WikitJsonParser
 from .pipelines import BasePipeline, PdfPipeline, WikitJsonPipeline
 
 
@@ -98,12 +98,15 @@ def main():
                 use_ocr=args.use_ocr,
             )
             pipeline = PdfPipeline(parser, chunker)
+        case ".docx":
+            parser = DocxParser()
+            pipeline = BasePipeline(parser, chunker)
         case ".json":
             parser = WikitJsonParser()
             pipeline = WikitJsonPipeline(parser, chunker)
         case _:
             raise ValueError(
-                "ChunkNorris currently only supports .md, .html, .pdf and .json files."
+                "ChunkNorris currently only supports .md, .html, .pdf, .docx and .json files."
             )
 
     chunks = pipeline.chunk_file(filepath=args.filepath)

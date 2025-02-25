@@ -117,8 +117,8 @@ class PdfTable:
         df = (
             pd.DataFrame(df_constructor[1:], columns=df_constructor[0])
             .drop_duplicates()
-            .dropna(axis=0, how="all") # type: ignore | type of dropna in partially unknown 
-            .dropna(axis=1, how="all") # type: ignore | type of dropna in partially unknown 
+            .dropna(axis=0, how="all")  # type: ignore | type of dropna in partially unknown
+            .dropna(axis=1, how="all")  # type: ignore | type of dropna in partially unknown
         )
 
         return df

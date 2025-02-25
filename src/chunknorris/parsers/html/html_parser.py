@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-from markdownify import markdownify  # type: ignore : no stub file
+from ...core.custom_markdownify import CustomMarkdownConverter  # type: ignore : no stub file
 
 from ...parsers.markdown.components import MarkdownDoc
 from ..abstract_parser import AbstractParser
@@ -31,7 +31,7 @@ class HTMLParser(AbstractParser):
         to the MarkdownChunker.
 
         Args:
-            filepath (FilePath): the path to a .md file
+            filepath (FilePath): the path to a .html file
 
         Returns:
             MarkdownDoc: the parsed document. Can be fed to chunker.
@@ -45,10 +45,10 @@ class HTMLParser(AbstractParser):
         """Reads a Markdown file
 
         Args:
-            filepath (str): the path to the markdown file
+            filepath (str): the path to the HTML file.
 
         Returns:
-            str: the markdown string
+            str: the HTML string.
         """
         path = Path(filepath)
         if path.suffix != ".html":
@@ -63,23 +63,24 @@ class HTMLParser(AbstractParser):
         """Applies markdownify to the html text
 
         Args:
-            html_text (str): the text of the html file
+            html_string (str): an HTML-formatted string.
 
         Returns:
-            str: the markdownified string
+            str: the markdownified string.
         """
         md_string = html_string
         initial_len, new_len = len(md_string), 0
         while new_len < initial_len:
             initial_len = len(md_string)
-            md_string = markdownify(
-                md_string,
+            md_string = CustomMarkdownConverter(
                 heading_style="ATX",
                 strip=["figure", "img"],
                 bullets="-*+",
                 escape_asterisks=False,
                 escape_underscores=False,
                 escape_misc=False,
+            ).convert(  # type: ignore MarkdownConverter.convert()->str
+                md_string
             )
             new_len = len(md_string)
 
@@ -87,15 +88,14 @@ class HTMLParser(AbstractParser):
 
     @staticmethod
     def cleanup_string(md_string: str) -> str:
-        """Cleans up the html string,
-        essentially by removing consecutive \n
+        """Cleans up the html string.
 
         Args:
-            html_string (str): the markdown string, output from
+            md_string (str): the markdown string, output from
                 apply_markdownify()
 
         Returns:
-            str: the cleaned up string
+            str: the cleaned up string.
         """
         md_string = md_string.strip()
         md_string = re.sub(r"\n{3,}", "\n\n", md_string)
