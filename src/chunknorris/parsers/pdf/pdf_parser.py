@@ -357,7 +357,7 @@ class PdfParser(
             )
         )
 
-        return max(linespace_counts, key=linespace_counts.get) + 0.3
+        return max(linespace_counts, key=linespace_counts.get)
 
     def _create_blocks(self, lines: list[TextLine]) -> list[TextBlock]:
         """Groups lines together into blocks.
@@ -381,21 +381,18 @@ class PdfParser(
         buffer = [lines[0]]
         for line in lines[1:]:
             # if previous line was emtpy ("\n") => new block
+            # or if lines have different fontsizes => new block
+            # or if new line is far up above previous line, might be new column in multicolumn document => new block
             # or if new line "far away" from previous line => new block
-            if buffer[-1].is_empty\
+            if (buffer[-1].is_empty\
             or line.fontsize != buffer[-1].fontsize\
-            or line.bbox.y0 - self.body_line_spacing > buffer[-1].bbox.y1: # type: ignore : missing typing in pymupdf | Rect.y0 : float
+            or line.bbox.y0 - self.body_line_spacing - 1 > buffer[-1].bbox.y1 # type: ignore : missing typing in pymupdf | Rect.y0 : float
+            or line.bbox.y1 <= buffer[-1].bbox.y0) : # type: ignore : missing typing in pymupdf | Rect.y0 : float
                 blocks.append(TextBlock(buffer))
                 buffer = [line]
-            # new line is close to previous line
+            # Two consecutive lines belong to the same block
             else:
-                # if new line is far up on page than previous line => change page or multicolumn => new block
-                if line.bbox.y1 <= buffer[-1].bbox.y0:  # type: ignore : missing typing in pymupdf | Rect.y0 : float
-                    blocks.append(TextBlock(buffer))
-                    buffer = [line]
-                # Two consecutive lines belong to the same block
-                else:
-                    buffer.append(line)
+                buffer.append(line)
         blocks.append(TextBlock(buffer))
 
         return blocks
