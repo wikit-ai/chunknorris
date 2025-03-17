@@ -2,9 +2,8 @@ from itertools import groupby
 from operator import attrgetter
 
 from ..chunkers.markdown_chunker import MarkdownChunker
-from ..chunkers.tools.tools import Chunk
+from ..core.components import Chunk, MarkdownLine
 from ..decorators.decorators import validate_args
-from ..parsers.markdown.components import MarkdownLine
 from ..parsers.pdf.pdf_parser import PdfParser
 
 

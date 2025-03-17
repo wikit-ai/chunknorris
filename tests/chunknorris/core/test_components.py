@@ -1,6 +1,6 @@
 from chunknorris.chunkers import MarkdownChunker
-from chunknorris.chunkers.tools import Chunk
-from chunknorris.parsers.markdown.components import MarkdownDoc
+from chunknorris.core.components import Chunk
+from chunknorris.core.components import MarkdownDoc
 
 
 # tests : Chunk

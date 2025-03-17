@@ -1,7 +1,8 @@
-from bs4 import NavigableString
-import pandas as pd
-from markdownify import MarkdownConverter  # type: ignore : no stubs
 from io import StringIO
+
+import pandas as pd
+from bs4 import NavigableString
+from markdownify import MarkdownConverter  # type: ignore : no stubs
 
 
 class CustomMarkdownConverter(MarkdownConverter):

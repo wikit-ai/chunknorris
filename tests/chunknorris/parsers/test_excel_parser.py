@@ -1,5 +1,5 @@
 from chunknorris.parsers import ExcelParser
-from chunknorris.parsers.markdown.components import MarkdownDoc
+from chunknorris.core.components import MarkdownDoc
 
 
 def test_parse_file(excel_parser: ExcelParser, excel_filepath: str):

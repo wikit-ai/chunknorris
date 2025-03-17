@@ -3,7 +3,7 @@ import json
 import nbformat
 
 from chunknorris.parsers import JupyterNotebookParser
-from chunknorris.parsers.markdown.components import MarkdownDoc
+from chunknorris.core.components import MarkdownDoc
 
 
 def test_parse_string(

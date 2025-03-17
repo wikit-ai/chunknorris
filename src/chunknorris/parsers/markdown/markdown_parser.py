@@ -3,8 +3,8 @@ from typing import Any
 
 import yaml
 
+from ...core.components import MarkdownDoc
 from ..abstract_parser import AbstractParser
-from .components import MarkdownDoc
 
 
 class MarkdownParser(AbstractParser):

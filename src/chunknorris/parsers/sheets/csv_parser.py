@@ -3,7 +3,7 @@ import csv
 import pandas as pd
 
 from ..abstract_parser import AbstractParser
-from ..markdown.components import MarkdownDoc
+from ...core.components import MarkdownDoc
 
 
 class CSVParser(AbstractParser):

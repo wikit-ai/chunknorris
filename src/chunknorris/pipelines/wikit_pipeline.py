@@ -4,7 +4,7 @@ import os
 from argparse import ArgumentParser
 
 from ..chunkers.markdown_chunker import MarkdownChunker
-from ..chunkers.tools.tools import Chunk
+from ..core.components import Chunk
 from ..decorators.decorators import validate_args
 from ..parsers.json.wikit_parser import WikitJsonParser
 from ..schemas.schemas import WikitJSONDocument, WikitJSONDocumentChunk

@@ -1,5 +1,5 @@
 from chunknorris.parsers import CSVParser
-from chunknorris.parsers.markdown.components import MarkdownDoc
+from chunknorris.core.components import MarkdownDoc
 
 
 def test_parse_file(csv_parser: CSVParser, csv_filepath: str):

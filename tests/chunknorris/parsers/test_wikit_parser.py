@@ -1,5 +1,5 @@
 from chunknorris.parsers.json.wikit_parser import WikitJsonParser
-from chunknorris.parsers.markdown.components import MarkdownDoc
+from chunknorris.core.components import MarkdownDoc
 
 
 def test_parse_string(wikit_parser: WikitJsonParser, json_string_in: str):

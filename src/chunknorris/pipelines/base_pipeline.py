@@ -1,4 +1,4 @@
-from ..chunkers.tools.tools import Chunk
+from ..core.components import Chunk
 from .abstract_pipeline import AbstractPipeline
 
 

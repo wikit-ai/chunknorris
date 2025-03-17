@@ -1,7 +1,7 @@
 import re
 
 from chunknorris.parsers import DocxParser
-from chunknorris.parsers.markdown.components import MarkdownDoc
+from chunknorris.core.components import MarkdownDoc
 
 
 def test_parse_file(docx_parser: DocxParser, docx_filepath: str):

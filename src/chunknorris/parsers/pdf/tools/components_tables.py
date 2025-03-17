@@ -1,5 +1,5 @@
-from operator import attrgetter
 import re
+from operator import attrgetter
 from typing import Any
 
 import numpy as np

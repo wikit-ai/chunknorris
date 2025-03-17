@@ -3,8 +3,8 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from ...core.components import MarkdownDoc
 from ...parsers.html.html_parser import HTMLParser
-from ...parsers.markdown.components import MarkdownDoc
 from ...parsers.markdown.markdown_parser import MarkdownParser
 from ...schemas.schemas import WikitJSONDocument
 from ..abstract_parser import AbstractParser
