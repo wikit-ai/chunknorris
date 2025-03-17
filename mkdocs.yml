@@ -63,10 +63,15 @@ nav:
           #- "Implement my own pipeline": examples/example1.ipynb # TODO
   - Reference:
       - "API reference": reference/index.md
+      - Core components:
+          - Chunk: reference/components/component_chunk.md
+          - MarkdownDoc: reference/components/component_markdowndoc.md
+          - MarkdownLine: reference/components/component_markdownline.md
       - Chunkers:
           - MarkdownChunker: reference/chunkers/chunker_markdown.md
       - Parsers:
           - CSVParser: reference/parsers/parser_csv.md
+          - DocxParser: reference/parsers/parser_docx.md
           - ExcelParser: reference/parsers/parser_excel.md
           - HTMLParser: reference/parsers/parser_html.md
           - JupyterNotebookParser: reference/parsers/parser_jupyter_notebook.md

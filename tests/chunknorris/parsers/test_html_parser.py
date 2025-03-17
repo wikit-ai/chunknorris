@@ -1,5 +1,5 @@
+from chunknorris.core.components import MarkdownDoc
 from chunknorris.parsers import HTMLParser
-from chunknorris.parsers.markdown.components import MarkdownDoc
 
 
 def test_parse_string(

@@ -1,5 +1,5 @@
+from chunknorris.core.components import MarkdownDoc
 from chunknorris.parsers import MarkdownParser
-from chunknorris.parsers.markdown.components import MarkdownDoc
 
 
 def test_markdowndoc(md_strings_in: list[str]):

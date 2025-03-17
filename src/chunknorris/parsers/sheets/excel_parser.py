@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..markdown.components import MarkdownDoc
+from ...core.components import MarkdownDoc
 
 
 class ExcelParser:

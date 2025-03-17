@@ -1,32 +1,21 @@
 import os
-from math import isclose
 from collections import Counter, defaultdict
 from itertools import groupby
+from math import isclose
 from pathlib import Path
 from typing import Literal
 
 import pymupdf  # type: ignore : no stubs
 
+from ...core.components import MarkdownDoc
 from ...decorators.decorators import timeit, validate_args
-from ...exceptions.exceptions import (
-    PageNotFoundException,
-    PdfParserException,
-    TextNotFoundException,
-)
-from ...parsers.markdown.components import MarkdownDoc
-from .tools import (
-    PdfExport,
-    PdfLinkExtraction,
-    PdfParserState,
-    DocSpecsExtraction,
-    PdfPlotter,
-    PdfTableExtraction,
-    PdfTocExtraction,
-    TableFinder,
-    TextBlock,
-    TextLine,
-    TextSpan,
-)
+from ...exceptions.exceptions import (PageNotFoundException,
+                                      PdfParserException,
+                                      TextNotFoundException)
+from .tools import (DocSpecsExtraction, PdfExport, PdfLinkExtraction,
+                    PdfParserState, PdfPlotter, PdfTableExtraction,
+                    PdfTocExtraction, TableFinder, TextBlock, TextLine,
+                    TextSpan)
 
 
 class PdfParser(
@@ -384,10 +373,12 @@ class PdfParser(
             # or if lines have different fontsizes => new block
             # or if new line is far up above previous line, might be new column in multicolumn document => new block
             # or if new line "far away" from previous line => new block
-            if (buffer[-1].is_empty\
-            or line.fontsize != buffer[-1].fontsize\
-            or line.bbox.y0 - self.body_line_spacing - 1 > buffer[-1].bbox.y1 # type: ignore : missing typing in pymupdf | Rect.y0 : float
-            or line.bbox.y1 <= buffer[-1].bbox.y0) : # type: ignore : missing typing in pymupdf | Rect.y0 : float
+            if (
+                buffer[-1].is_empty
+                or line.fontsize != buffer[-1].fontsize
+                or line.bbox.y0 - self.body_line_spacing - 1 > buffer[-1].bbox.y1  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+                or line.bbox.y1 <= buffer[-1].bbox.y0  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+            ):  # type: ignore : missing typing in pymupdf | Rect.y0 : float
                 blocks.append(TextBlock(buffer))
                 buffer = [line]
             # Two consecutive lines belong to the same block

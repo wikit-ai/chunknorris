@@ -1,22 +1,15 @@
 import pytest
+
 import tests.test_strings.chunkers.markdown_chunker as md_chunker_strings
 import tests.test_strings.chunkers.tools.tools as chunker_tools_strings
 import tests.test_strings.parsers.html_parser as html_parser_strings
 import tests.test_strings.parsers.markdown_parser as md_parser_strings
 import tests.test_strings.parsers.wikit_parser as wikit_parser_strings
-
 from chunknorris.chunkers import MarkdownChunker
-from chunknorris.chunkers.tools import Chunk
-from chunknorris.parsers import (
-    CSVParser,
-    DocxParser,
-    ExcelParser,
-    HTMLParser,
-    JupyterNotebookParser,
-    MarkdownParser,
-    PdfParser,
-    WikitJsonParser,
-)
+from chunknorris.core.components import Chunk
+from chunknorris.parsers import (CSVParser, DocxParser, ExcelParser,
+                                 HTMLParser, JupyterNotebookParser,
+                                 MarkdownParser, PdfParser, WikitJsonParser)
 
 ################
 #   Chunkers   #

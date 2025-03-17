@@ -1,7 +1,8 @@
 from pathlib import Path
 
 import mammoth  # type: ignore : No stub files
-from ...parsers.markdown.components import MarkdownDoc
+
+from ...core.components import MarkdownDoc
 from ..html.html_parser import HTMLParser
 
 

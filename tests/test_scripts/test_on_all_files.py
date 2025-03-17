@@ -5,9 +5,10 @@ from argparse import ArgumentParser
 from tqdm import tqdm
 
 from src.chunknorris.chunkers import MarkdownChunker
-from src.chunknorris.exceptions import PageNotFoundException, TextNotFoundException
-from src.chunknorris.parsers import PdfParser, DocxParser
-from src.chunknorris.pipelines import PdfPipeline, BasePipeline
+from src.chunknorris.exceptions import (PageNotFoundException,
+                                        TextNotFoundException)
+from src.chunknorris.parsers import DocxParser, PdfParser
+from src.chunknorris.pipelines import BasePipeline, PdfPipeline
 
 # To run this test, use the following :
 # python -m tests.test_scripts.test_on_all_files --file_type pdf

@@ -3,7 +3,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any
 
-from .tools.tools import Chunk
+from ..core.components import Chunk
 
 
 class AbstractChunker(ABC):

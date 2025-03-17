@@ -3,7 +3,7 @@ import re
 from collections import defaultdict
 from operator import attrgetter
 
-from ....parsers.markdown.components import MarkdownDoc, MarkdownLine
+from ....core.components import MarkdownDoc, MarkdownLine
 from .utils import PdfParserState
 
 

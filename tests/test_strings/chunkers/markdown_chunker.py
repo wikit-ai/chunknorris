@@ -1,9 +1,8 @@
-"""This file contains markdown strings intended to be used 
+"""This file contains markdown strings intended to be used
 to test the MarkdownChunkNorris chunker
 """
 
-from chunknorris.chunkers.tools import Chunk
-from chunknorris.parsers.markdown.components import MarkdownLine
+from chunknorris.core.components import Chunk, MarkdownLine
 
 MD_STANDARD_IN = """
 # This is header 1

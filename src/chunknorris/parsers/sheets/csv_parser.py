@@ -2,8 +2,8 @@ import csv
 
 import pandas as pd
 
+from ...core.components import MarkdownDoc
 from ..abstract_parser import AbstractParser
-from ..markdown.components import MarkdownDoc
 
 
 class CSVParser(AbstractParser):

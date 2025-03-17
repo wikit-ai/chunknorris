@@ -1,5 +1,4 @@
-from chunknorris.chunkers.tools.tools import Chunk
-from chunknorris.parsers.markdown.components import MarkdownLine
+from chunknorris.core.components import Chunk, MarkdownLine
 
 CHUNK_WITH_LINKS_IN = Chunk(
     headers=[MarkdownLine("# Header with [link](www.link.com)", line_idx=0)],

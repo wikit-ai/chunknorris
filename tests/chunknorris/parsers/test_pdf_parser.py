@@ -2,8 +2,8 @@ import re
 
 import pymupdf  # type: ignore -> no stubs
 
+from chunknorris.core.components import MarkdownDoc
 from chunknorris.parsers import PdfParser
-from chunknorris.parsers.markdown.components import MarkdownDoc
 
 
 def test_parse_file(pdf_parser: PdfParser, pdf_filepath: str):
