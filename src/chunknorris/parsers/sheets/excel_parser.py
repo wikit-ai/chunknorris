@@ -1,5 +1,6 @@
 from io import StringIO
 from pathlib import Path
+import re
 
 import pandas as pd
 
@@ -79,6 +80,25 @@ class ExcelParser:
 
         for sheet_name, df in sheets.items():
             md_string += f"## {sheet_name}\n\n"
-            md_string += df.to_markdown(index=False) + "\n\n"
+            md_string += ExcelParser.convert_df_to_markdown(df) + "\n\n"
+
+        return md_string
+
+    @staticmethod
+    def convert_df_to_markdown(df: pd.DataFrame) -> str:
+        """Converts a DataFrame to markdown.
+        Wraps tabula's method pd.DataFrame.to_markdown()
+        between pre and post processing.
+
+        Args:
+            df (pd.DataFrame): the dataframe to convert.
+
+        Returns:
+            str: a markdown formatted table.
+        """
+        df = df.apply(lambda x: x.str.replace("\n", " "))  # type: ignore | x: pd.Series -> pd.Series
+        md_string = df.to_markdown(index=False)
+        md_string = re.sub(r"\s{3,}", "  ", md_string)
+        md_string = re.sub(r"-{3,}", "---", md_string)
 
         return md_string
