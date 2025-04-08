@@ -3,8 +3,7 @@ from argparse import ArgumentParser
 
 from .chunkers import MarkdownChunker
 from .core.logger import LOGGER
-from .parsers import (DocxParser, HTMLParser, MarkdownParser, PdfParser,
-                      WikitJsonParser)
+from .parsers import DocxParser, HTMLParser, MarkdownParser, PdfParser, WikitJsonParser
 from .pipelines import BasePipeline, PdfPipeline, WikitJsonPipeline
 
 

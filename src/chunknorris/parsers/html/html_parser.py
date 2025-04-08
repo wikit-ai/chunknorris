@@ -2,8 +2,9 @@ import re
 from pathlib import Path
 
 from ...core.components import MarkdownDoc
-from ...core.custom_markdownify import \
-    CustomMarkdownConverter  # type: ignore : no stub file
+from ...core.custom_markdownify import (
+    CustomMarkdownConverter,
+)  # type: ignore : no stub file
 from ..abstract_parser import AbstractParser
 
 

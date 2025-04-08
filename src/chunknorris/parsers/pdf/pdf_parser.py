@@ -9,13 +9,24 @@ import pymupdf  # type: ignore : no stubs
 
 from ...core.components import MarkdownDoc
 from ...decorators.decorators import timeit, validate_args
-from ...exceptions.exceptions import (PageNotFoundException,
-                                      PdfParserException,
-                                      TextNotFoundException)
-from .tools import (DocSpecsExtraction, PdfExport, PdfLinkExtraction,
-                    PdfParserState, PdfPlotter, PdfTableExtraction,
-                    PdfTocExtraction, TableFinder, TextBlock, TextLine,
-                    TextSpan)
+from ...exceptions.exceptions import (
+    PageNotFoundException,
+    PdfParserException,
+    TextNotFoundException,
+)
+from .tools import (
+    DocSpecsExtraction,
+    PdfExport,
+    PdfLinkExtraction,
+    PdfParserState,
+    PdfPlotter,
+    PdfTableExtraction,
+    PdfTocExtraction,
+    TableFinder,
+    TextBlock,
+    TextLine,
+    TextSpan,
+)
 
 
 class PdfParser(

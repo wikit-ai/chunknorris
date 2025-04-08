@@ -5,8 +5,7 @@ from argparse import ArgumentParser
 from tqdm import tqdm
 
 from src.chunknorris.chunkers import MarkdownChunker
-from src.chunknorris.exceptions import (PageNotFoundException,
-                                        TextNotFoundException)
+from src.chunknorris.exceptions import PageNotFoundException, TextNotFoundException
 from src.chunknorris.parsers import DocxParser, PdfParser
 from src.chunknorris.pipelines import BasePipeline, PdfPipeline
 
