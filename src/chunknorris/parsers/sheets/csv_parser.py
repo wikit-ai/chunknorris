@@ -1,5 +1,6 @@
 import csv
 import re
+from io import StringIO
 
 import pandas as pd
 
@@ -28,26 +29,26 @@ class CSVParser(AbstractParser):
         Returns:
             MarkdownDoc: the markdown-formatted csv.
         """
-        df = self.read_file(filepath)
-        md_string = CSVParser.convert_df_to_markdown(df)
+        csv_string = self.read_file(filepath)
 
-        return MarkdownDoc.from_string(md_string)
+        return self.parse_string(csv_string)
 
-    # Both
     def parse_string(self, string: str) -> MarkdownDoc:
         """Parses a string representing a csv file to markdown.
 
         Args:
-            string (str): the string.
+            string (str): the csv-formatted string.
 
         Returns:
             MarkdownDoc: the markdown-formatted csv.
         """
-        # Actually pd.read_csv() handles filepath as well as string and byte string.
-        # We keep parse_string() to please the AbstractParser()
-        return self.parse_file(string)
+        delimiter = self.csv_delimiter or CSVParser._detect_csv_delimiter(string)
+        df = pd.read_csv(StringIO(string), delimiter=delimiter)  # type: ignore | missing typing in pandas
+        md_string = CSVParser.convert_df_to_markdown(df)
 
-    def read_file(self, filepath: str) -> pd.DataFrame:
+        return MarkdownDoc.from_string(md_string)
+
+    def read_file(self, filepath: str) -> str:
         """Read the provided filepath. For a list of handled filetypes,
         refer to https://pandas.pydata.org/docs/reference/api/pandas.read_excel.html.
 
@@ -55,29 +56,28 @@ class CSVParser(AbstractParser):
             filepath (str): path to the file.
 
         Returns:
-            pd.DataFrame: a dataframe.
+            str: the csv file content as a string.
         """
         if not filepath.lower().endswith(".csv"):
             raise ValueError("Only .csv files can be passed to CSVParser.")
-        delimiter = self.csv_delimiter or CSVParser._detect_csv_delimiter(filepath)
-        df = pd.read_csv(filepath, delimiter=delimiter)  # type: ignore | missing typing in pandas
+        with open(filepath, "r", encoding="utf8") as file:
+            csv_string = "".join(file.readlines())
 
-        return df
+        return csv_string
 
     @staticmethod
-    def _detect_csv_delimiter(filepath: str, n_sample_lines: int = 5) -> str:
+    def _detect_csv_delimiter(csv_string: str, n_sample_lines: int = 5) -> str:
         """Detect the delimiter used in a CSV file.
 
         Args:
-            filepath (str): the path to a csv file.
+            csv_string (str): the csv file as a string.
             n_sample_lines (int): the amount of lines to consider for guessing the separator.
                 Higher number may increase inference time.
 
         Returns:
             str : the delimiter
         """
-        with open(filepath, "r", encoding="utf8") as file:
-            sample = "".join([file.readline() for _ in range(n_sample_lines)])
+        sample = "\n".join(csv_string.split("\n")[:n_sample_lines])
         sniffer = csv.Sniffer()
         try:
             dialect = sniffer.sniff(sample)
@@ -92,6 +92,10 @@ class CSVParser(AbstractParser):
         """Converts a DataFrame to markdown.
         Wraps tabula's method pd.DataFrame.to_markdown()
         between pre and post processing.
+        Preprocess :
+        - Remove \n in text columns
+        PostProcess :
+        - Replace multiple spaces with 2 spaces.
 
         Args:
             df (pd.DataFrame): the dataframe to convert.
@@ -99,7 +103,11 @@ class CSVParser(AbstractParser):
         Returns:
             str: a markdown formatted table.
         """
-        df = df.apply(lambda x: x.str.replace("\n", " "))  # type: ignore | x: pd.Series -> pd.Series
+        dtypes = df.apply(
+            lambda x: pd.api.types.infer_dtype(x, skipna=True)  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
+        )
+        string_cols = dtypes[dtypes == "string"].index  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
+        df[string_cols] = df[string_cols].apply(lambda x: x.str.replace("\n", " "))  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
         md_string = df.to_markdown(index=False)
         md_string = re.sub(r"\s{3,}", "  ", md_string)
         md_string = re.sub(r"-{3,}", "---", md_string)
