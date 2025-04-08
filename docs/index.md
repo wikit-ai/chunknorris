@@ -4,7 +4,7 @@
 
 ## What is ``chunknorris`` ?
 
-In a nutshell, ``chunknorris`` is a python package that aims at drastically <span style="color:#FF6E42">**improve the chunking of documents**</span> from various sources (HTML, PDFs, Markdown, ...) while <span style="color:#FF6E42">**keeping the usage of computational ressources to the minimum**</span>.
+In a nutshell, ``chunknorris`` is a python package that aims at drastically <span style="color:#FF6E42">**improve the chunking of documents**</span> from various sources (HTML, PDFs, Markdown, ...) while <span style="color:#FF6E42">**keeping the usage of computational ressources to the minimum**</span>. [Try it out](https://huggingface.co/spaces/Wikit/chunknorris) !
 
 ## Why should I use it ?
 

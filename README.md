@@ -1,6 +1,7 @@
 # ChunkNorris
 
-📚 Check out [chunknorris's documentation](https://wikit-ai.github.io/chunknorris/) !
+📒 [Documentation](https://wikit-ai.github.io/chunknorris/) | 🧪 [Testing app](https://huggingface.co/spaces/Wikit/chunknorris)
+
 
 ## Goal
 
