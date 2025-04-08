@@ -103,8 +103,8 @@ class MarkdownChunker(AbstractChunker):
             Chunks: the chunks text, formatted
         """
         chunks = self.build_chunks(toc_tree)
-        chunks = self.remove_small_chunks(chunks)
         chunks = self.split_big_chunks(chunks)
+        chunks = self.remove_small_chunks(chunks)
 
         return chunks
 
@@ -218,11 +218,7 @@ class MarkdownChunker(AbstractChunker):
         Returns:
             Chunks: the chunks with more words than the specified threshold
         """
-        return [
-            c
-            for c in chunks
-            if c.word_count >= self.min_chunk_word_count and c.get_text()
-        ]
+        return [c for c in chunks if c.word_count >= self.min_chunk_word_count]
 
     def split_big_chunks(
         self,
