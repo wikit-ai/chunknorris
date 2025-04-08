@@ -1,4 +1,4 @@
-from io import StringIO
+from io import BytesIO
 from pathlib import Path
 import re
 
@@ -34,9 +34,8 @@ class ExcelParser:
         Returns:
             MarkdownDoc: the markdown formatted excel file
         """
-        data_str = string.decode("utf-8")
-        sheets = pd.read_excel(StringIO(data_str), sheet_name=None)  # type: ignore | missing typing in pandas.
-        md_string = ExcelParser.convert_sheets_to_markdown(sheets)
+        sheets = pd.read_excel(BytesIO(string), sheet_name=None)  # type: ignore | missing typing in pandas.
+        md_string = self.convert_sheets_to_markdown(sheets)
 
         return MarkdownDoc.from_string(md_string)
 
@@ -89,6 +88,10 @@ class ExcelParser:
         """Converts a DataFrame to markdown.
         Wraps tabula's method pd.DataFrame.to_markdown()
         between pre and post processing.
+        Preprocess :
+        - Remove \n in text columns
+        PostProcess :
+        - Replace multiple spaces with 2 spaces.
 
         Args:
             df (pd.DataFrame): the dataframe to convert.
@@ -96,7 +99,11 @@ class ExcelParser:
         Returns:
             str: a markdown formatted table.
         """
-        df = df.apply(lambda x: x.str.replace("\n", " "))  # type: ignore | x: pd.Series -> pd.Series
+        dtypes = df.apply(
+            lambda x: pd.api.types.infer_dtype(x, skipna=True)  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
+        )
+        string_cols = dtypes[dtypes == "string"].index  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
+        df[string_cols] = df[string_cols].apply(lambda x: x.str.replace("\n", " "))  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
         md_string = df.to_markdown(index=False)
         md_string = re.sub(r"\s{3,}", "  ", md_string)
         md_string = re.sub(r"-{3,}", "---", md_string)

@@ -7,9 +7,16 @@ import tests.test_strings.parsers.markdown_parser as md_parser_strings
 import tests.test_strings.parsers.wikit_parser as wikit_parser_strings
 from chunknorris.chunkers import MarkdownChunker
 from chunknorris.core.components import Chunk
-from chunknorris.parsers import (CSVParser, DocxParser, ExcelParser,
-                                 HTMLParser, JupyterNotebookParser,
-                                 MarkdownParser, PdfParser, WikitJsonParser)
+from chunknorris.parsers import (
+    CSVParser,
+    DocxParser,
+    ExcelParser,
+    HTMLParser,
+    JupyterNotebookParser,
+    MarkdownParser,
+    PdfParser,
+    WikitJsonParser,
+)
 
 ################
 #   Chunkers   #
