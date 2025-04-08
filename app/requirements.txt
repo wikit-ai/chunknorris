@@ -1,0 +1,3 @@
+chunknorris @ git+https://github.com/wikit-ai/chunknorris
+pydantic
+streamlit==1.44.0
