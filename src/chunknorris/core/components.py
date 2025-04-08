@@ -6,7 +6,7 @@ from copy import deepcopy
 from typing import Any
 from unicodedata import normalize
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class MarkdownDoc(BaseModel):
@@ -53,11 +53,15 @@ class MarkdownDoc(BaseModel):
         return MarkdownDoc(content=md_lines)
 
 
-class MarkdownLine:
-    text: str  # the text content of the line
-    order: int  # the order of the line in the markdown string
-    isin_code_block: bool  # whether or not the line belongs to a code block
-    page: int | None  # the page the line belongs to (for pdf to markdown conversion)
+class MarkdownLine(BaseModel):
+    text: str = Field(description="the text content of the line")
+    line_idx: int = Field(description="the index of the line in the markdown string")
+    isin_code_block: bool = Field(
+        description="whether or not the line belongs to a code block"
+    )
+    page: int | None = Field(
+        description="the page the line belongs to (if markdown comes from converted paginated document)"
+    )
 
     def __init__(
         self,
@@ -65,11 +69,15 @@ class MarkdownLine:
         line_idx: int,
         isin_code_block: bool = False,
         page: int | None = None,
+        **kwargs: dict[str, Any],
     ) -> None:
-        self.text = text.strip()
-        self.line_idx = line_idx
-        self.isin_code_block = isin_code_block
-        self.page = page
+        super().__init__(
+            text=text.strip(),
+            line_idx=line_idx,
+            isin_code_block=isin_code_block,
+            page=page,
+            **kwargs,
+        )
 
     @property
     def isin_table(self) -> bool:
@@ -104,29 +112,22 @@ class MarkdownLine:
         return str(vars(self))
 
 
-class Chunk:
+class Chunk(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     headers: list[MarkdownLine]
     content: list[MarkdownLine]
     start_line: int
 
-    def __init__(
-        self,
-        headers: list[MarkdownLine],
-        content: list[MarkdownLine],
-        start_line: int,
-    ) -> None:
-        self.headers = headers
-        self.content = content
-        self.start_line = start_line
-
+    @computed_field
     @property
     def word_count(self) -> int:
         """Gets the amount of words in the chunk's content
         (headers not included)
         """
         text_content = "\n".join((line.text for line in self.content))
-        return len(Chunk._cleanup_text(text_content).split())
+        return len(re.findall(r"\w+", Chunk._cleanup_text(text_content)))
 
+    @computed_field
     @property
     def start_page(self) -> int | None:
         pages = [line.page for line in self.content if line.page is not None]
@@ -135,6 +136,7 @@ class Chunk:
         else:
             return None
 
+    @computed_field
     @property
     def end_page(self) -> int | None:
         pages = [line.page for line in self.content if line.page is not None]
@@ -146,7 +148,7 @@ class Chunk:
     def __str__(self) -> str:
         return self.get_text()
 
-    def get_text(self, remove_links: bool = False) -> str:
+    def get_text(self, remove_links: bool = False, prepend_headers: bool = True) -> str:
         """Gets the text of the chunk.
 
         Args:
@@ -156,8 +158,10 @@ class Chunk:
         Returns:
             str: the text
         """
-        text = "\n\n".join((header.text for header in self.headers))
-        text += "\n\n" + "\n".join((line.text for line in self.content))
+        text = ""
+        if prepend_headers:
+            text += "\n\n".join((header.text for header in self.headers)) + "\n\n"
+        text += "\n".join((line.text for line in self.content))
         if remove_links:
             text = Chunk.remove_links(text)
 
