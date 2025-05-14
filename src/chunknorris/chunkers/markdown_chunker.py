@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from ..core.components import Chunk, MarkdownDoc, MarkdownLine, TocTree
 from ..decorators.decorators import timeit, validate_args
@@ -17,6 +17,8 @@ class MarkdownChunker(AbstractChunker):
         max_chunk_word_count: int = 200,
         hard_max_chunk_word_count: int = 400,
         min_chunk_word_count: int = 15,
+        hard_max_chunk_token_count: int | None = None,
+        tokenizer: Any | None = None,
     ) -> None:
         """Initialize a Markdown chunker
 
@@ -29,14 +31,18 @@ class MarkdownChunker(AbstractChunker):
                 It is a SOFT limit, meaning that chunks bigger that this size will be chunked using lower level headers if any are available."
             hard_max_chunk_word_count (int) : The true maximum size a chunk can be (in word).
                 It is a HARD limit, meaning that chunks bigger by this limit will be split into subchunks.
-                ChunkNorris will try to equilibrate the size of resulting subchunks. It should be greater than max_chunk_word_count."
             min_chunk_word_count (int) : The minimum size a chunk can be (in words).
                 Chunks lower than this will be discarded.
+            hard_max_chunk_token_count (None | int) : The true maximum size a chunk can be (in tokens). If None, no token-based splitting will be done.
+                It is a HARD limit, meaning that chunks bigger by this limit will be split into subchunks equivalent in tokens.
+            tokenizer (Any | None) : The tokenizer to use. Can be any instance of a class that has 'encode' and 'decode' methods such as tiktoken.
         """
         self.max_headers_to_use = max_headers_to_use
         self.max_chunk_word_count = max_chunk_word_count
         self.hard_max_chunk_word_count = hard_max_chunk_word_count
         self.min_chunk_word_count = min_chunk_word_count
+        self.hard_max_chunk_token_count = hard_max_chunk_token_count
+        self.tokenizer = tokenizer
 
     @timeit
     @validate_args
@@ -103,7 +109,8 @@ class MarkdownChunker(AbstractChunker):
             Chunks: the chunks text, formatted
         """
         chunks = self.build_chunks(toc_tree)
-        chunks = self.split_big_chunks(chunks)
+        chunks = self.split_big_chunks_wordbased(chunks)
+        chunks = self.split_big_chunks_tokenbased(chunks)
         chunks = self.remove_small_chunks(chunks)
 
         return chunks
@@ -220,7 +227,7 @@ class MarkdownChunker(AbstractChunker):
         """
         return [c for c in chunks if c.word_count >= self.min_chunk_word_count]
 
-    def split_big_chunks(
+    def split_big_chunks_wordbased(
         self,
         chunks: list[Chunk],
     ) -> list[Chunk]:
@@ -275,20 +282,97 @@ class MarkdownChunker(AbstractChunker):
                 continue
             current_word_count = len("\n".join(lb.text for lb in line_buffer).split())
             if current_word_count > split_word_size:
-                new_chunk = Chunk(
-                    headers=chunk.headers + list(filter(None, prev_buffer)),
-                    content=line_buffer,
-                    start_line=line_buffer[0].line_idx,
+                chunks.append(
+                    MarkdownChunker._create_new_chunk_from_lines(
+                        chunk.headers + list(filter(None, prev_buffer)), line_buffer
+                    )
                 )
-                chunks.append(new_chunk)
                 line_buffer = []
                 prev_buffer = headers_buffer
         if line_buffer:
-            new_chunk = Chunk(
-                headers=chunk.headers,
-                content=line_buffer,
-                start_line=line_buffer[0].line_idx,
+            chunks.append(
+                MarkdownChunker._create_new_chunk_from_lines(chunk.headers, line_buffer)
             )
-            chunks.append(new_chunk)
 
         return chunks
+
+    def split_big_chunks_tokenbased(
+        self,
+        chunks: list[Chunk],
+    ) -> list[Chunk]:
+        """Splits the chunks that are too big considering the provided tokenizer.
+
+        Args:
+            chunks (list[Chunk]): the chunks to split.
+
+        Raises:
+            ValueError: if the tokenizer is not provided.
+            ValueError: if the tokenizer does not have both 'encode' and 'decode' methods.
+
+        Returns:
+            list[Chunk]: the chunks, with big chunks splitting into smaller chunks.
+        """
+        if self.hard_max_chunk_token_count is None:
+            return chunks
+        if self.tokenizer is None:
+            raise ValueError(
+                "Tokenizer is required when hard_max_chunk_token_count is set"
+            )
+        if not hasattr(self.tokenizer, "encode"):
+            raise ValueError(
+                "Tokenizer must have 'encode' methods that takes a string a intput and return a list of tokens."
+            )
+
+        splitted_chunks: list[Chunk] = []
+        for chunk in chunks:
+            splitted_chunks.extend(self._split_with_tokenizer(chunk))
+        return splitted_chunks
+
+    def _split_with_tokenizer(self, chunk: Chunk) -> list[Chunk]:
+        """Split a chunk using the provided tokenizer and the hard_max_chunk_token_count."""
+        chunk_tokens = self.tokenizer.encode(chunk.get_text())
+        if len(chunk_tokens) < self.hard_max_chunk_token_count:
+            return [chunk]
+        else:
+            chunk_tokens = self.tokenizer.encode(chunk.get_text(prepend_headers=False))
+            n_splits = len(chunk_tokens) // self.hard_max_chunk_token_count + 1
+            tokens_per_split = len(chunk_tokens) // n_splits
+            line_buffer: list[MarkdownLine] = []
+            current_token_count = 0
+            new_chunks: list[Chunk] = []
+            for line in chunk.content:
+                line_token_count = len(self.tokenizer.encode(line.text))
+                current_token_count += line_token_count
+                if current_token_count > tokens_per_split and line_buffer:
+                    new_chunks.append(
+                        MarkdownChunker._create_new_chunk_from_lines(
+                            chunk.headers, line_buffer
+                        )
+                    )
+                    line_buffer = []
+                    current_token_count = line_token_count
+                line_buffer.append(line)
+            if line_buffer:
+                new_chunks.append(
+                    MarkdownChunker._create_new_chunk_from_lines(
+                        chunk.headers, line_buffer
+                    )
+                )
+
+            return new_chunks
+
+    @staticmethod
+    def _create_new_chunk_from_lines(
+        headers: list[MarkdownLine], lines: list[MarkdownLine]
+    ) -> Chunk:
+        """Utility function to create a chunk from a buffer
+        of markdownLines.
+
+        Args:
+            headers (list[MarkdownLine]): the headers of the original chunk.
+            lines (list[MarkdownLine]): The lines to put in the chunk.
+
+        Returns:
+            Chunk: the new chunk.
+        """
+        return Chunk(headers=headers, content=lines, start_line=lines[0].line_idx)
