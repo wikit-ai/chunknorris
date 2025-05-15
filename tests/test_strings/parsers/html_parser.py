@@ -40,9 +40,7 @@ HTML_STRING_OUT = """# This is a h1 header
 ### This is a h3 header
 
 This is some text with [markdown links](www.link.com) within it.
-
 Carte des infrastructures et de l'occupation des sols de la commune en 2018.
-
 | Items | Expenditure |
 |:--------|--------------:|
 | Donuts | 1000 |

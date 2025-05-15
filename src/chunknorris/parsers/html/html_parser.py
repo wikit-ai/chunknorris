@@ -85,6 +85,11 @@ class HTMLParser(AbstractParser):
             )
             new_len = len(md_string)
 
+        md_string = "\n".join(
+            line + "\n" if line.startswith("#") else line
+            for line in str(md_string).split("\n")
+        )
+
         return md_string
 
     @staticmethod
@@ -99,6 +104,6 @@ class HTMLParser(AbstractParser):
             str: the cleaned up string.
         """
         md_string = md_string.strip()
-        md_string = re.sub(r"\n{3,}", "\n\n", md_string)
+        md_string = re.sub(r"(?:\n\s*){3,}", "\n\n", md_string)
 
         return md_string
