@@ -84,9 +84,9 @@ class TextSpan:
         origin: tuple[float],
         page: int,
         orientation: tuple[float, float],
-        bidi: int,
-        char_flags: int,
-        alpha: int,
+        bidi: int | None = None,
+        char_flags: int | None = None,
+        alpha: int | None = None,
     ) -> None:
         self._bbox = pymupdf.Rect(bbox)
         self.text = TextSpan._remove_invalid_characters(text)

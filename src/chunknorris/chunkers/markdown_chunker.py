@@ -28,14 +28,14 @@ class MarkdownChunker(AbstractChunker):
                 For example, if 'h4' is set, then 'h5' and 'h6' headers won't be used.
                 Must be a string of type 'hx' with x being the title level ranging from 1 to 6.
             max_chunk_word_count (int) : The maximum size a chunk can be (in words).
-                It is a SOFT limit, meaning that chunks bigger that this size will be chunked using lower level headers if any are available."
+                It is a SOFT limit, meaning that chunks bigger that this will be chunked only if lower level headers if any are available."
             hard_max_chunk_word_count (int) : The true maximum size a chunk can be (in word).
                 It is a HARD limit, meaning that chunks bigger by this limit will be split into subchunks.
             min_chunk_word_count (int) : The minimum size a chunk can be (in words).
-                Chunks lower than this will be discarded.
+                Chunks smaller than this will be discarded.
             hard_max_chunk_token_count (None | int) : The true maximum size a chunk can be (in tokens). If None, no token-based splitting will be done.
-                It is a HARD limit, meaning that chunks bigger by this limit will be split into subchunks equivalent in tokens.
-            tokenizer (Any | None) : The tokenizer to use. Can be any instance of a class that has 'encode' and 'decode' methods such as tiktoken.
+                It is a HARD limit, meaning that chunks bigger by this limit will be split into subchunks that are equivalent in terms of tokens count.
+            tokenizer (Any | None) : The tokenizer to use. Can be any instance of a class that has 'encode' method such as tiktoken.
         """
         self.max_headers_to_use = max_headers_to_use
         self.max_chunk_word_count = max_chunk_word_count
@@ -54,7 +54,7 @@ class MarkdownChunker(AbstractChunker):
                 Might be the output of a chunknorris.Parser.
 
         Returns:
-            list[Chunk]: the chunks
+            list[Chunk]: the chunks.
         """
         toc_tree = self.get_toc_tree(content.content)
         chunks = self.get_chunks(toc_tree)
@@ -65,13 +65,13 @@ class MarkdownChunker(AbstractChunker):
         self,
         md_lines: list[MarkdownLine],
     ) -> TocTree:
-        """Builds the table of content tree based on header
+        """Builds the table of content tree based on header.
 
         Args:
-            md_lines (list[MarkdownLines]): the markdown lines
+            md_lines (list[MarkdownLines]): the markdown lines.
 
         Returns:
-            TocTree: the table of content
+            TocTree: the table of content.
         """
         max_header_level_to_use = int(self.max_headers_to_use[1])
         dummy_line = MarkdownLine("", line_idx=-1)
@@ -103,10 +103,10 @@ class MarkdownChunker(AbstractChunker):
         that they fit in size, replace links formatting.
 
         Args:
-            toc_tree (TocTree): the toc tree of the document
+            toc_tree (TocTree): the toc tree of the document.
 
         Returns:
-            Chunks: the chunks text, formatted
+            Chunks: the chunks text, formatted.
         """
         chunks = self.build_chunks(toc_tree)
         chunks = self.split_big_chunks_wordbased(chunks)
@@ -134,7 +134,7 @@ class MarkdownChunker(AbstractChunker):
                 Used for recursion. Defaults to None.
 
         Returns:
-            Chunks: list of chunk's texts
+            Chunks: list of chunk's texts.
         """
         if already_ok_chunks is None:
             already_ok_chunks = []
@@ -160,13 +160,13 @@ class MarkdownChunker(AbstractChunker):
     @staticmethod
     def _build_chunk(toc_tree_element: TocTree) -> Chunk:
         """Builds a chunk by apposing the text of headers
-        and recursively getting the content of children
+        and recursively getting the content of children.
 
         Args:
-            toc_tree_element (TocTree): the toc tree element
+            toc_tree_element (TocTree): the toc tree element.
 
         Returns:
-            str: the chunk content. parent's headers + content
+            str: the chunk content. parent's headers + content.
         """
         parent_headers = MarkdownChunker.get_parents_headers(toc_tree_element)
         content = MarkdownChunker._build_chunk_content(toc_tree_element)
@@ -181,13 +181,13 @@ class MarkdownChunker(AbstractChunker):
     def _build_chunk_content(toc_tree_element: TocTree) -> list[MarkdownLine]:
         """Builds a chunk content (i.e without headers above)
         from a toc tree. It uses the toc tree's content, and recursively
-        adds the header and content of its children
+        adds the header and content of its children.
 
         Args:
-            toc_tree_element (TocTree): the toc tree (or element of toc tree)
+            toc_tree_element (TocTree): the toc tree (or element of toc tree).
 
         Returns:
-            list[MarkdownLine]: the list of lines that belong to the chunk content (without the headers of parents)
+            list[MarkdownLine]: the list of lines that belong to the chunk content (without the headers of parents).
         """
         content = [toc_tree_element.title] + toc_tree_element.content
         for child in toc_tree_element.children:
@@ -202,10 +202,10 @@ class MarkdownChunker(AbstractChunker):
         is ordered in descending order in terms of header level.
 
         Args:
-            toc_tree_element (TocTree): the toc tree element
+            toc_tree_element (TocTree): the toc tree element.
 
         Returns:
-            list[MarkdownLine]: the list of line that represent the parent's headers
+            list[MarkdownLine]: the list of line that represent the parent's headers.
         """
         headers: list[MarkdownLine] = []
         while toc_tree_element.parent:
@@ -217,13 +217,13 @@ class MarkdownChunker(AbstractChunker):
         return list(reversed(headers))
 
     def remove_small_chunks(self, chunks: list[Chunk]) -> list[Chunk]:
-        """Removes chunks that have less words than the specified limit
+        """Removes chunks that have less words than the specified limit.
 
         Args:
-            chunks (Chunks): the list of chunks
+            chunks (Chunks): the list of chunks.
 
         Returns:
-            Chunks: the chunks with more words than the specified threshold
+            Chunks: the chunks with more words than the specified threshold.
         """
         return [c for c in chunks if c.word_count >= self.min_chunk_word_count]
 
@@ -233,13 +233,13 @@ class MarkdownChunker(AbstractChunker):
     ) -> list[Chunk]:
         """Splits the chunks that are too big.
         You may consider passing the kwarg "hard_max_chunk_word_count"
-        to specify the limit size of the chunk (in words)
+        to specify the limit size of the chunk (in words).
 
         Args:
-            chunks (Chunks): The chunks obtained from the get_chunks() method
+            chunks (Chunks): The chunks obtained from the get_chunks() method.
 
         Returns:
-            Chunks: the chunks, with big chunks splitting into smaller chunks
+            Chunks: the chunks, with big chunks splitted into smaller chunks.
         """
         splitted_chunks: list[Chunk] = []
         for chunk in chunks:
@@ -256,10 +256,10 @@ class MarkdownChunker(AbstractChunker):
         chunk: Chunk,
     ) -> list[Chunk]:
         """Split chunks based on newlines. Adds the
-        chunk titles at the beginning of each chunk
+        chunk titles at the beginning of each chunk.
 
         Args:
-            chunk (Chunk): the chunk to split
+            chunk (Chunk): the chunk to split.
         """
         split_count = (chunk.word_count // self.hard_max_chunk_word_count) + 1
         split_word_size = chunk.word_count // split_count
@@ -307,7 +307,7 @@ class MarkdownChunker(AbstractChunker):
 
         Raises:
             ValueError: if the tokenizer is not provided.
-            ValueError: if the tokenizer does not have both 'encode' and 'decode' methods.
+            ValueError: if the tokenizer does not have 'encode' method.
 
         Returns:
             list[Chunk]: the chunks, with big chunks splitting into smaller chunks.
@@ -365,8 +365,8 @@ class MarkdownChunker(AbstractChunker):
     def _create_new_chunk_from_lines(
         headers: list[MarkdownLine], lines: list[MarkdownLine]
     ) -> Chunk:
-        """Utility function to create a chunk from a buffer
-        of markdownLines.
+        """Utility function to create a chunk
+        from a buffer of markdownLines.
 
         Args:
             headers (list[MarkdownLine]): the headers of the original chunk.
