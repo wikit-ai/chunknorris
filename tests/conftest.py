@@ -180,6 +180,16 @@ def md_big_chunk_out() -> list[str]:
     return md_chunker_strings.MD_BIG_CHUNK_OUT
 
 
+@pytest.fixture(scope="session")
+def md_chunk_token_in() -> Chunk:
+    return md_chunker_strings.MD_CHUNK_TOKEN_IN
+
+
+@pytest.fixture(scope="session")
+def md_chunk_token_out() -> Chunk:
+    return md_chunker_strings.MD_CHUNK_TOKEN_OUT
+
+
 ### MarkdownParser ###
 
 

@@ -11,3 +11,4 @@ mkdocs-jupyter==0.25.1
 pymdown-extensions==10.12
 mkdocstrings-python==1.12.2
 mkdocs-material==9.5.48
+tiktoken==0.9.0

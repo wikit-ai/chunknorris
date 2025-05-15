@@ -108,6 +108,7 @@ Feel free to experiment with various combinations, or even to implement your the
 Additionally, the chunkers and parsers can take a number of argument allowing to modifiy their behavior. For example:
 
 ```py
+import tiktoken
 from chunknorris.chunkers import MarkdownChunker
 
 chunker = MarkdownChunker(
@@ -115,6 +116,8 @@ chunker = MarkdownChunker(
     max_chunk_word_count=250,
     hard_max_chunk_word_count=400,
     min_chunk_word_count=15,
+    hard_max_chunk_token_count=8000,
+    tokenizer=tiktoken.encoding_for_model("text-embedding-3-large"),
 )
 ```
 
@@ -129,3 +132,9 @@ chunker = MarkdownChunker(
 
 ***min_chunk_word_count***
 (int): Minimum number of words to consider keeping the chunks. Chunks with less words will be discarded. Defaults to 15.
+
+***hard_max_chunk_token_count***
+(int | None): The hard maximum of tokens a chunk can be. This is used after the word-based chunking. Every chunk bigger (in token) than this number will be split into subchunks. ChunkNorris will try to equilibrate the size of resulting subchunks, still considering newlines to avoid random cuts. If None, this parameter won't be used. If an int value is provided, then a tokenizer must be provided as well. Defaults to None.
+
+***tokenizer***
+(Any | None): The tokenizer to use to count tokens. Can be any instance of a class that has an ```.encode()``` method, that takes a string as input and returns a list of tokens. Must be provided if ```hard_max_chunk_token_count``` is set. Defaults to None.

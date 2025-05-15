@@ -120,3 +120,16 @@ MD_BIG_CHUNK_OUT = [
     "# This is header 1\n\n## This is header 2.2\n\nword word word word word word word word word word",
     "# This is header 1\n\n## This is header 2.2\n\nword word word word word word word word word word",
 ]
+
+# " token"= 1 token and "\n" = 1 token
+# So expected to by chunked in 2 if hard_max_chunk_token_count = 4
+MD_CHUNK_TOKEN_IN = Chunk(
+    headers=[],
+    content=[
+        MarkdownLine(text=" token token token\n", line_idx=1),
+        MarkdownLine(text=" token token token\n", line_idx=2),
+    ],
+    start_line=1,
+)
+
+MD_CHUNK_TOKEN_OUT = ["token token token", "token token token"]
