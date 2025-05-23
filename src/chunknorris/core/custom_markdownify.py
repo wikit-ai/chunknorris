@@ -1,4 +1,5 @@
 from io import StringIO
+from typing import Any
 
 import pandas as pd
 from bs4 import NavigableString
@@ -17,7 +18,7 @@ class CustomMarkdownConverter(MarkdownConverter):
     As we do have both in chunknorris, we can afford using them here to improve markdown conversion of table.
     """
 
-    def convert_table(self, el: str, text: str, convert_as_inline: bool) -> str:
+    def convert_table(self, el: str, text: str, parent_tags: Any) -> str:
         try:
             df = pd.read_html(StringIO(str(el)), displayed_only=False)[0]  # type: ignore : missing typing in pandas
             df = df.fillna("")  # type: ignore : missing typing in pandas
@@ -25,37 +26,19 @@ class CustomMarkdownConverter(MarkdownConverter):
             if all(df.columns == list(range(len(df.columns)))):
                 df.columns = df.iloc[0]
                 df = df.iloc[1:]
-            return df.to_markdown(index=False) + "\n\n"
+            return "\n\n" + df.to_markdown(index=False) + "\n\n"
         except:
             return "\n\n"
 
-    def convert_th(
-        self, el: NavigableString, text: str, convert_as_inline: bool
-    ) -> str:
+    def convert_th(self, el: NavigableString, text: str, parent_tags: Any) -> str:
         """This method is empty because we want a No-Op for the <th> tag."""
         # return the html as is
         return str(el)
 
-    def convert_tr(
-        self, el: NavigableString, text: str, convert_as_inline: bool
-    ) -> str:
+    def convert_tr(self, el: NavigableString, text: str, parent_tags: Any) -> str:
         """This method is empty because we want a No-Op for the <tr> tag."""
         return str(el)
 
-    def convert_td(
-        self, el: NavigableString, text: str, convert_as_inline: bool
-    ) -> str:
+    def convert_td(self, el: NavigableString, text: str, parent_tags: Any) -> str:
         """This method is empty because we want a No-Op for the <td> tag."""
-        return str(el)
-
-    def convert_thead(
-        self, el: NavigableString, text: str, convert_as_inline: bool
-    ) -> str:
-        """This method is empty because we want a No-Op for the <thead> tag."""
-        return str(el)
-
-    def convert_tbody(
-        self, el: NavigableString, text: str, convert_as_inline: bool
-    ) -> str:
-        """This method is empty because we want a No-Op for the <tbody> tag."""
         return str(el)

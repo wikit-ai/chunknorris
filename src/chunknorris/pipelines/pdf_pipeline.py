@@ -137,7 +137,8 @@ class PdfPipeline:
             )
             line_idx += len("\n".join((line.text for line in lines)).split("\n"))
 
-        chunks = self.chunker.split_big_chunks(chunks)
+        chunks = self.chunker.split_big_chunks_wordbased(chunks)
+        chunks = self.chunker.split_big_chunks_tokenbased(chunks)
 
         return chunks
 

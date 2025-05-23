@@ -84,6 +84,9 @@ class TextSpan:
         origin: tuple[float],
         page: int,
         orientation: tuple[float, float],
+        bidi: int | None = None,
+        char_flags: int | None = None,
+        alpha: int | None = None,
     ) -> None:
         self._bbox = pymupdf.Rect(bbox)
         self.text = TextSpan._remove_invalid_characters(text)
@@ -96,6 +99,9 @@ class TextSpan:
         self.origin = pymupdf.Point(origin)
         self.page = page
         self.orientation = orientation
+        self.bidi = bidi
+        self.char_flags = char_flags
+        self.alpha = alpha
 
         self.order = 0
         self.isin_table = False
@@ -112,23 +118,23 @@ class TextSpan:
 
     @property
     def is_superscripted(self) -> bool:
-        return self.flags & 2**0
+        return self.flags & pymupdf.TEXT_FONT_SUPERSCRIPT
 
     @property
     def is_italic(self) -> bool:
-        return self.flags & 2**1
+        return self.flags & pymupdf.TEXT_FONT_ITALIC
 
     @property
     def is_serifed(self) -> bool:
-        return self.flags & 2**2
+        return self.flags & pymupdf.TEXT_FONT_SERIFED
 
     @property
     def is_monospaced(self) -> bool:
-        return self.flags & 2**3
+        return self.flags & pymupdf.TEXT_FONT_MONOSPACED
 
     @property
     def is_bold(self) -> bool:
-        return self.flags & 2**4
+        return self.flags & pymupdf.TEXT_FONT_BOLD
 
     @property
     def line_height(self) -> float:
