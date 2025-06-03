@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal
 
 import requests
-import streamlit as st
+import tiktoken
 from chunknorris.chunkers import MarkdownChunker
 from chunknorris.parsers import (
     AbstractParser,
@@ -16,6 +16,7 @@ from chunknorris.parsers import (
     PdfParser,
 )
 from chunknorris.pipelines import PdfPipeline
+import streamlit as st
 from streamlit import session_state as ss
 from streamlit.runtime.uploaded_file_manager import UploadedFile, UploadedFileRec
 
@@ -78,6 +79,8 @@ def get_md_chunker() -> MarkdownChunker:
         max_chunk_word_count=ss.max_chunk_word_count,
         hard_max_chunk_word_count=ss.hard_max_chunk_word_count,
         min_chunk_word_count=ss.min_chunk_word_count,
+        hard_max_chunk_token_count=ss.hard_max_chunk_token_count,
+        tokenizer=tiktoken.encoding_for_model("text-embedding-ada-002"),
     )
 
 
@@ -96,7 +99,7 @@ def parse_and_chunk(uploaded_file: UploadedFile | None):
             case ".pdf":
                 md_doc = parser.parse_string(uploaded_file.getvalue())
                 chunker = PdfPipeline(parser, get_md_chunker())
-                chunks = chunker._get_chunks_using_strategy() # type: ignore
+                chunks = chunker._get_chunks_using_strategy()  # type: ignore
             case ".xlsx":
                 md_doc = parser.parse_string(uploaded_file.getvalue())
                 chunker = get_md_chunker()
@@ -188,7 +191,7 @@ st.sidebar.select_slider(
 )
 
 st.sidebar.slider(
-    label="Maximum words per chunk",
+    label="Maximum words (soft maximum) per chunk",
     value=250,
     min_value=0,
     max_value=3000,
@@ -199,13 +202,24 @@ st.sidebar.slider(
 )
 
 st.sidebar.slider(
-    label="Hard maximum words per chunk",
+    label="Maximum words (hard maximum) per chunk",
     value=400,
     min_value=100,
     max_value=3000,
     step=50,
     key="hard_max_chunk_word_count",
     help="The hard maximum number of words per chunk. If a chunk is bigger than this, chunk is split using newlines, still trying to preverse code blocks or tables integrity.",
+    label_visibility="visible",
+)
+
+st.sidebar.slider(
+    label="Maximum token (hard maximum) per chunk",
+    value=400,
+    min_value=100,
+    max_value=8000,
+    step=100,
+    key="hard_max_chunk_token_count",
+    help="The hard maximum number of tokens per chunk. If a chunk is bigger than this, chunk is split using newlines. Applied after the word-based chunking",
     label_visibility="visible",
 )
 
@@ -309,7 +323,7 @@ with col1:
                 st.markdown(ss.parsed_md)
 
 with col2:
-    if uploaded_file and ss.chunks: # type: ignore | list[Chunk]
+    if uploaded_file and ss.chunks:  # type: ignore | list[Chunk]
         file_chunks = save_chunks()
         cola, colb = st.columns([0.25, 0.75])
         with colb:
@@ -324,9 +338,9 @@ with col2:
                 use_container_width=True,
             )
         with st.container(border=False):
-            for i, chunk in enumerate(ss.chunks): # type: ignore | list[Chunk]
+            for i, chunk in enumerate(ss.chunks):  # type: ignore | list[Chunk]
                 with st.expander(f"Chunk {i+1}", expanded=False):
                     with st.container(height=300, border=False):
                         st.markdown(
-                            chunk.get_text(prepend_headers=ss.prepend_headers_to_chunks) # type: ignore | Chunk.get_text()
+                            chunk.get_text(prepend_headers=ss.prepend_headers_to_chunks)  # type: ignore | Chunk.get_text()
                         )

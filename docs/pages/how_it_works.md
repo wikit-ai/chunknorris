@@ -8,7 +8,9 @@ In a nutshell, ``chunknorris`` relies on 3 components :
 
 ### Parsers
 
-The role of parsers is to take a file or a string as input, and output a clean markdown-formatted content suited for a chunker. Each parser is dedicated to a type of document. As of today, <span style="color:#FF6E42">**3 parsers are available**</span> :
+The role of parsers is to take a file or a string as input, and output a clean markdown-formatted content suited for a chunker. Each parser is dedicated to a type of document. 
+
+<span style="color:#FF6E42">**Various parsers are available**</span>, for example :
 
 - ``MarkdownParser`` : for parsing markdown files/strings.
 

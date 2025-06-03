@@ -5,6 +5,8 @@ import pandas as pd
 from bs4 import NavigableString
 from markdownify import MarkdownConverter  # type: ignore : no stubs
 
+from .logger import LOGGER
+
 
 class CustomMarkdownConverter(MarkdownConverter):
     """A custom MarkdownConverter that handles rowspan (merged cells).
@@ -27,7 +29,8 @@ class CustomMarkdownConverter(MarkdownConverter):
                 df.columns = df.iloc[0]
                 df = df.iloc[1:]
             return "\n\n" + df.to_markdown(index=False) + "\n\n"
-        except:
+        except Exception as e:
+            LOGGER.warning(f"Error converting table: {e}")
             return "\n\n"
 
     def convert_th(self, el: NavigableString, text: str, parent_tags: Any) -> str:
