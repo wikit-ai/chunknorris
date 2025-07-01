@@ -46,20 +46,16 @@ class PdfTocExtraction(PdfParserState):
             self._set_block_issectiontitle_with_toc(toc_from_metadata)
             # sometime, the toc in metadata doesn't represent the toc in document.
             # So, if less than half of toc are found in doc, find toc in doc.
-            if sum(title.found for title in toc_from_metadata) > 0.5 * len(
-                toc_from_metadata
-            ):
+            if self.headers_have_been_found(toc_from_metadata):
                 toc = toc_from_metadata
         if toc is None and toc_from_document:
             self._set_block_issectiontitle_with_toc(toc_from_document)
-            if sum(title.found for title in toc_from_document) > 0.5 * len(
-                toc_from_document
-            ):
+            if self.headers_have_been_found(toc_from_document):
                 toc = toc_from_document
         if toc is None:
             toc = self._set_block_issectiontitle_with_fontsize()
 
-        return toc
+        return toc or []
 
     def get_toc_from_metadata(self) -> list[TocTitle]:
         """Uses pymupdf.get_toc() to try to get the table of
@@ -316,3 +312,17 @@ class PdfTocExtraction(PdfParserState):
             return main_title[:100] + "[...]" if len(main_title) > 100 else main_title
 
         return ""
+
+    def headers_have_been_found(self, toc: list[TocTitle]) -> bool:
+        """Given a potential ToC, determines whether the headers have been
+        found in the document.
+        If more than half the headers have been found, returns True.
+        Otherwise retruns False, indicating that detected the ToC might be wrong.
+
+        Returns:
+            bool : True if detected headers have been found in document.
+        """
+        if len(toc) < 3:
+            return False
+        headers_found = [header for header in toc if header.found]
+        return len(headers_found) / len(toc) > 0.5

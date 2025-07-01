@@ -61,10 +61,10 @@ Here are code examples for chunking documents according to their file type:
     ```py
     from chunknorris.parsers import PdfParser
     from chunknorris.chunkers import MarkdownChunker
-    from chunknorris.pipelines import PdfPipeline
+    from chunknorris.pipelines import BasePipeline
 
     # Instanciate components
-    pipeline = PdfPipeline(
+    pipeline = BasePipeline(
         parser=PdfParser(),
         chunker=MarkdownChunker()
         )

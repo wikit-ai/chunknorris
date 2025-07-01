@@ -7,7 +7,6 @@ Each feature is developed with **``chunknorris``' main motivation in mind: findi
 | Feature | Status |
 |---------|--------|
 | [PDF] Parsing of tables delimited by lines in .pdf documents | 🟢 |
-| Build documentation and usage examples | 🔵 |
 | [DOCX] Parsing of .docx documents to markdown | 🟡 |
 | [PDF] Title tree detection when no table of contents is present in the document | 🟡 |
 | [PDF] Fix typos induced by tesseract (c.f. note 1) | 🟡 |
