@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from .chunkers import MarkdownChunker
 from .core.logger import LOGGER
 from .parsers import DocxParser, HTMLParser, MarkdownParser, PdfParser, WikitJsonParser
-from .pipelines import BasePipeline, PdfPipeline, WikitJsonPipeline
+from .pipelines import BasePipeline, WikitJsonPipeline
 
 
 def parse_arguments():
@@ -97,7 +97,7 @@ def main():
                 ocr_language=args.ocr_language,
                 use_ocr=args.use_ocr,
             )
-            pipeline = PdfPipeline(parser, chunker)
+            pipeline = BasePipeline(parser, chunker)
         case ".docx":
             parser = DocxParser()
             pipeline = BasePipeline(parser, chunker)

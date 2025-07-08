@@ -7,7 +7,7 @@ from tqdm import tqdm
 from src.chunknorris.chunkers import MarkdownChunker
 from src.chunknorris.exceptions import PageNotFoundException, TextNotFoundException
 from src.chunknorris.parsers import DocxParser, PdfParser
-from src.chunknorris.pipelines import BasePipeline, PdfPipeline
+from src.chunknorris.pipelines import BasePipeline
 
 # To run this test, use the following :
 # python -m tests.test_scripts.test_on_all_files --file_type pdf
@@ -47,7 +47,7 @@ match args.file_type:
             use_ocr="never",
             extract_tables=True,
         )
-        pipe = PdfPipeline(parser, MarkdownChunker())
+        pipe = BasePipeline(parser, MarkdownChunker())
     case "docx":
         pipe = BasePipeline(DocxParser(), MarkdownChunker())
     case _:

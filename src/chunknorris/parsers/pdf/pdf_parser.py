@@ -387,7 +387,7 @@ class PdfParser(
             if (
                 buffer[-1].is_empty
                 or line.fontsize != buffer[-1].fontsize
-                or line.bbox.y0 - self.body_line_spacing - 1 > buffer[-1].bbox.y1  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+                or line.bbox.y0 - self.body_line_spacing - 2 > buffer[-1].bbox.y1  # type: ignore : missing typing in pymupdf | Rect.y0 : float
                 or line.bbox.y1 <= buffer[-1].bbox.y0  # type: ignore : missing typing in pymupdf | Rect.y0 : float
             ):  # type: ignore : missing typing in pymupdf | Rect.y0 : float
                 blocks.append(TextBlock(buffer))

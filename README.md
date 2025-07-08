@@ -79,27 +79,6 @@ pipeline.save_chunks(chunks)
 
 The ``BasePipeline`` is rather simple : it simply puts the parsers output into the chunker. While this is enough most in most cases, you may sometime need to use more advanced strategies.
 
-The ``PdfPipeline`` for example works better with ``PdfParser``, as it has a ***fallback mechanism*** toward chunking the document by page in case no headers have been found. Here is a basic example of how to use it.
-
-```py
-from chunknorris.parsers import PdfParser
-from chunknorris.chunkers import MarkdownChunker
-from chunknorris.pipelines import PdfPipeline
-
-# Instanciate components
-parser = PdfParser()
-chunker = MarkdownChunker()
-pipeline = PdfPipeline(parser, chunker)
-
-# Get some chunks !
-chunks = pipeline.chunk_file(filepath="myfile.pdf")
-
-# Print or save :
-for chunk in chunks:
-    print(chunk.get_text())
-pipeline.save_chunks(chunks)
-```
-
 Feel free to experiment with various combinations, or even to implement your the pipeline that suits your needs !.
 
 

@@ -15,7 +15,6 @@ from chunknorris.parsers import (
     MarkdownParser,
     PdfParser,
 )
-from chunknorris.pipelines import PdfPipeline
 import streamlit as st
 from streamlit import session_state as ss
 from streamlit.runtime.uploaded_file_manager import UploadedFile, UploadedFileRec
@@ -96,11 +95,7 @@ def parse_and_chunk(uploaded_file: UploadedFile | None):
         parser = get_parser(fileext)
         start_time = time.perf_counter()
         match fileext:
-            case ".pdf":
-                md_doc = parser.parse_string(uploaded_file.getvalue())
-                chunker = PdfPipeline(parser, get_md_chunker())
-                chunks = chunker._get_chunks_using_strategy()  # type: ignore
-            case ".xlsx":
+            case ".pdf" | ".xlsx":
                 md_doc = parser.parse_string(uploaded_file.getvalue())
                 chunker = get_md_chunker()
                 chunks = chunker.chunk(md_doc)

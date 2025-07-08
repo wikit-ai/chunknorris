@@ -56,6 +56,10 @@ class PdfExport(PdfParserState):
         items_to_export = sorted(self.blocks + self.tables, key=attrgetter("order"))
         md_lines: list[MarkdownLine] = []
         line_idx_counter = 0
+
+        main_title = f"# {self.main_title}\n\n" if self.main_title else ""
+        md_lines.append(MarkdownLine(text=main_title, line_idx=-1, page=0))
+
         for item in items_to_export:
             if item.is_header_footer:
                 continue
