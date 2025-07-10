@@ -72,7 +72,7 @@ class MarkdownLine(BaseModel):
         **kwargs: dict[str, Any],
     ) -> None:
         super().__init__(
-            text=text.strip(),
+            text=normalize("NFKD", text.strip()),
             line_idx=line_idx,
             isin_code_block=isin_code_block,
             page=page,
@@ -187,7 +187,6 @@ class Chunk(BaseModel):
     @staticmethod
     def _cleanup_text(text: str) -> str:
         """Cleans up the text"""
-        text = normalize("NFKD", text)
         text = re.sub(r"\n{3,}", "\n\n", text)
         text = text.strip()
 
