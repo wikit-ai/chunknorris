@@ -337,18 +337,20 @@ class MarkdownChunker(AbstractChunker):
         chunk: Chunk, tokenizer: Any, hard_max_chunk_token_count: int
     ) -> list[Chunk]:
         """Split a chunk using the provided tokenizer and the hard_max_chunk_token_count."""
-        chunk_tokens = tokenizer.encode(chunk.get_text())
-        if len(chunk_tokens) < hard_max_chunk_token_count:
+        chunk_tokens_count = len(tokenizer.encode(chunk.get_text()))
+        if chunk_tokens_count < hard_max_chunk_token_count:
             return [chunk]
         else:
-            chunk_tokens = tokenizer.encode(chunk.get_text(prepend_headers=False))
-            n_splits = len(chunk_tokens) // hard_max_chunk_token_count + 1
-            tokens_per_split = len(chunk_tokens) // n_splits
+            n_splits = chunk_tokens_count // hard_max_chunk_token_count + 1
+            tokens_per_split = chunk_tokens_count // n_splits
             line_buffer: list[MarkdownLine] = []
-            current_token_count = 0
+            initial_token_count = len(
+                tokenizer.encode("\n\n".join([header.text for header in chunk.headers]))
+            )
+            current_token_count = initial_token_count
             new_chunks: list[Chunk] = []
             for line in chunk.content:
-                line_token_count = len(tokenizer.encode(line.text))
+                line_token_count = len(tokenizer.encode(line.text + "\n"))
                 current_token_count += line_token_count
                 if current_token_count > tokens_per_split and line_buffer:
                     new_chunks.append(
@@ -357,7 +359,7 @@ class MarkdownChunker(AbstractChunker):
                         )
                     )
                     line_buffer = []
-                    current_token_count = line_token_count
+                    current_token_count = initial_token_count + line_token_count
                 line_buffer.append(line)
             if line_buffer:
                 new_chunks.append(
