@@ -74,6 +74,7 @@ class HTMLParser(AbstractParser):
         while new_len < initial_len:
             initial_len = len(md_string)
             md_string = CustomMarkdownConverter(
+                autolinks=False,
                 heading_style="ATX",
                 strip=["figure", "img"],
                 bullets="-*+",
@@ -105,5 +106,9 @@ class HTMLParser(AbstractParser):
         """
         md_string = md_string.strip()
         md_string = re.sub(r"(?:\n\s*){3,}", "\n\n", md_string)
+
+        # remove base64 images
+        pattern = r"data:image\/[bmp,gif,ico,jpg,png,svg,webp,x\-icon,svg+xml]+;base64,[a-zA-Z0-9,+,\/]+={0,2}"
+        md_string = re.sub(pattern, "", md_string)
 
         return md_string

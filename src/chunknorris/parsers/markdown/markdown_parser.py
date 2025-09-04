@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 from typing import Any
 
 import yaml
@@ -20,7 +21,8 @@ class MarkdownParser(AbstractParser):
         Returns:
             TypedString: the formatted markdown string
         """
-        formatted_string, metadata = MarkdownParser.parse_metadata(string)
+        formatted_string = MarkdownParser.cleanup_string(string)
+        formatted_string, metadata = MarkdownParser.parse_metadata(formatted_string)
         formatted_string = MarkdownParser.convert_setext_to_atx(formatted_string)
         md_doc = MarkdownDoc.from_string(formatted_string)
         md_doc.metadata = metadata
@@ -127,3 +129,23 @@ class MarkdownParser(AbstractParser):
             metadata_as_json = {}
 
         return content, metadata_as_json
+
+    @staticmethod
+    def cleanup_string(md_string: str) -> str:
+        """Cleans up the html string.
+
+        Args:
+            md_string (str): the markdown string, output from
+                apply_markdownify()
+
+        Returns:
+            str: the cleaned up string.
+        """
+        md_string = md_string.strip()
+        md_string = re.sub(r"(?:\n\s*){3,}", "\n\n", md_string)
+
+        # remove base64 images
+        pattern = r"data:image\/[bmp,gif,ico,jpg,png,svg,webp,x\-icon,svg+xml]+;base64,[a-zA-Z0-9,+,\/]+={0,2}"
+        md_string = re.sub(pattern, "", md_string)
+
+        return md_string

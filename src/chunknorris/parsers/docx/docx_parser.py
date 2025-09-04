@@ -1,4 +1,5 @@
 from pathlib import Path
+import html
 
 import mammoth  # type: ignore : No stub files
 
@@ -54,5 +55,6 @@ class DocxParser(HTMLParser):
             raise ValueError("Only .docx files can be passed to DocxParser.")
         with path.open("rb") as file:
             html_string = mammoth.convert_to_html(file).value  # type: ignore : Type of input is unknown
+            html_string = html.unescape(html_string)
 
         return html_string

@@ -1,5 +1,4 @@
-MD_STANDARD_SETEXT_IN = """
-This is header 1
+MD_STANDARD_SETEXT_IN = """This is header 1
 ================
 
 This is header 2.1
@@ -22,11 +21,9 @@ Rex solvo sinu patuit in, Facit et Anaphen exosae eversae tenuit:
 
 Rex solvo sinu patuit in, Facit et Anaphen exosae eversae tenuit:
 **ales** tuis, igne. **Ab luna** sponte movit eratque. Dextera iuvencae via mihi
-*patrioque*.
-"""
+*patrioque*."""
 
-MD_STANDARD_SETEXT_OUT = """
-# This is header 1
+MD_STANDARD_SETEXT_OUT = """# This is header 1
 
 ## This is header 2.1
 
@@ -46,8 +43,7 @@ Rex solvo sinu patuit in, Facit et Anaphen exosae eversae tenuit:
 
 Rex solvo sinu patuit in, Facit et Anaphen exosae eversae tenuit:
 **ales** tuis, igne. **Ab luna** sponte movit eratque. Dextera iuvencae via mihi
-*patrioque*.
-"""
+*patrioque*."""
 
 MD_WITH_CODE_BLOCK = """
 ```This is not a code block```
