@@ -47,6 +47,10 @@ if "parsed_md" not in ss:
 if "chunks" not in ss:
     ss.chunks = []  # type: ignore | list[Chunk]
 
+# keep track of the uploader to clear the file
+if "uploader_key" not in ss:
+    ss.uploader_key = 1
+
 
 def get_parser(fileext: str) -> AbstractParser:
     """Get the pipeline for the given filename."""
@@ -62,9 +66,12 @@ def get_parser(fileext: str) -> AbstractParser:
         case ".docx":
             parser = DocxParser()
         case ".xls" | ".xlsx" | ".xlsm" | ".xlsb" | ".odf" | ".ods" | ".odt":
-            parser = ExcelParser()
+            parser = ExcelParser(output_format=ss.sheet_parsers_output_format)
         case ".csv":
-            parser = CSVParser()
+            output_format: str = ss.sheet_parsers_output_format
+            if ss.sheet_parsers_output_format == "auto":
+                output_format = "json_lines"
+            parser = CSVParser(output_format=output_format)
         case _:
             raise ValueError("File format not supported by ChunkNorris")
 
@@ -237,6 +244,15 @@ st.sidebar.checkbox(
     help="Whether or not all the parent headers should be prepended to the chunk's text content. Might improve retrieval performance of the chunk as it preserves context.",
 )
 
+st.sidebar.select_slider(
+    label="Parse sheets (.csv, .xlsx) as :",
+    options=["json_lines", "auto", "markdown_table"],
+    value="auto",
+    key="sheet_parsers_output_format",
+    label_visibility="visible",
+    help="How the tables should be parsed. JSON lines is easier to understand for an LLM and ensures headers wont be lost at the top of the document. Markdown table produces less tokens and is more suitable for non-CSV-like Excel spreadsheets.",
+)
+
 _, col1, col2, _ = st.columns([0.1, 0.5, 0.3, 0.1])
 with col1:
     uploaded_file = st.file_uploader(
@@ -255,6 +271,7 @@ with col1:
             "odt",
             "csv",
         ],
+        key=ss.uploader_key,
     )
 
 with col2:
