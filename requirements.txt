@@ -3,7 +3,7 @@ lxml==6.0.0
 html5lib==1.1
 termcolor==2.4
 PyMuPDF==1.25.5
-matplotlib==3.9.2
+matplotlib>=3.9.2
 pydantic<3.0.0, >=2.0
 pandas==2.2.3
 pyyaml==6.0.2
