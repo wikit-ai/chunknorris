@@ -1,6 +1,7 @@
 import csv
 import re
 from io import StringIO
+from typing import Literal
 
 import pandas as pd
 
@@ -11,14 +12,23 @@ from ..abstract_parser import AbstractParser
 class CSVParser(AbstractParser):
     """Parser for Comma-Separated Values file (.csv)"""
 
-    def __init__(self, csv_delimiter: str | None = None) -> None:
+    def __init__(
+        self,
+        csv_delimiter: str | None = None,
+        output_format: Literal["markdown_table", "json_lines"] = "json_lines",
+    ) -> None:
         """Initializes a sheet parser
 
         Args:
             csv_delimiter (str | None, optional): The delimiter to consider to parse the .csv files.
                 If None, we will try to guess what the delimiter is. Defaults to None.
+            output_format (Literal[&quot;markdown_table&quot;, &quot;json_lines&quot;], optional): the output format of the parsed document.
+                - markdown_table : uses tabula to build a markdown-formatted table.
+                - json_lines : each row of the table will be output as a JSON line. NOTE : consumes way more tokens as column names are repeated at each row. But easier to read for LLMs.
+                Defaults to "json_lines".
         """
         self.csv_delimiter = csv_delimiter
+        self.output_format = output_format
 
     def parse_file(self, filepath: str) -> MarkdownDoc:
         """Parses a csv file to markdown.
@@ -44,7 +54,15 @@ class CSVParser(AbstractParser):
         """
         delimiter = self.csv_delimiter or CSVParser._detect_csv_delimiter(string)
         df = pd.read_csv(StringIO(string), delimiter=delimiter)  # type: ignore | missing typing in pandas
-        md_string = CSVParser.convert_df_to_markdown(df)
+        match self.output_format:
+            case "markdown_table":
+                md_string = CSVParser.convert_df_to_markdown_table(df)
+            case "json_lines":
+                md_string = df.to_json(orient="records", force_ascii=False, lines=True)  # type: ignore | df.to_json() -> str
+            case _:
+                raise ValueError(
+                    f"Invalid value for argument 'output_format' : expected one of ['markdown_table', 'json_lines]. Got '{self.output_format}'."
+                )
 
         return MarkdownDoc.from_string(md_string)
 
@@ -88,7 +106,7 @@ class CSVParser(AbstractParser):
             ) from e
 
     @staticmethod
-    def convert_df_to_markdown(df: pd.DataFrame) -> str:
+    def convert_df_to_markdown_table(df: pd.DataFrame) -> str:
         """Converts a DataFrame to markdown.
         Wraps tabula's method pd.DataFrame.to_markdown()
         between pre and post processing.
@@ -103,7 +121,7 @@ class CSVParser(AbstractParser):
         Returns:
             str: a markdown formatted table.
         """
-        dtypes = df.apply(
+        dtypes = df.apply(  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
             lambda x: pd.api.types.infer_dtype(x, skipna=True)  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
         )
         string_cols = dtypes[dtypes == "string"].index  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
@@ -113,3 +131,15 @@ class CSVParser(AbstractParser):
         md_string = re.sub(r"-{3,}", "---", md_string)
 
         return md_string
+
+    @staticmethod
+    def convert_df_to_json_lines(df: pd.DataFrame) -> str:
+        """Converts a DataFrame to json lines.
+
+        Args:
+            df (pd.DataFrame): the dataframe to convert.
+
+        Returns:
+            str: the json lines.
+        """
+        return df.to_json(orient="records", force_ascii=False, lines=True)  # type: ignore | df.to_json() -> str
