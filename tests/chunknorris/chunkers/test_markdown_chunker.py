@@ -41,3 +41,6 @@ def test_split_big_chunks_tokenbased(
         chunk.get_text()
         for chunk in md_chunker.split_big_chunks_tokenbased([md_chunk_token_in])
     ] == md_chunk_token_out
+
+    md_chunker.hard_max_chunk_token_count = 3  # expected to split lines also
+    assert len(md_chunker.split_big_chunks_tokenbased([md_chunk_token_in])) == 4

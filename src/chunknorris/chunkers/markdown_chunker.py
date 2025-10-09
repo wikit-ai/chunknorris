@@ -351,6 +351,25 @@ class MarkdownChunker(AbstractChunker):
             new_chunks: list[Chunk] = []
             for line in chunk.content:
                 line_token_count = len(tokenizer.encode(line.text + "\n"))
+                # if line is too big for a single chunk -> split line and make chunks
+                if line_token_count > hard_max_chunk_token_count:
+                    if line_buffer:
+                        new_chunks.append(
+                            MarkdownChunker._create_new_chunk_from_lines(
+                                chunk.headers, line_buffer
+                            )
+                        )
+                        line_buffer = []
+                    # split line in multiple chunks
+                    new_chunks.extend(
+                        MarkdownChunker._split_line_into_chunks(
+                            line,
+                            line_token_count,
+                            hard_max_chunk_token_count,
+                            chunk.headers,
+                        )
+                    )
+                    continue
                 current_token_count += line_token_count
                 if current_token_count > tokens_per_split and line_buffer:
                     new_chunks.append(
@@ -385,3 +404,40 @@ class MarkdownChunker(AbstractChunker):
             Chunk: the new chunk.
         """
         return Chunk(headers=headers, content=lines, start_line=lines[0].line_idx)
+
+    @staticmethod
+    def _split_line_into_chunks(
+        line: MarkdownLine,
+        line_token_count: int,
+        hard_max_chunk_token_count: int,
+        chunk_headers: list[MarkdownLine],
+    ) -> list[Chunk]:
+        """Splits a line that is too big to fit in a chunk
+        into multiple lines, each producing a chunk.
+
+        NOTE: to avoid the need of tokenizer.decode()
+        we split be character.
+
+        Args:
+            line (MarkdownLine): the line to split.
+            line_token_count (int): the token count of the line.
+            hard_max_chunk_token_count (int): the maximum number of token a chunk can be.
+            chunk_headers (list[MarkdownLine]): the headers of the chunk.
+        """
+        n_splits = line_token_count // hard_max_chunk_token_count + 1
+        n_chars = len(line.text)
+        n_chars_per_split = n_chars // n_splits + 1
+        line_splits = [
+            MarkdownLine(
+                text=line.text[n_chars_per_split * i : n_chars_per_split * (i + 1)],
+                line_idx=line.line_idx,  # WARNING : This creates multiple lines with same idx.
+                isin_code_block=line.isin_code_block,
+                page=line.page,
+            )
+            for i in range(n_splits)
+        ]
+
+        return [
+            MarkdownChunker._create_new_chunk_from_lines(chunk_headers, [line_split])
+            for line_split in line_splits
+        ]
