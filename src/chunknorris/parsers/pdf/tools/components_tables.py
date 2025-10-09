@@ -981,4 +981,4 @@ class TableFinder:
         cells_areas = np.abs((x1 - x0) * (y1 - y0))
         total_cells_area = np.sum(cells_areas)
 
-        return np.isclose(table_area, total_cells_area, rtol=0.02)
+        return np.isclose(table_area, total_cells_area, rtol=0.001)
