@@ -110,7 +110,11 @@ class PdfTable:
                 for cell in self.cells:
                     if cell.contains(grid_cell):  # type: ignore : missing typing in pymuPdf | Rect.contains(r: Rect | Point) -> bool
                         for span in cell.spans:
-                            cell_text += " " + span.text
+                            cell_text += (
+                                " " + span.text
+                                if not span.link
+                                else f"[{span.text}]({span.link.uri})"
+                            )
                 row_text.append(cell_text)
             df_constructor.append(row_text)
 

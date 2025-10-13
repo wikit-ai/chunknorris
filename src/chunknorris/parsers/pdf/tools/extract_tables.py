@@ -151,5 +151,6 @@ class PdfTableExtraction(PdfParserState):
             orientation=span.orientation,
         )
         new_span.order = span.order
+        new_span.link = span.link
 
         return new_span
