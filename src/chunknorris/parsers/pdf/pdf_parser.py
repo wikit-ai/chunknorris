@@ -46,6 +46,8 @@ class PdfParser(
     use_ocr: Literal["always", "auto", "never"] = "auto"
     ocr_language: str = "fra+eng"
     body_line_spacing: float | None = None
+    table_extraction_max_workers: int | None = None
+    table_extraction_multiproc_page_thresh: int = 20
 
     def __init__(
         self,
@@ -56,6 +58,8 @@ class PdfParser(
         use_ocr: Literal["always", "auto", "never"] = "auto",
         ocr_language: str = "fra+eng",
         body_line_spacing: float | None = None,
+        table_extraction_max_workers: int | None = None,
+        table_extraction_multiproc_page_thresh: int = 20,
     ) -> None:
         """Initializes a pdf parser.
 
@@ -77,6 +81,13 @@ class PdfParser(
                 Tweak this parameter for better merging of lines into blocks.
             table_finder (TableFinder | None, optional): the table finder to use for parsing the tables.
                 If None, defauts to a TableFinder with default parameters.
+            table_extraction_max_workers (int | None, optional): Maximum number of worker processes
+                to use for parallel table extraction. If None, automatically uses multiprocessing
+                for documents with page count >= table_extraction_multiproc_page_thresh (defaults to cpu_count()).
+                Set to 1 for sequential processing. Example: PdfParser(table_extraction_max_workers=4).
+            table_extraction_multiproc_page_thresh (int, optional): Minimum number of pages required
+                to automatically enable multiprocessing when table_extraction_max_workers is None.
+                Defaults to 20. Only applies when table_extraction_max_workers is None.
         """
         self.add_headers = add_headers
         self.extract_tables = extract_tables
@@ -84,6 +95,8 @@ class PdfParser(
         self.ocr_language = ocr_language
         self.body_line_spacing = body_line_spacing
         self.table_finder = table_finder
+        self.table_extraction_max_workers = table_extraction_max_workers
+        self.table_extraction_multiproc_page_thresh = table_extraction_multiproc_page_thresh
 
         if self.use_ocr != "never":
             self.check_ocr_config_is_valid()
@@ -133,6 +146,7 @@ class PdfParser(
         Returns:
             MarkdownDoc: The MarkdownDoc to be passed to MarkdownChunker.
         """
+        self.document_bytes = string
         self.document = pymupdf.open(stream=string, filetype="pdf")
         self._set_page_range(page_start, page_end)
 
@@ -404,6 +418,7 @@ class PdfParser(
         self.document.close()
         self._document = None
         self.filepath = None
+        self.document_bytes = None
         self.page_start = 0
         self.page_end = None
         self.spans = []
