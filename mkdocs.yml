@@ -57,6 +57,7 @@ nav:
           - Influence chunking behavior: examples/advanced_chunking.ipynb
       - Parsing:
           - "In-depth usage of PdfParser": examples/pdf_parsing.ipynb
+          - "Parallel table extraction": examples/parallel_table_extraction.ipynb
           # - "Parsing tables": examples/example2.ipynb # TODO
       - Customize:
           - "Implement my own parser": examples/custom_parser.ipynb
