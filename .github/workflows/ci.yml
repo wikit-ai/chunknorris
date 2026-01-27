@@ -26,6 +26,5 @@ jobs:
           restore-keys: |
             mkdocs-material-
       - run: pip install .
-      - run: pip install mkdocs-material==9.5.48 mkdocs-click==0.8.1 mkdocs-jupyter==0.25.1 mkdocstrings-python==1.12.2
-      - run: pip install pymdown-extensions==10.12
+      - run: pip install mkdocs-material==9.5.48 mkdocs-click==0.8.1 mkdocs-jupyter==0.25.1 mkdocstrings[python]==0.27.0 griffe-pydantic==1.2.0
       - run: mkdocs gh-deploy --force
