@@ -8,6 +8,7 @@ import pandas as pd
 import pymupdf  # type: ignore | No stubs
 
 from .components import TextSpan
+from ....core.logger import LOGGER
 
 
 class Cell(pymupdf.Rect):
@@ -185,9 +186,22 @@ class TableFinder:
             return []
         lines_grouped_by_table = self.group_lines_by_table(lines_coordinates)
         # tuples of (line_coord, intersections and cells) for each table. We might only need the cells later if we do not need plotting
-        parsed_tables = [
-            self.build_table(table_lines) for table_lines in lines_grouped_by_table
-        ]
+        parsed_tables: list[
+            tuple[
+                npt.NDArray[np.float32],
+                npt.NDArray[np.float32],
+                npt.NDArray[np.float32],
+            ]
+        ] = []
+        for table_lines in lines_grouped_by_table:
+            try:
+                parsed_tables.append(self.build_table(table_lines))
+            except AssertionError:
+                LOGGER.warning(
+                    "Table parsing failed on page %i (likely because detected lines are not a table).",
+                    page.number,  # type: ignore | missing typing in pymupdf page.number -> int
+                )
+                pass
         # remove tables with no cells
         return [tab for tab in parsed_tables if tab[2].size]
 
