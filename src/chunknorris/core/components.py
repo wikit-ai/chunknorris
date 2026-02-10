@@ -86,8 +86,7 @@ class MarkdownDoc(BaseModel):
         return text
 
     def save(self, output_filepath: str = "./output.md") -> None:
-        """Generates the markdown export of the pdf
-        and saves it in a file
+        """Saves the markdown export of the document in a file.
 
         Args:
             output_filpath (str): the file path where the md is saved

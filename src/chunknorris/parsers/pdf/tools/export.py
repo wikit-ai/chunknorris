@@ -47,8 +47,8 @@ class PdfExport(PdfParserState):
 
     @staticmethod
     def _cleanup_md_string(md_string: str) -> str:
-        """Performs various cleanup operation
-        of the markwdown string output by to_markdown()
+        """Performs various cleanup operations
+        on the markwdown string.
 
         Args:
             md_string (str): the markdown string
