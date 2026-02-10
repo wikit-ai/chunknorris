@@ -41,11 +41,13 @@ class MarkdownDoc(BaseModel):
                     else f"{line.text}\n"
                 )
                 page_dict[line.page] += text
-            return page_dict
+            return {k: self._cleanup_text(v) for k, v in page_dict.items()}
 
-        return "\n".join(
-            f"\n{line.text}\n" if line.text.startswith("#") else line.text
-            for line in self.content
+        return self._cleanup_text(
+            "\n".join(
+                f"\n{line.text}\n" if line.text.startswith("#") else line.text
+                for line in self.content
+            )
         )
 
     @staticmethod
@@ -74,6 +76,14 @@ class MarkdownDoc(BaseModel):
             )
 
         return MarkdownDoc(content=md_lines)
+
+    @staticmethod
+    def _cleanup_text(text: str) -> str:
+        """Cleans up the text"""
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        text = text.strip()
+
+        return text
 
     def save(self, output_filepath: str = "./output.md") -> None:
         """Generates the markdown export of the pdf
