@@ -15,6 +15,7 @@ class PdfParserState:
 
     _document: pymupdf.Document | None = None
     filepath: str | None = None
+    document_bytes: bytes | None = None
     page_start: int = 0
     page_end: int | None = None
     spans: list[TextSpan] = []
@@ -22,6 +23,7 @@ class PdfParserState:
     blocks: list[TextBlock] = []
     tables: list[PdfTable] = []
     table_finder: TableFinder = TableFinder()
+    table_extraction_max_workers: int | None = None
     main_title: str = ""
     main_body_fontsizes: list[float] = []
     document_fontsizes: list[float] = []
