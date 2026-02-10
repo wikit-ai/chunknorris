@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from copy import deepcopy
 from typing import Any
@@ -21,9 +22,31 @@ class MarkdownDoc(BaseModel):
     content: list[MarkdownLine]
     metadata: dict[str, Any] = {}
 
-    def to_string(self) -> str:
-        """Get the markdown string corresponding to the document's content"""
-        return "\n".join(line.text for line in self.content)
+    def to_string(self, keep_track_of_page: bool = False) -> str | dict[int, str]:
+        """Get the markdown string corresponding to the document's content
+
+        Args:
+            keep_track_of_page (bool): if True, returns a dict as {page_number : string}.
+                Page number is 0-based. For non paginated documents, returns {None: entire document string}
+                If False returns a string for the whole document.
+                Defaults to False."""
+        if keep_track_of_page:
+            page_dict: dict[int, str] = {}
+            for line in self.content:
+                if line.page not in page_dict:
+                    page_dict[line.page] = ""
+                text = (
+                    f"\n{line.text}\n\n"
+                    if line.text.startswith("#")
+                    else f"{line.text}\n"
+                )
+                page_dict[line.page] += text
+            return page_dict
+
+        return "\n".join(
+            f"\n{line.text}\n" if line.text.startswith("#") else line.text
+            for line in self.content
+        )
 
     @staticmethod
     def from_string(md_string: str) -> MarkdownDoc:
@@ -51,6 +74,19 @@ class MarkdownDoc(BaseModel):
             )
 
         return MarkdownDoc(content=md_lines)
+
+    def save(self, output_filepath: str = "./output.md") -> None:
+        """Generates the markdown export of the pdf
+        and saves it in a file
+
+        Args:
+            output_filpath (str): the file path where the md is saved
+        """
+        md_string = self.to_string()
+        if not os.path.exists(os.path.dirname(output_filepath)):
+            os.makedirs(os.path.dirname(output_filepath))
+        with open(output_filepath, "w", encoding="utf-8") as f:
+            f.write(md_string)
 
 
 class MarkdownLine(BaseModel):

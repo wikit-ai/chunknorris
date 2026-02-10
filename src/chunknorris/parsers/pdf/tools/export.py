@@ -1,6 +1,4 @@
-import os
 import re
-from collections import defaultdict
 from operator import attrgetter
 
 from ....core.components import MarkdownDoc, MarkdownLine
@@ -13,38 +11,6 @@ class PdfExport(PdfParserState):
     on the elements parsed by the PdfParser. Uses attributes
     such as self.spans, self.lines and self.blocks
     """
-
-    def to_markdown(
-        self,
-        keep_track_of_page: bool = False,
-    ) -> str | dict[int, str]:
-        """Export parsed content to markdown.
-
-        Args:
-            keep_track_of_page (bool) : if True, returns a dict with
-                dict[page_number : string]. Page number is 0-based
-                and page 0 is reserved for main document title.
-                If False returns a string for the whole document.
-                Defaults to False.
-
-        Returns:
-            str | dict[int, str]: the markdown formatted string, split by page if keep_track_of_page = True.
-        """
-        prefix = f"# {self.main_title}\n\n" if self.main_title else ""
-        string_per_page = defaultdict(str)
-        items_to_export = sorted(self.blocks + self.tables, key=attrgetter("order"))
-        for item in items_to_export:
-            if not item.is_header_footer:
-                string_per_page[item.page] += "\n\n" + item.to_markdown()
-        string_per_page = {
-            page: PdfExport._cleanup_md_string(md_string)
-            for page, md_string in string_per_page.items()
-        }
-
-        if keep_track_of_page:
-            return string_per_page
-
-        return prefix + "\n\n".join(string_per_page.values())
 
     def to_markdown_doc(self) -> MarkdownDoc:
         """Generated the markdown doc to be fed in the
@@ -95,16 +61,3 @@ class PdfExport(PdfParserState):
         md_string = re.sub(r"\n{3,}", "\n\n", md_string)
 
         return md_string.strip()
-
-    def save_markdown(self, output_filepath: str = "./output.md") -> None:
-        """Generates the markdown export of the pdf
-        and saves it in a file
-
-        Args:
-            output_filpath (str): the file path where the md is saved
-        """
-        md_string = self.to_markdown()
-        if not os.path.exists(os.path.dirname(output_filepath)):
-            os.makedirs(os.path.dirname(output_filepath))
-        with open(output_filepath, "w", encoding="utf-8") as f:
-            f.write(md_string)
