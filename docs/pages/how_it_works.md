@@ -32,7 +32,7 @@ The chunking strategy of chunkers is based on several principles :
 
 - <span style="color:#FF6E42">**Each chunk must carry homogenous information.**</span> To this end, chunkers use the document's headers to chunk the documents. It helps ensuring that a specific piece of information is not splitted across multiple chunks.
 
-- <span style="color:#FF6E42">**Each chunk must keep contextual information.**</span> A document's section might loose its meaning if the reader as no knowledge of its context. Consequently, all the headers of the parents sections are added ad the top of the chunk.
+- <span style="color:#FF6E42">**Each chunk must keep contextual information.**</span> A document's section might loose its meaning if the reader has no knowledge of its context. Consequently, all the headers of the parents sections are added at the top of the chunk.
 
 - <span style="color:#FF6E42">**All chunks must be of similar sizes.**</span> Indeed, when attempting to retrieve relevant chunks regarding a query, embedding models tend to be sensitive to the length of chunks. Actually, it is likely that a chunk with a text content of similar length to the query will have a high similarity score, while a chunk with a longer text content will see its similarity score descrease despite its relevancy. To prevent this, chunkers try to keep chunks of similar sizes whenever possible.
 
@@ -42,6 +42,6 @@ All chunkers output a list of ``Chunk`` objects containing the chunk's text and 
 
 ### Pipelines
 
-Pipelines are the glue that sticks together a parser and a chunker. They use both to process documents and ensure **constant output quality**.
+Pipelines are the glue that sticks together a parser and a chunker. They use both the parsers and chunkers to process documents and ensure **constant output quality**.
 
 ![pipeline](../assets/pipeline.png)
