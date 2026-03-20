@@ -46,17 +46,17 @@ The role of chunkers is to process the output of parsers in order to obtain rele
 
 The chunking strategy of chunkers is based on several principles:
 - **Each chunk must carry homogenous information.** To this end, they use the document's headers to chunk the documents. It helps ensuring that a specific piece of information is not splitted across multiple chunks.
-- **Each chunk must keep contextual information.** A document's section might loose its meaning if the reader as no knowledge of its context. Consequently, all the headers of the parents sections are added ad the top of the chunk.
+- **Each chunk must keep contextual information.** A document's section might loose its meaning if the reader has no knowledge of its context. Consequently, all the headers of the parents sections are added at the top of the chunk.
 - **All chunks must be of similar sizes.** Indeed, when attempting to retrieve relevant chunks regarding a query, embedding models tend to be sensitive to the length of chunks. Actually, it is likely that a chunk with a text content of similar length to the query will have a high similarity score, while a chunk with a longer text content will see its similarity score descrease despite its relevancy. To prevent this, chunkers try to keep chunks of similar sizes whenever possible.
 
 
 ### Pipelines
 
-Pipelines are the glue that **sticks together a parser and a chunker**. They use both to process documents and ensure constant output quality.
+Pipelines are the glue that **sticks together a parser and a chunker**. They use both the parsers and chunkers to process documents and ensure constant output quality.
 
 ## Usage
 
-You may find more detailed examples in the [examples section](./docs/examples) of the repo. Nevertheless, here is a basic example to get you started, assuming you need to chunk Mardown files.
+You may find more detailed examples in the [examples section](https://wikit-ai.github.io/chunknorris/examples/) of the repo. Nevertheless, here is a basic example to get you started, assuming you need to chunk Mardown files.
 
 ```py
 from chunknorris.parsers import MarkdownParser

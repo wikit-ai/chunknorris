@@ -28,6 +28,8 @@ def test_parse_file(pdf_parser: PdfParser, pdf_filepath: str):
     )
     ### Main Title ###
     assert pdf_parser.main_title == "DUMMY  DOCUMENT  TITLE  Dummy subtitle"
+    # Pagination is intact
+    assert len(parser_output.to_string(keep_track_of_page=True)) == 10
 
 
 def test_parse_tables(pdf_parser: PdfParser, pdf_tables_filepath: str):

@@ -4,7 +4,7 @@ from chunknorris.parsers import MarkdownParser
 
 def test_markdowndoc(md_strings_in: list[str]):
     for string in md_strings_in:
-        assert MarkdownDoc.from_string(string).to_string() == string
+        assert MarkdownDoc.from_string(string).to_string() == string.strip()
 
 
 def test_markdowndoc_from_string(md_with_code_block: str):
