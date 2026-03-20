@@ -436,9 +436,9 @@ class TableFinder:
         sorted_idxs = np.argsort(values)
         x = np.asarray(values)[sorted_idxs]
         diff = x[1:] - x[:-1]
-        gps = np.concatenate([[0], np.cumsum(diff >= self.line_width_threshold)])
+        split_at = np.where(diff >= self.line_width_threshold)[0] + 1
 
-        return [sorted_idxs[gps == i] for i in range(gps[-1] + 1)]
+        return np.split(sorted_idxs, split_at)
 
     def _normalize_lines_grid(
         self,
@@ -854,11 +854,12 @@ class TableFinder:
         new_lines: list[list[float]] = []
         for i, line in enumerate(lines):
             split_pts = intersections[on_line[i]]
-            # Sort split points by distance from line start
-            x0, y0 = line[0], line[1]
-            order = np.argsort(np.abs(split_pts[:, 0] - x0) + np.abs(split_pts[:, 1] - y0))
+            # Sort split points along the line's varying coordinate (lines are axis-aligned)
+            is_h = line[1] == line[3]
+            order = np.argsort(split_pts[:, 0] if is_h else split_pts[:, 1])
             split_pts = split_pts[order]
             # Subdivide
+            x0, y0 = line[0], line[1]
             cx, cy = x0, y0
             for x, y in split_pts:
                 new_lines.append([cx, cy, x, y])
@@ -891,47 +892,57 @@ class TableFinder:
             npt.NDArray[np.float32]: An array of shape (n, 4) containing
             all the coordinates of the segments + every possible recombination.
         """
-        combined_lines = lines_coordinates
-        n_prev_combined_lines = -1
+        # Instead of a fixpoint loop, compute all combinations in one pass:
+        # group collinear segments (same y for H-lines, same x for V-lines),
+        # find connected chains (segments sharing exact endpoints), then enumerate
+        # all O(n²) (start_i, end_j) super-segment pairs within each chain.
+        is_h = lines_coordinates[:, 1] == lines_coordinates[:, 3]
+        combos: list[npt.NDArray[np.float32]] = [lines_coordinates]
 
-        while len(combined_lines) != n_prev_combined_lines:
-            n_prev_combined_lines = len(combined_lines)
-            new_combinations: list[list[float]] = []
-            # Build dictionaries for quick lookup of start and end points
-            start_to_indices: dict[tuple[float, float], list[int]] = {}
-            for idx, line in enumerate(combined_lines):
-                start_point = (line[0], line[1])
-                start_to_indices.setdefault(start_point, []).append(idx)
+        for lines, axis_col, pos0_col, pos1_col in (
+            (lines_coordinates[is_h],  1, 0, 2),  # H: group by y, vary along x
+            (lines_coordinates[~is_h], 0, 1, 3),  # V: group by x, vary along y
+        ):
+            if not lines.size:
+                continue
 
-            for idx, (x0, y0, x1, y1) in enumerate(combined_lines):
-                # Look for lines that start where the current line ends
-                end_point = (x1, y1)
-                if end_point in start_to_indices:
-                    # Combine with all lines starting at the end point
-                    for next_idx in start_to_indices[end_point]:
-                        # only pay attention to vertical/horizontal lines
-                        if (
-                            combined_lines[next_idx][2] == x0
-                            or combined_lines[next_idx][3] == y1
-                        ):
-                            new_line = [
-                                x0,
-                                y0,
-                                combined_lines[next_idx][2],
-                                combined_lines[next_idx][3],
-                            ]
-                            new_combinations.append(new_line)
+            axis_vals = lines[:, axis_col]
+            # Normalise direction so start <= end
+            c0 = np.minimum(lines[:, pos0_col], lines[:, pos1_col])
+            c1 = np.maximum(lines[:, pos0_col], lines[:, pos1_col])
 
-            if new_combinations:
-                # Add new combinations and remove duplicates
-                combined_lines = np.unique(
-                    np.vstack(
-                        (combined_lines, np.array(new_combinations, dtype=np.float32))
-                    ),
-                    axis=0,
-                )
+            for ax in np.unique(axis_vals):
+                mask = axis_vals == ax
+                g_c0 = c0[mask]
+                g_c1 = c1[mask]
+                order = np.argsort(g_c0)
+                g_c0 = g_c0[order]
+                g_c1 = g_c1[order]
 
-        return combined_lines
+                # Connected components: a boundary exists where no current segment
+                # ends exactly at the next segment's start (i.e. there is a gap).
+                running_max_end = np.maximum.accumulate(g_c1)
+                is_new_comp = np.concatenate([[True], g_c0[1:] > running_max_end[:-1]])
+                comp_ids = np.cumsum(is_new_comp) - 1
+
+                for comp_id in range(int(comp_ids[-1]) + 1):
+                    seg_mask = comp_ids == comp_id
+                    seg_c0 = g_c0[seg_mask]
+                    seg_c1 = g_c1[seg_mask]
+                    n = len(seg_c0)
+                    if n < 2:
+                        continue  # single segment — no new combinations
+
+                    # All (i, j) pairs with i < j: super-segment from start[i] to end[j]
+                    ii, jj = np.triu_indices(n, k=1)
+                    fixed = np.full(len(ii), ax, dtype=np.float32)
+                    if axis_col == 1:  # H lines: y is fixed
+                        new = np.column_stack([seg_c0[ii], fixed, seg_c1[jj], fixed])
+                    else:  # V lines: x is fixed
+                        new = np.column_stack([fixed, seg_c0[ii], fixed, seg_c1[jj]])
+                    combos.append(new)
+
+        return np.unique(np.vstack(combos), axis=0)
 
     @staticmethod
     def _table_sanity_check(cells_coords: npt.NDArray[np.float32]) -> bool:
