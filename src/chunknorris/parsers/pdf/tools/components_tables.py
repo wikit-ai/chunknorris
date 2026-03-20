@@ -50,12 +50,10 @@ class PdfTable:
 
     @cached_property
     def bbox(self) -> pymupdf.Rect:
-        return pymupdf.Rect(
-            min(self.cells, key=lambda cell: cell.x0).x0,  # type: ignore : missing typing in pymuPdf | Rect.x0 : float
-            min(self.cells, key=lambda cell: cell.y0).y0,  # type: ignore : missing typing in pymuPdf | Rect.y0 : float
-            max(self.cells, key=lambda cell: cell.x1).x1,  # type: ignore : missing typing in pymuPdf | Rect.x1 : float
-            max(self.cells, key=lambda cell: cell.y1).y1,  # type: ignore : missing typing in pymuPdf | Rect.y1 : float
-        )
+        coords = np.array([[c.x0, c.y0, c.x1, c.y1] for c in self.cells], dtype=np.float32)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+        mins = coords.min(axis=0)
+        maxs = coords.max(axis=0)
+        return pymupdf.Rect(mins[0], mins[1], maxs[2], maxs[3])
 
     @property
     def is_header_footer(self) -> bool:
@@ -76,18 +74,9 @@ class PdfTable:
         Returns:
             list[list[Cells]] : the list of cells, organized by row
         """
-        y_lines = sorted(
-            list(
-                set(cell.y0 for cell in self.cells)  # type: ignore : missing typing in pymuPdf | Rect.y0 : float
-                | set(cell.y1 for cell in self.cells)  # type: ignore : missing typing in pymuPdf | Rect.y1 : float
-            )
-        )
-        x_lines = sorted(
-            list(
-                set(cell.x0 for cell in self.cells)  # type: ignore : missing typing in pymuPdf | Rect.x0 : float
-                | set(cell.x1 for cell in self.cells)  # type: ignore : missing typing in pymuPdf | Rect.x1 : float
-            )
-        )
+        coords = np.array([[c.x0, c.y0, c.x1, c.y1] for c in self.cells], dtype=np.float32)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+        y_lines = sorted(set(coords[:, 1]) | set(coords[:, 3]))
+        x_lines = sorted(set(coords[:, 0]) | set(coords[:, 2]))
         grid_cells: list[list[Cell]] = []
         for y0, y1 in zip(y_lines[:-1], y_lines[1:]):
             row_cells: list[Cell] = []
@@ -104,19 +93,27 @@ class PdfTable:
             pd.DataFrame : the table as dataframe
         """
         grid_cells = self.get_table_grid()
+        # Build actual cell coords array once for vectorized containment check
+        ac = np.array([[c.x0, c.y0, c.x1, c.y1] for c in self.cells], dtype=np.float32)  # type: ignore : missing typing in pymuPdf | Rect coords : float
         df_constructor: list[list[str]] = []
         for grid_row in grid_cells:
             row_text: list[str] = []
             for grid_cell in grid_row:
                 cell_text = ""
-                for cell in self.cells:
-                    if cell.contains(grid_cell):  # type: ignore : missing typing in pymuPdf | Rect.contains(r: Rect | Point) -> bool
-                        for span in cell.spans:
-                            cell_text += (
-                                " " + span.text
-                                if not span.link
-                                else f"[{span.text}]({span.link.uri})"
-                            )
+                # Vectorized containment: find actual cell(s) that fully contain this grid sub-cell
+                mask = (
+                    (ac[:, 0] <= grid_cell.x0)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+                    & (ac[:, 1] <= grid_cell.y0)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+                    & (ac[:, 2] >= grid_cell.x1)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+                    & (ac[:, 3] >= grid_cell.y1)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+                )
+                for i in np.where(mask)[0]:
+                    for span in self.cells[i].spans:
+                        cell_text += (
+                            " " + span.text
+                            if not span.link
+                            else f"[{span.text}]({span.link.uri})"
+                        )
                 row_text.append(cell_text)
             df_constructor.append(row_text)
 
@@ -362,6 +359,10 @@ class TableFinder:
         """
         Find all intersection points between line segments.
 
+        All lines are guaranteed axis-aligned (H or V) by _filter_lines upstream,
+        so we split them and compute intersections analytically in O(n_h * n_v)
+        instead of the general O(n^2) formula.
+
         Args:
             coordinates (npt.NDArray[np.float32]): A numpy array of shape (n_lines, 4) where each row is the coordinates
                 of the points of the lines like (x0, y0, x1, y1).
@@ -370,53 +371,34 @@ class TableFinder:
             (npt.NDArray[np.float32]): A numpy array of shape (n_intersections, 2) where each row is a the coordinates
                 an intersection point between 2 segments like (x, y).
         """
-        # Extract coordinates
-        x1, y1, x2, y2 = self._bounding_boxes(coordinates)
-        # Create matrices for pairwise combinations
-        n = coordinates.shape[0]
-        x1_tile = np.tile(x1, (n, 1))
-        y1_tile = np.tile(y1, (n, 1))
-        x2_tile = np.tile(x2, (n, 1))
-        y2_tile = np.tile(y2, (n, 1))
-        x3_tile = x1_tile.T
-        y3_tile = y1_tile.T
-        x4_tile = x2_tile.T
-        y4_tile = y2_tile.T
-        # Calculate denominators
-        denom = (x1_tile - x2_tile) * (y3_tile - y4_tile) - (y1_tile - y2_tile) * (
-            x3_tile - x4_tile
-        )
-        # Avoid division by zero for parallel lines
-        denom[denom == 0] = np.nan
-        # Calculate intersection points
-        px = (
-            (x1_tile * y2_tile - y1_tile * x2_tile) * (x3_tile - x4_tile)
-            - (x1_tile - x2_tile) * (x3_tile * y4_tile - y3_tile * x4_tile)
-        ) / denom
-        py = (
-            (x1_tile * y2_tile - y1_tile * x2_tile) * (y3_tile - y4_tile)
-            - (y1_tile - y2_tile) * (x3_tile * y4_tile - y3_tile * x4_tile)
-        ) / denom
-        # Check if intersection points are within the segments
-        within_segment1 = (
-            (np.minimum(x1_tile, x2_tile) - self.snap_tolerance <= px)
-            & (px <= np.maximum(x1_tile, x2_tile) + self.snap_tolerance)
-            & (np.minimum(y1_tile, y2_tile) - self.snap_tolerance <= py)
-            & (py <= np.maximum(y1_tile, y2_tile) + self.snap_tolerance)
-        )
-        within_segment2 = (
-            (np.minimum(x3_tile, x4_tile) - self.snap_tolerance <= px)
-            & (px <= np.maximum(x3_tile, x4_tile) + self.snap_tolerance)
-            & (np.minimum(y3_tile, y4_tile) - self.snap_tolerance <= py)
-            & (py <= np.maximum(y3_tile, y4_tile) + self.snap_tolerance)
-        )
-        valid_intersections = within_segment1 & within_segment2
-        # Extract valid intersection points
-        intersections = np.column_stack(
-            (px[valid_intersections], py[valid_intersections])
-        )
+        is_horizontal = coordinates[:, 1] == coordinates[:, 3]
+        h = coordinates[is_horizontal]
+        v = coordinates[~is_horizontal]
 
-        return np.unique(intersections, axis=0)
+        if not h.size or not v.size:
+            return np.empty((0, 2), dtype=np.float32)
+
+        tol = self.snap_tolerance
+        # Use min/max to handle unordered endpoints from pymupdf
+        hx0 = np.minimum(h[:, 0], h[:, 2])
+        hx1 = np.maximum(h[:, 0], h[:, 2])
+        hy  = h[:, 1]  # == h[:, 3] guaranteed by _filter_lines
+
+        vx  = v[:, 0]  # == v[:, 2] guaranteed by _filter_lines
+        vy0 = np.minimum(v[:, 1], v[:, 3])
+        vy1 = np.maximum(v[:, 1], v[:, 3])
+
+        # Broadcast to shape (n_h, n_v): H line i intersects V line j iff
+        # vx[j] is within H line i's x-range AND hy[i] is within V line j's y-range
+        valid = (
+            (hx0[:, None] - tol <= vx[None, :]) & (vx[None, :] <= hx1[:, None] + tol)
+            & (vy0[None, :] - tol <= hy[:, None]) & (hy[:, None] <= vy1[None, :] + tol)
+        )
+        hi, vi = np.where(valid)
+        if not hi.size:
+            return np.empty((0, 2), dtype=np.float32)
+
+        return np.unique(np.column_stack([vx[vi], hy[hi]]), axis=0)
 
     def normalize_table_grid(
         self, grid_points: npt.NDArray[np.float32]
@@ -451,11 +433,12 @@ class TableFinder:
         of the groups.
         For examples, if values = [2, 3, 5, 10] and threshold = 2,
         it will return [[0,1], [2], [3]]"""
-        x = np.sort(values)
+        sorted_idxs = np.argsort(values)
+        x = np.asarray(values)[sorted_idxs]
         diff = x[1:] - x[:-1]
         gps = np.concatenate([[0], np.cumsum(diff >= self.line_width_threshold)])
 
-        return [np.argsort(values)[gps == i] for i in range(gps[-1] + 1)]
+        return [sorted_idxs[gps == i] for i in range(gps[-1] + 1)]
 
     def _normalize_lines_grid(
         self,
@@ -772,22 +755,19 @@ class TableFinder:
         """
         x0, y0, x1, y1 = TableFinder._bounding_boxes(cells_coords)
         # build array of shape (n_cells, 4, 4), in which we have the coords of the 4 borders of each cell.
-        left_lines = np.array([x0, y0, x0, y1]).T
-        top_lines = np.array([x0, y0, x1, y0]).T
-        right_lines = np.array([x1, y0, x1, y1]).T
-        bottom_lines = np.array([x0, y1, x1, y1]).T
+        left_lines = np.stack([x0, y0, x0, y1], axis=1)
+        top_lines = np.stack([x0, y0, x1, y0], axis=1)
+        right_lines = np.stack([x1, y0, x1, y1], axis=1)
+        bottom_lines = np.stack([x0, y1, x1, y1], axis=1)
 
         cells_borders = np.stack(
             [left_lines, top_lines, right_lines, bottom_lines], axis=1
-        )
-        lines_coordinates_set = set(map(tuple, lines_coordinates))
-        valid_borders_mask = np.array(
-            [
-                [tuple(border) in lines_coordinates_set for border in cell_borders]
-                for cell_borders in cells_borders
-            ],
-            np.bool_,
-        )
+        )  # (n_cells, 4, 4)
+        # Encode each 4-float border as bytes for vectorized membership test via np.isin
+        dt = np.dtype([("a", np.float32), ("b", np.float32), ("c", np.float32), ("d", np.float32)])
+        borders_struct = cells_borders.reshape(-1, 4).astype(np.float32).view(dt).ravel()
+        lines_struct = lines_coordinates.astype(np.float32).view(dt).ravel()
+        valid_borders_mask = np.isin(borders_struct, lines_struct).reshape(len(cells_coords), 4)
 
         return valid_borders_mask
 
