@@ -1,4 +1,5 @@
 import re
+from functools import cached_property
 from operator import attrgetter
 from typing import Any
 
@@ -47,7 +48,7 @@ class PdfTable:
         self.cells = cells
         self.page = page
 
-    @property
+    @cached_property
     def bbox(self) -> pymupdf.Rect:
         return pymupdf.Rect(
             min(self.cells, key=lambda cell: cell.x0).x0,  # type: ignore : missing typing in pymuPdf | Rect.x0 : float
@@ -60,7 +61,7 @@ class PdfTable:
     def is_header_footer(self) -> bool:
         return all(span.is_header_footer for cell in self.cells for span in cell.spans)
 
-    @property
+    @cached_property
     def order(self) -> int:
         return min(
             (span for cell in self.cells for span in cell.spans),
@@ -535,16 +536,14 @@ class TableFinder:
                 line intersects with other lines.
         """
         x1, y1, x2, y2 = TableFinder._bounding_boxes(coordinates)
-
-        n = len(coordinates)
-        adjacency_matrix = np.zeros((n, n), dtype=bool)
-        for i in range(n):
-            for j in range(i + 1, n):
-                if self._bboxes_intersect_or_nearly(
-                    (x1[i], y1[i], x2[i], y2[i]), (x1[j], y1[j], x2[j], y2[j])
-                ):
-                    adjacency_matrix[i, j] = True
-                    adjacency_matrix[j, i] = True
+        tol = self.snap_tolerance
+        adjacency_matrix = (
+            (x1[:, None] <= x2[None, :] + tol)
+            & (x2[:, None] + tol >= x1[None, :])
+            & (y1[:, None] <= y2[None, :] + tol)
+            & (y2[:, None] + tol >= y1[None, :])
+        )
+        np.fill_diagonal(adjacency_matrix, False)
 
         return adjacency_matrix
 
@@ -856,30 +855,39 @@ class TableFinder:
         Returns:
             npt.NDArray[np.float32]: the cooridiantes of subdivided lines.
         """
-        new_lines: list[tuple[float, float, float, float]] = []
+        lx0, ly0, lx1, ly1 = lines[:, 0], lines[:, 1], lines[:, 2], lines[:, 3]
+        px, py = intersections[:, 0], intersections[:, 1]
 
-        for line in lines:
-            split_points: list[tuple[float, float]] = []
+        # Vectorized point-on-line check: shape (n_lines, n_intersections)
+        cross = (
+            (py[None, :] - ly0[:, None]) * (lx1 - lx0)[:, None]
+            - (px[None, :] - lx0[:, None]) * (ly1 - ly0)[:, None]
+        )
+        on_line = (
+            (np.abs(cross) < 1e-6)
+            & (np.minimum(lx0, lx1)[:, None] <= px[None, :])
+            & (px[None, :] <= np.maximum(lx0, lx1)[:, None])
+            & (np.minimum(ly0, ly1)[:, None] <= py[None, :])
+            & (py[None, :] <= np.maximum(ly0, ly1)[:, None])
+        )
 
-            # Check each intersection to see if it lies on the line
-            for intersection in intersections:
-                if TableFinder.point_is_on_line(intersection, line):
-                    split_points.append(intersection)
-            # Sort the split points in the order they appear on the line
-            x0, y0 = line[:2]
-            split_points.sort(
-                key=lambda p, x0=x0, y0=y0: abs(p[0] - x0) + abs(p[1] - y0)
-            )
-            # Subdivide the line at each of these split points
-            x1, y1 = line[:2]
-            for x, y in split_points:
-                new_lines.append([x1, y1, x, y])
-                x1, y1 = x, y
-            new_lines.append([x1, y1, line[2], line[3]])
-        # Get uniues lines and remove lines that are actually points
-        new_lines = np.unique(np.array(new_lines), axis=0)
-        return new_lines[
-            (new_lines[:, 0] != new_lines[:, 2]) | (new_lines[:, 1] != new_lines[:, 3])
+        new_lines: list[list[float]] = []
+        for i, line in enumerate(lines):
+            split_pts = intersections[on_line[i]]
+            # Sort split points by distance from line start
+            x0, y0 = line[0], line[1]
+            order = np.argsort(np.abs(split_pts[:, 0] - x0) + np.abs(split_pts[:, 1] - y0))
+            split_pts = split_pts[order]
+            # Subdivide
+            cx, cy = x0, y0
+            for x, y in split_pts:
+                new_lines.append([cx, cy, x, y])
+                cx, cy = x, y
+            new_lines.append([cx, cy, line[2], line[3]])
+
+        new_lines_arr = np.unique(np.array(new_lines), axis=0)
+        return new_lines_arr[
+            (new_lines_arr[:, 0] != new_lines_arr[:, 2]) | (new_lines_arr[:, 1] != new_lines_arr[:, 3])
         ]
 
     @staticmethod
@@ -944,36 +952,6 @@ class TableFinder:
                 )
 
         return combined_lines
-
-    @staticmethod  # TODO : investigate if possible to replace _get_recombined_lines with this one
-    def _get_recombined_lines_v2(
-        lines_coordinates: npt.NDArray[np.float32],
-    ) -> npt.NDArray[np.float32]:
-        """WARNING : IMPLEMENTATION DOESN'T WORK
-        I leave it here for further investigation as it might be faster and easier to read
-        than current used implementation : _get_recombined_lines.
-        """
-        prev_n_lines = -1  # dummy to go in while loop
-        while prev_n_lines < lines_coordinates.shape[0]:
-            prev_n_lines = lines_coordinates.shape[0]
-            start_points = lines_coordinates[:, :2]
-            end_points = lines_coordinates[:, 2:]
-            # Get mask where start point and endpoints match
-            mask = (start_points[:, np.newaxis, :] == end_points[np.newaxis, :, :]).all(
-                axis=2
-            )  # PROBLEM WITH THIS LINE
-            new_lines = np.hstack(
-                [start_points[mask.any(axis=0)], end_points[mask.any(axis=1)]]
-            )
-            new_lines = new_lines[
-                (new_lines[:, 0] == new_lines[:, 2])
-                | (new_lines[:, 1] == new_lines[:, 3])
-            ]  # only vertical and horizontal lines
-            lines_coordinates = np.unique(
-                np.vstack([new_lines, lines_coordinates]), axis=0
-            )
-
-        return lines_coordinates
 
     @staticmethod
     def _table_sanity_check(cells_coords: npt.NDArray[np.float32]) -> bool:
