@@ -70,33 +70,27 @@ class PdfTable:
         return min(spans, key=attrgetter("order")).order
 
     @cached_property
+    def _y_lines(self) -> list[int]:
+        """Sorted unique y-edge coordinates (rounded to int) of all cells."""
+        coords = self._coords
+        return sorted(set(coords[:, 1].round().astype(int)) | set(coords[:, 3].round().astype(int)))
+
+    @cached_property
+    def _x_lines(self) -> list[int]:
+        """Sorted unique x-edge coordinates (rounded to int) of all cells."""
+        coords = self._coords
+        return sorted(set(coords[:, 0].round().astype(int)) | set(coords[:, 2].round().astype(int)))
+
+    @cached_property
     def has_merged_cells(self) -> bool:
         """Returns True if any cell in the table spans multiple rows or columns."""
-        coords = self._coords
-        n_rows = (
-            len(
-                set(coords[:, 1].round().astype(int).tolist())
-                | set(coords[:, 3].round().astype(int).tolist())
-            )
-            - 1
-        )
-        n_cols = (
-            len(
-                set(coords[:, 0].round().astype(int).tolist())
-                | set(coords[:, 2].round().astype(int).tolist())
-            )
-            - 1
-        )
+        n_rows = len(self._y_lines) - 1
+        n_cols = len(self._x_lines) - 1
         return len(self.cells) < n_rows * n_cols
 
-    def get_table_grid(self) -> list[list[Cell]]:
-        """Gets the grid of the table.
-        As some self.cells might be merged cells, this
-        method get the grid of cells as if no cells were merged
-
-        Returns:
-            list[list[Cells]] : the list of cells, organized by row
-        """
+    @cached_property
+    def _grid(self) -> list[list[Cell]]:
+        """Grid of cells as if no cells were merged (inner cache for get_table_grid)."""
         coords = self._coords
         y_lines = sorted(set(coords[:, 1]) | set(coords[:, 3]))
         x_lines = sorted(set(coords[:, 0]) | set(coords[:, 2]))
@@ -106,8 +100,17 @@ class PdfTable:
             for x0, x1 in zip(x_lines[:-1], x_lines[1:]):
                 row_cells.append(Cell(x0, y0, x1, y1))
             grid_cells.append(row_cells)
-
         return grid_cells
+
+    def get_table_grid(self) -> list[list[Cell]]:
+        """Gets the grid of the table.
+        As some self.cells might be merged cells, this
+        method get the grid of cells as if no cells were merged
+
+        Returns:
+            list[list[Cells]] : the list of cells, organized by row
+        """
+        return self._grid
 
     def to_pandas(self, has_header: bool = True) -> pd.DataFrame:
         """Transforms this table to a pd.DataFrame
@@ -167,17 +170,8 @@ class PdfTable:
         Returns:
             str: the HTML table string
         """
-        coords = self._coords
-        y_lines = sorted(
-            set(coords[:, 1].round().astype(int).tolist())
-            | set(coords[:, 3].round().astype(int).tolist())
-        )
-        x_lines = sorted(
-            set(coords[:, 0].round().astype(int).tolist())
-            | set(coords[:, 2].round().astype(int).tolist())
-        )
-        y_to_idx = {y: i for i, y in enumerate(y_lines)}
-        x_to_idx = {x: i for i, x in enumerate(x_lines)}
+        y_to_idx = {y: i for i, y in enumerate(self._y_lines)}
+        x_to_idx = {x: i for i, x in enumerate(self._x_lines)}
 
         rows: dict[int, list[tuple[int, int, int, Cell]]] = {}
         for cell in self.cells:
@@ -189,10 +183,10 @@ class PdfTable:
 
         html_rows = [sorted(rows[i], key=lambda x: x[0]) for i in sorted(rows)]
 
-        lines = ["<table>"]
+        parts = ["<table>"]
         for i, row_cells in enumerate(html_rows):
             tag = "th" if (has_header and i == 0) else "td"
-            lines.append("  <tr>")
+            parts.append("<tr>")
             for col_idx, colspan, rowspan, cell in row_cells:
                 text = " ".join(
                     f"[{span.text}]({span.link.uri})" if span.link else span.text
@@ -203,11 +197,11 @@ class PdfTable:
                     attrs += f' colspan="{colspan}"'
                 if rowspan > 1:
                     attrs += f' rowspan="{rowspan}"'
-                lines.append(f"    <{tag}{attrs}>{text}</{tag}>")
-            lines.append("  </tr>")
-        lines.append("</table>")
+                parts.append(f"<{tag}{attrs}>{text}</{tag}>")
+            parts.append("</tr>")
+        parts.append("</table>")
 
-        return "\n".join(lines)
+        return "".join(parts)
 
     def to_markdown(self, has_header: bool = True) -> str:
         """Builds a markdown string from the provided table.
@@ -285,10 +279,11 @@ class TableFinder:
         for table_lines in lines_grouped_by_table:
             try:
                 parsed_tables.append(self.build_table(table_lines))
-            except AssertionError:
+            except Exception:
                 LOGGER.warning(
                     "Table parsing failed on page %i (likely because detected lines are not a table).",
                     page.number,  # type: ignore | missing typing in pymupdf page.number -> int
+                    exc_info=True,
                 )
         # remove tables with no cells
         return [tab for tab in parsed_tables if tab[2].size]
@@ -529,6 +524,10 @@ class TableFinder:
         sorted_idxs = np.argsort(values)
         x = np.asarray(values)[sorted_idxs]
         diff = x[1:] - x[:-1]
+        # Use line_width_threshold here (not snap_tolerance): normalization needs a
+        # slightly larger window than intersection detection to produce a clean, minimal
+        # grid. snap_tolerance=3 keeps too many near-duplicate points distinct, bloating
+        # the grid and slowing downstream cell detection.
         split_at = np.where(diff >= self.line_width_threshold)[0] + 1
 
         return np.split(sorted_idxs, split_at)
@@ -547,7 +546,8 @@ class TableFinder:
                 as an array of shape (n_intersections, 2)
 
         Returns:
-            npt.NDArray[np.float32]: _description_
+            npt.NDArray[np.float32]: line coordinates remapped onto the intersection grid,
+                shape (n_lines, 4).
         """
         x_targets = np.unique(intersections[:, 0])
         y_targets = np.unique(intersections[:, 1])
@@ -742,17 +742,20 @@ class TableFinder:
                 corresponding to provided points.
         """
         cells = TableFinder._get_potential_cells_for_point(topleft_point, intersections)
-        if cells.size:
-            cells = TableFinder._remove_cells_with_invalid_borders(
-                cells, lines_combinations
+        if not cells.size:
+            return np.empty((0, 4), dtype=np.float32)
+
+        cells = TableFinder._remove_cells_with_invalid_borders(cells, lines_combinations)
+        cells = TableFinder._remove_nesting_cells(cells)
+        if cells.shape[0] > 1:
+            LOGGER.warning(
+                "Merged cell resolution produced %d candidates for point (%g, %g); "
+                "expected 0 or 1. Keeping the first.",
+                cells.shape[0],
+                topleft_point[0],
+                topleft_point[1],
             )
-            cells = TableFinder._remove_nesting_cells(cells)
-            assert cells.shape[0] in [
-                0,
-                1,
-            ], "Error, only 1 or 0 cells should be returned."
-        else:
-            cells = np.empty((0, 4), dtype=np.float32)
+            return cells[:1]
 
         return cells
 
