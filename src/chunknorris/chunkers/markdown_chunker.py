@@ -268,19 +268,18 @@ class MarkdownChunker(AbstractChunker):
         line_buffer: list[MarkdownLine] = []
         headers_buffer = [None] * 7
         prev_buffer = headers_buffer.copy()
+        current_word_count = 0
         for line in chunk.content:
             line_buffer.append(line)
+            current_word_count += len(line.text.split())
             if line.is_header:
                 header_level = line.get_header_level()
-                headers_buffer[header_level:] = [None] * len(
-                    headers_buffer[header_level:]
-                )
+                headers_buffer[header_level:] = [None] * (7 - header_level)
                 headers_buffer[header_level] = line
                 continue
             # Do not split the chunk at this line to preserve tables, bullet points list and code blocks.
             elif line.is_bullet_point or line.isin_code_block or line.isin_table:
                 continue
-            current_word_count = len("\n".join(lb.text for lb in line_buffer).split())
             if current_word_count > split_word_size:
                 chunks.append(
                     MarkdownChunker._create_new_chunk_from_lines(
@@ -289,6 +288,7 @@ class MarkdownChunker(AbstractChunker):
                 )
                 line_buffer = []
                 prev_buffer = headers_buffer
+                current_word_count = 0
         if line_buffer:
             chunks.append(
                 MarkdownChunker._create_new_chunk_from_lines(chunk.headers, line_buffer)

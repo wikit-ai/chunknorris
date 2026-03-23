@@ -7,7 +7,7 @@ from copy import deepcopy
 from typing import Any
 from unicodedata import normalize
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
 
 class MarkdownDoc(BaseModel):
@@ -127,7 +127,7 @@ class MarkdownLine(BaseModel):
     @property
     def isin_table(self) -> bool:
         """whether or not the line belongs to a table"""
-        return self.text.startswith("|")
+        return self.text.startswith("|") or self.text.startswith("<table>")
 
     @property
     def is_header(self):
@@ -162,6 +162,7 @@ class Chunk(BaseModel):
     headers: list[MarkdownLine]
     content: list[MarkdownLine]
     start_line: int
+    _word_count_cache: int | None = PrivateAttr(default=None)
 
     @computed_field
     @property
@@ -169,26 +170,20 @@ class Chunk(BaseModel):
         """Gets the amount of words in the chunk's content
         (headers not included)
         """
-        text_content = "\n".join((line.text for line in self.content))
-        return len(re.findall(r"\w+", Chunk._cleanup_text(text_content)))
+        if self._word_count_cache is None:
+            text_content = "\n".join(line.text for line in self.content)
+            self._word_count_cache = len(re.findall(r"\w+", Chunk._cleanup_text(text_content)))
+        return self._word_count_cache
 
     @computed_field
     @property
     def start_page(self) -> int | None:
-        pages = [line.page for line in self.content if line.page is not None]
-        if pages:
-            return min(pages)
-        else:
-            return None
+        return min((line.page for line in self.content if line.page is not None), default=None)
 
     @computed_field
     @property
     def end_page(self) -> int | None:
-        pages = [line.page for line in self.content if line.page is not None]
-        if pages:
-            return max(pages)
-        else:
-            return None
+        return max((line.page for line in self.content if line.page is not None), default=None)
 
     def __str__(self) -> str:
         return self.get_text()
@@ -204,9 +199,9 @@ class Chunk(BaseModel):
             str: the text
         """
         text = ""
-        if prepend_headers:
-            text += "\n\n".join((header.text for header in self.headers)) + "\n\n"
-        text += "\n".join((line.text for line in self.content))
+        if prepend_headers and self.headers:
+            text += "\n\n".join(header.text for header in self.headers) + "\n\n"
+        text += "\n".join(line.text for line in self.content)
         if remove_links:
             text = Chunk.remove_links(text)
 
@@ -223,11 +218,7 @@ class Chunk(BaseModel):
             str: the formated text
         """
         pattern = r"\[?!?\[(.*?)\](\(.*\)\])?\((.*\..+?)(\s.*)?\)"
-        matches = re.finditer(pattern, text)
-        for match in matches:
-            text = text.replace(match[0], match[1])
-
-        return text
+        return re.sub(pattern, r"\1", text)
 
     @staticmethod
     def _cleanup_text(text: str) -> str:
