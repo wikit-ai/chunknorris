@@ -69,6 +69,26 @@ class PdfTable:
             return 0
         return min(spans, key=attrgetter("order")).order
 
+    @cached_property
+    def has_merged_cells(self) -> bool:
+        """Returns True if any cell in the table spans multiple rows or columns."""
+        coords = self._coords
+        n_rows = (
+            len(
+                set(coords[:, 1].round().astype(int).tolist())
+                | set(coords[:, 3].round().astype(int).tolist())
+            )
+            - 1
+        )
+        n_cols = (
+            len(
+                set(coords[:, 0].round().astype(int).tolist())
+                | set(coords[:, 2].round().astype(int).tolist())
+            )
+            - 1
+        )
+        return len(self.cells) < n_rows * n_cols
+
     def get_table_grid(self) -> list[list[Cell]]:
         """Gets the grid of the table.
         As some self.cells might be merged cells, this
@@ -116,7 +136,9 @@ class PdfTable:
                 for i in np.where(mask)[0]:
                     for span in self.cells[i].spans:
                         parts.append(
-                            f"[{span.text}]({span.link.uri})" if span.link else span.text
+                            f"[{span.text}]({span.link.uri})"
+                            if span.link
+                            else span.text
                         )
                 row_text.append(" ".join(parts))
             df_constructor.append(row_text)
@@ -133,16 +155,74 @@ class PdfTable:
 
         return df
 
+    def to_html(self, has_header: bool = True) -> str:
+        """Builds an HTML string from the provided table, preserving merged cells
+        via colspan/rowspan attributes. Each cell's text is written exactly once,
+        avoiding the duplication that occurs when de-merging.
+
+        Args:
+            has_header (bool): whether the first row should be rendered as <th> elements.
+                Defaults to True.
+
+        Returns:
+            str: the HTML table string
+        """
+        coords = self._coords
+        y_lines = sorted(
+            set(coords[:, 1].round().astype(int).tolist())
+            | set(coords[:, 3].round().astype(int).tolist())
+        )
+        x_lines = sorted(
+            set(coords[:, 0].round().astype(int).tolist())
+            | set(coords[:, 2].round().astype(int).tolist())
+        )
+        y_to_idx = {y: i for i, y in enumerate(y_lines)}
+        x_to_idx = {x: i for i, x in enumerate(x_lines)}
+
+        rows: dict[int, list[tuple[int, int, int, Cell]]] = {}
+        for cell in self.cells:
+            row_idx = y_to_idx[round(cell.y0)]  # type: ignore : missing typing in pymuPdf | Rect coords : float
+            col_idx = x_to_idx[round(cell.x0)]  # type: ignore
+            rowspan = y_to_idx[round(cell.y1)] - row_idx  # type: ignore
+            colspan = x_to_idx[round(cell.x1)] - col_idx  # type: ignore
+            rows.setdefault(row_idx, []).append((col_idx, colspan, rowspan, cell))
+
+        html_rows = [sorted(rows[i], key=lambda x: x[0]) for i in sorted(rows)]
+
+        lines = ["<table>"]
+        for i, row_cells in enumerate(html_rows):
+            tag = "th" if (has_header and i == 0) else "td"
+            lines.append("  <tr>")
+            for col_idx, colspan, rowspan, cell in row_cells:
+                text = " ".join(
+                    f"[{span.text}]({span.link.uri})" if span.link else span.text
+                    for span in cell.spans
+                )
+                attrs = ""
+                if colspan > 1:
+                    attrs += f' colspan="{colspan}"'
+                if rowspan > 1:
+                    attrs += f' rowspan="{rowspan}"'
+                lines.append(f"    <{tag}{attrs}>{text}</{tag}>")
+            lines.append("  </tr>")
+        lines.append("</table>")
+
+        return "\n".join(lines)
+
     def to_markdown(self, has_header: bool = True) -> str:
-        """Builds a markdown string from the provided table
+        """Builds a markdown string from the provided table.
+        Falls back to HTML when the table contains merged cells, to avoid
+        duplicating cell text across de-merged sub-cells.
 
         Args:
             has_header (bool): whether the first row should be used as column headers.
                 Defaults to True.
 
         Returns:
-            str: the markdown string
+            str: the markdown (or HTML) string
         """
+        if self.has_merged_cells:
+            return self.to_html(has_header=has_header)
         table_as_md = self.to_pandas(has_header=has_header).to_markdown(index=False)
         table_as_md = re.sub(r"\s{3,}", "  ", table_as_md)
         table_as_md = re.sub(r"-{3,}", "---", table_as_md)
@@ -392,17 +472,19 @@ class TableFinder:
         # Use min/max to handle unordered endpoints from pymupdf
         hx0 = np.minimum(h[:, 0], h[:, 2])
         hx1 = np.maximum(h[:, 0], h[:, 2])
-        hy  = h[:, 1]  # == h[:, 3] guaranteed by _filter_lines
+        hy = h[:, 1]  # == h[:, 3] guaranteed by _filter_lines
 
-        vx  = v[:, 0]  # == v[:, 2] guaranteed by _filter_lines
+        vx = v[:, 0]  # == v[:, 2] guaranteed by _filter_lines
         vy0 = np.minimum(v[:, 1], v[:, 3])
         vy1 = np.maximum(v[:, 1], v[:, 3])
 
         # Broadcast to shape (n_h, n_v): H line i intersects V line j iff
         # vx[j] is within H line i's x-range AND hy[i] is within V line j's y-range
         valid = (
-            (hx0[:, None] - tol <= vx[None, :]) & (vx[None, :] <= hx1[:, None] + tol)
-            & (vy0[None, :] - tol <= hy[:, None]) & (hy[:, None] <= vy1[None, :] + tol)
+            (hx0[:, None] - tol <= vx[None, :])
+            & (vx[None, :] <= hx1[:, None] + tol)
+            & (vy0[None, :] - tol <= hy[:, None])
+            & (hy[:, None] <= vy1[None, :] + tol)
         )
         hi, vi = np.where(valid)
         if not hi.size:
@@ -758,10 +840,16 @@ class TableFinder:
             [left_lines, top_lines, right_lines, bottom_lines], axis=1
         )  # (n_cells, 4, 4)
         # Encode each 4-float border as bytes for vectorized membership test via np.isin
-        dt = np.dtype([("a", np.float32), ("b", np.float32), ("c", np.float32), ("d", np.float32)])
-        borders_struct = cells_borders.reshape(-1, 4).astype(np.float32).view(dt).ravel()
+        dt = np.dtype(
+            [("a", np.float32), ("b", np.float32), ("c", np.float32), ("d", np.float32)]
+        )
+        borders_struct = (
+            cells_borders.reshape(-1, 4).astype(np.float32).view(dt).ravel()
+        )
         lines_struct = lines_coordinates.astype(np.float32).view(dt).ravel()
-        valid_borders_mask = np.isin(borders_struct, lines_struct).reshape(len(cells_coords), 4)
+        valid_borders_mask = np.isin(borders_struct, lines_struct).reshape(
+            len(cells_coords), 4
+        )
 
         return valid_borders_mask
 
@@ -815,10 +903,9 @@ class TableFinder:
         px, py = intersections[:, 0], intersections[:, 1]
 
         # Vectorized point-on-line check: shape (n_lines, n_intersections)
-        cross = (
-            (py[None, :] - ly0[:, None]) * (lx1 - lx0)[:, None]
-            - (px[None, :] - lx0[:, None]) * (ly1 - ly0)[:, None]
-        )
+        cross = (py[None, :] - ly0[:, None]) * (lx1 - lx0)[:, None] - (
+            px[None, :] - lx0[:, None]
+        ) * (ly1 - ly0)[:, None]
         on_line = (
             (np.abs(cross) < 1e-6)
             & (np.minimum(lx0, lx1)[:, None] <= px[None, :])
@@ -840,7 +927,8 @@ class TableFinder:
 
         new_lines_arr = np.unique(np.vstack(new_lines), axis=0)
         return new_lines_arr[
-            (new_lines_arr[:, 0] != new_lines_arr[:, 2]) | (new_lines_arr[:, 1] != new_lines_arr[:, 3])
+            (new_lines_arr[:, 0] != new_lines_arr[:, 2])
+            | (new_lines_arr[:, 1] != new_lines_arr[:, 3])
         ]
 
     @staticmethod
@@ -872,7 +960,7 @@ class TableFinder:
         combos: list[npt.NDArray[np.float32]] = [lines_coordinates]
 
         for lines, axis_col, pos0_col, pos1_col in (
-            (lines_coordinates[is_h],  1, 0, 2),  # H: group by y, vary along x
+            (lines_coordinates[is_h], 1, 0, 2),  # H: group by y, vary along x
             (lines_coordinates[~is_h], 0, 1, 3),  # V: group by x, vary along y
         ):
             if not lines.size:
