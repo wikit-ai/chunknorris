@@ -1,4 +1,3 @@
-from copy import deepcopy
 from itertools import groupby
 from operator import attrgetter
 
@@ -57,19 +56,35 @@ class PdfTableExtraction(PdfParserState):
             raw_cells (list[pymupdf.Rect]): a list of rects that are cell of a table.
             spans_on_page (list[TextSpan]): a list of spans that are on the same page of the table.
         """
+        # Compute the bounding box of the whole table and pre-filter spans to only
+        # those that overlap with it, avoiding a full O(n_cells × n_spans) scan.
+        table_x0 = min(c[0] for c in raw_cells)
+        table_y0 = min(c[1] for c in raw_cells)
+        table_x1 = max(c[2] for c in raw_cells)
+        table_y1 = max(c[3] for c in raw_cells)
+        spans_in_table = [
+            span for span in spans_on_page
+            if not (
+                span.bbox.x1 <= table_x0  # type: ignore : missing typing in pymuPdf | Rect coords : float
+                or span.bbox.x0 >= table_x1  # type: ignore
+                or span.bbox.y1 <= table_y0  # type: ignore
+                or span.bbox.y0 >= table_y1  # type: ignore
+            )
+        ]
+
+        small_bboxes = [PdfTableExtraction._get_smaller_bbox(span.bbox) for span in spans_in_table]
+
         cells: list[Cell] = []
         for cell_coords in raw_cells:
             cell = Cell(*cell_coords)
             spans_to_bind: list[TextSpan] = []
-            for span in spans_on_page:
-                small_bbox = PdfTableExtraction._get_smaller_bbox(span.bbox)
+            for span, small_bbox in zip(spans_in_table, small_bboxes):
                 # if the cell contains the span -> bind span to cell
                 if cell.contains(small_bbox):  # type: ignore : missing typing in pymupdf -> Rect.contains(r: Point | Rect) -> bool
                     spans_to_bind.append(span)
                 # elif cell intersects the span -> span is on multiple cells -> create new splitted span
                 elif cell.intersects(small_bbox):  # type: ignore : missing typing in pymupdf -> Rect.intersects(r: Rect) -> bool
-                    splitted_span = PdfTableExtraction._split_span(cell, span)
-                    spans_to_bind.append(splitted_span)
+                    spans_to_bind.append(PdfTableExtraction._split_span(cell, span))
 
             cell.spans = spans_to_bind
             cells.append(cell)
@@ -126,7 +141,7 @@ class PdfTableExtraction(PdfParserState):
                 that is inside the cell.
         """
         # Compute the amount of character that are inside the cell
-        intersect = deepcopy(cell).intersect(span.bbox)  # type: ignore : missing typing in pymuPdf | Rect.intersect(r : Rect) -> bool
+        intersect = pymupdf.Rect(cell) & span.bbox  # type: ignore : missing typing in pymuPdf | Rect.__and__ -> Rect
         x_portion_to_keep = intersect.width / span.bbox.width  # type: ignore : missing typing in pymuPdf | Rect.width : float
         n_char_to_keep = int(round(x_portion_to_keep * len(span.text), 0))
         # Determine which portion of span is in cell (left or right)

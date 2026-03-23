@@ -49,10 +49,13 @@ class PdfTable:
         self.page = page
 
     @cached_property
+    def _coords(self) -> npt.NDArray[np.float32]:
+        return np.array([[c.x0, c.y0, c.x1, c.y1] for c in self.cells], dtype=np.float32)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+
+    @cached_property
     def bbox(self) -> pymupdf.Rect:
-        coords = np.array([[c.x0, c.y0, c.x1, c.y1] for c in self.cells], dtype=np.float32)  # type: ignore : missing typing in pymuPdf | Rect coords : float
-        mins = coords.min(axis=0)
-        maxs = coords.max(axis=0)
+        mins = self._coords.min(axis=0)
+        maxs = self._coords.max(axis=0)
         return pymupdf.Rect(mins[0], mins[1], maxs[2], maxs[3])
 
     @property
@@ -61,10 +64,10 @@ class PdfTable:
 
     @cached_property
     def order(self) -> int:
-        return min(
-            (span for cell in self.cells for span in cell.spans),
-            key=attrgetter("order"),
-        ).order
+        spans = [span for cell in self.cells for span in cell.spans]
+        if not spans:
+            return 0
+        return min(spans, key=attrgetter("order")).order
 
     def get_table_grid(self) -> list[list[Cell]]:
         """Gets the grid of the table.
@@ -74,7 +77,7 @@ class PdfTable:
         Returns:
             list[list[Cells]] : the list of cells, organized by row
         """
-        coords = np.array([[c.x0, c.y0, c.x1, c.y1] for c in self.cells], dtype=np.float32)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+        coords = self._coords
         y_lines = sorted(set(coords[:, 1]) | set(coords[:, 3]))
         x_lines = sorted(set(coords[:, 0]) | set(coords[:, 2]))
         grid_cells: list[list[Cell]] = []
@@ -86,20 +89,22 @@ class PdfTable:
 
         return grid_cells
 
-    def to_pandas(self) -> pd.DataFrame:
+    def to_pandas(self, has_header: bool = True) -> pd.DataFrame:
         """Transforms this table to a pd.DataFrame
+
+        Args:
+            has_header (bool): whether the first row should be used as column headers.
+                Defaults to True.
 
         Returns:
             pd.DataFrame : the table as dataframe
         """
         grid_cells = self.get_table_grid()
-        # Build actual cell coords array once for vectorized containment check
-        ac = np.array([[c.x0, c.y0, c.x1, c.y1] for c in self.cells], dtype=np.float32)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+        ac = self._coords
         df_constructor: list[list[str]] = []
         for grid_row in grid_cells:
             row_text: list[str] = []
             for grid_cell in grid_row:
-                cell_text = ""
                 # Vectorized containment: find actual cell(s) that fully contain this grid sub-cell
                 mask = (
                     (ac[:, 0] <= grid_cell.x0)  # type: ignore : missing typing in pymuPdf | Rect coords : float
@@ -107,32 +112,38 @@ class PdfTable:
                     & (ac[:, 2] >= grid_cell.x1)  # type: ignore : missing typing in pymuPdf | Rect coords : float
                     & (ac[:, 3] >= grid_cell.y1)  # type: ignore : missing typing in pymuPdf | Rect coords : float
                 )
+                parts: list[str] = []
                 for i in np.where(mask)[0]:
                     for span in self.cells[i].spans:
-                        cell_text += (
-                            " " + span.text
-                            if not span.link
-                            else f"[{span.text}]({span.link.uri})"
+                        parts.append(
+                            f"[{span.text}]({span.link.uri})" if span.link else span.text
                         )
-                row_text.append(cell_text)
+                row_text.append(" ".join(parts))
             df_constructor.append(row_text)
 
+        if has_header:
+            df = pd.DataFrame(df_constructor[1:], columns=df_constructor[0])
+        else:
+            df = pd.DataFrame(df_constructor)
         df = (
-            pd.DataFrame(df_constructor[1:], columns=df_constructor[0])
-            .drop_duplicates()
-            .dropna(axis=0, how="all")  # type: ignore | type of dropna in partially unknown
-            .dropna(axis=1, how="all")  # type: ignore | type of dropna in partially unknown
+            df.drop_duplicates()
+            .dropna(axis=0, how="all")  # type: ignore | type of dropna is partially unknown
+            .dropna(axis=1, how="all")  # type: ignore | type of dropna is partially unknown
         )
 
         return df
 
-    def to_markdown(self) -> str:
+    def to_markdown(self, has_header: bool = True) -> str:
         """Builds a markdown string from the provided table
+
+        Args:
+            has_header (bool): whether the first row should be used as column headers.
+                Defaults to True.
 
         Returns:
             str: the markdown string
         """
-        table_as_md = self.to_pandas().to_markdown(index=False)
+        table_as_md = self.to_pandas(has_header=has_header).to_markdown(index=False)
         table_as_md = re.sub(r"\s{3,}", "  ", table_as_md)
         table_as_md = re.sub(r"-{3,}", "---", table_as_md)
 
@@ -199,7 +210,6 @@ class TableFinder:
                     "Table parsing failed on page %i (likely because detected lines are not a table).",
                     page.number,  # type: ignore | missing typing in pymupdf page.number -> int
                 )
-                pass
         # remove tables with no cells
         return [tab for tab in parsed_tables if tab[2].size]
 
@@ -279,15 +289,15 @@ class TableFinder:
             drawing_items: list[tuple[Any]] = []
             for item in drawing["items"]:
                 if item[0] == "re":
-                    if item[1].width < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.witdh : float
-                        mid_x = (item[1].x1 - item[1].x0) / 2 + item[1].x0  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
+                    if item[1].width < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.width : float
+                        mid_x = (item[1].x0 + item[1].x1) / 2  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
                         item = (
                             "l",
                             pymupdf.Point(mid_x, item[1].y0),  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
                             pymupdf.Point(mid_x, item[1].y1),  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
                         )
                     elif item[1].height < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.height : float
-                        mid_y = (item[1].y1 - item[1].y0) / 2 + item[1].y0  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
+                        mid_y = (item[1].y0 + item[1].y1) / 2  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
                         item = (
                             "l",
                             pymupdf.Point(item[1].x0, mid_y),  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
@@ -415,6 +425,7 @@ class TableFinder:
         Returns:
             npt.NDArray[np.float32] : the aligned points.
         """
+        grid_points = grid_points.copy()
         x = grid_points[:, 0]
         groups_by_x = self._get_grouped_idxes(x)
         for group in groups_by_x:
@@ -456,9 +467,8 @@ class TableFinder:
         Returns:
             npt.NDArray[np.float32]: _description_
         """
-        sorted_x_y = np.sort(intersections, axis=0)
-        x_targets = np.unique(sorted_x_y[:, 0])
-        y_targets = np.unique(sorted_x_y[:, 1])
+        x_targets = np.unique(intersections[:, 0])
+        y_targets = np.unique(intersections[:, 1])
 
         x_bins = (x_targets[1:] + x_targets[:-1]) / 2
         y_bins = (y_targets[1:] + y_targets[:-1]) / 2
@@ -488,22 +498,6 @@ class TableFinder:
         y2 = np.maximum(coordinates[:, 1], coordinates[:, 3])
 
         return x1, y1, x2, y2
-
-    def _bboxes_intersect_or_nearly(
-        self,
-        bbox_a: tuple[float],
-        bbox_b: tuple[float],
-    ) -> bool:
-        """Check if two bounding boxes of lines a and b intersect or are nearly intersecting.
-        Arguments must be bbox coordinates as a tuple representing (x1, y1, x2, y2)."""
-        x1a, y1a, x2a, y2a = bbox_a
-        x1b, y1b, x2b, y2b = bbox_b
-        return (
-            (x1a <= x2b + self.snap_tolerance)
-            & (x2a + self.snap_tolerance >= x1b)
-            & (y1a <= y2b + self.snap_tolerance)
-            & (y2a + self.snap_tolerance >= y1b)
-        )
 
     def _build_adjacency_matrix(
         self, coordinates: npt.NDArray[np.float32]
@@ -800,24 +794,6 @@ class TableFinder:
         return cells_coords[containment_mask]
 
     @staticmethod
-    def point_is_on_line(
-        point: tuple[float, float],
-        line: tuple[float, float, float, float],
-        tolerance: float = 1e-6,
-    ) -> bool:
-        """Check if a point is on a line segment."""
-        x1, y1, x2, y2 = line
-        x, y = point
-        # Check if the point lies on the line using vector cross product
-        if abs((y - y1) * (x2 - x1) - (x - x1) * (y2 - y1)) > tolerance:
-            return False
-        # Check if the point is within the line segment bounds
-        if min(x1, x2) <= x <= max(x1, x2) and min(y1, y2) <= y <= max(y1, y2):
-            return True
-
-        return False
-
-    @staticmethod
     def subdivide_lines(
         lines: npt.NDArray[np.float32], intersections: npt.NDArray[np.float32]
     ) -> npt.NDArray[np.float32]:
@@ -851,22 +827,18 @@ class TableFinder:
             & (py[None, :] <= np.maximum(ly0, ly1)[:, None])
         )
 
-        new_lines: list[list[float]] = []
+        new_lines: list[npt.NDArray[np.float32]] = []
         for i, line in enumerate(lines):
             split_pts = intersections[on_line[i]]
             # Sort split points along the line's varying coordinate (lines are axis-aligned)
             is_h = line[1] == line[3]
             order = np.argsort(split_pts[:, 0] if is_h else split_pts[:, 1])
             split_pts = split_pts[order]
-            # Subdivide
-            x0, y0 = line[0], line[1]
-            cx, cy = x0, y0
-            for x, y in split_pts:
-                new_lines.append([cx, cy, x, y])
-                cx, cy = x, y
-            new_lines.append([cx, cy, line[2], line[3]])
+            # Build ordered sequence: start → split points → end, then zip consecutive pairs
+            all_pts = np.vstack([[line[0], line[1]], split_pts, [line[2], line[3]]])
+            new_lines.append(np.column_stack([all_pts[:-1], all_pts[1:]]))
 
-        new_lines_arr = np.unique(np.array(new_lines), axis=0)
+        new_lines_arr = np.unique(np.vstack(new_lines), axis=0)
         return new_lines_arr[
             (new_lines_arr[:, 0] != new_lines_arr[:, 2]) | (new_lines_arr[:, 1] != new_lines_arr[:, 3])
         ]
@@ -957,12 +929,7 @@ class TableFinder:
             bool: returns True if the sanity check is passed, and False if the table
                 is likely to be a false detection.
         """
-        x0, y0, x1, y1 = (
-            cells_coords[:, 0],
-            cells_coords[:, 1],
-            cells_coords[:, 2],
-            cells_coords[:, 3],
-        )
+        x0, y0, x1, y1 = cells_coords.T
 
         table_area = (np.max(x1) - np.min(x0)) * (np.max(y1) - np.min(y0))
         cells_areas = np.abs((x1 - x0) * (y1 - y0))
