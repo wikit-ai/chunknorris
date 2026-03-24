@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from pydantic import validate_call
-
 
 class AbstractParser(ABC):
     """A parser is meant to parse either a string
@@ -12,12 +10,10 @@ class AbstractParser(ABC):
     must be the same.
     """
 
-    @validate_call
     @abstractmethod
     def parse_string(self, string: str) -> Any:
         pass
 
-    @validate_call
     @abstractmethod
     def parse_file(self, filepath: str) -> Any:
         pass

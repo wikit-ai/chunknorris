@@ -7,6 +7,11 @@ import yaml
 from ...core.components import MarkdownDoc
 from ..abstract_parser import AbstractParser
 
+_RE_EXCESS_NEWLINES = re.compile(r"(?:\n\s*){3,}")
+_RE_BASE64_IMAGE = re.compile(
+    r"data:image/(?:bmp|gif|ico|jpg|jpeg|png|svg\+xml|webp|x-icon);base64,[a-zA-Z0-9+/]+=*"
+)
+
 
 class MarkdownParser(AbstractParser):
 
@@ -19,7 +24,7 @@ class MarkdownParser(AbstractParser):
             string (str): the markdown formatted string
 
         Returns:
-            TypedString: the formatted markdown string
+            MarkdownDoc: the formatted markdown document
         """
         formatted_string = MarkdownParser.cleanup_string(string)
         formatted_string, metadata = MarkdownParser.parse_metadata(formatted_string)
@@ -30,15 +35,15 @@ class MarkdownParser(AbstractParser):
         return md_doc
 
     def parse_file(self, filepath: str) -> MarkdownDoc:
-        """Reads and parses a markdown-formatted string.
+        """Reads and parses a markdown file.
         Ensures that the formatting is suited to be passed
         to the MarkdownChunker.
 
         Args:
-            filepath (FilePath): the path to a .md file
+            filepath (str): the path to a .md file
 
         Returns:
-            TypedString: the typed string
+            MarkdownDoc: the parsed markdown document
         """
         md_string = MarkdownParser.read_file(filepath)
 
@@ -69,7 +74,7 @@ class MarkdownParser(AbstractParser):
         Args:
             md_string (str): the markdown string
 
-        Return:
+        Returns:
             str: the string with formatted headers
         """
         output_lines: list[str] = []
@@ -80,10 +85,10 @@ class MarkdownParser(AbstractParser):
             if line.startswith("```") and "```" not in line[3:]:
                 within_code_block = not within_code_block
             if not within_code_block:
-                if line.startswith("==="):
+                if line.startswith("===") and output_lines and prev_line.strip():
                     output_lines.pop()
                     output_lines.append(f"# {prev_line}")
-                elif line.startswith("---"):
+                elif line.startswith("---") and output_lines and prev_line.strip():
                     output_lines.pop()
                     output_lines.append(f"## {prev_line}")
                 else:
@@ -113,7 +118,7 @@ class MarkdownParser(AbstractParser):
             str: the content of the docu, with the metadata section removed
             dict[str, Any]: the parsed metadata, as dict
         """
-        if not md_string[:3] == "---":  # no metadata
+        if not md_string.startswith("---"):  # no metadata
             return md_string, {}
         # find idx of lines belonging to metadata
         lines = md_string.split("\n")
@@ -132,20 +137,16 @@ class MarkdownParser(AbstractParser):
 
     @staticmethod
     def cleanup_string(md_string: str) -> str:
-        """Cleans up the html string.
+        """Cleans up the markdown string.
 
         Args:
-            md_string (str): the markdown string, output from
-                apply_markdownify()
+            md_string (str): the markdown string
 
         Returns:
             str: the cleaned up string.
         """
         md_string = md_string.strip()
-        md_string = re.sub(r"(?:\n\s*){3,}", "\n\n", md_string)
-
-        # remove base64 images
-        pattern = r"data:image\/[bmp,gif,ico,jpg,png,svg,webp,x\-icon,svg+xml]+;base64,[a-zA-Z0-9,+,\/]+={0,2}"
-        md_string = re.sub(pattern, "", md_string)
+        md_string = _RE_EXCESS_NEWLINES.sub("\n\n", md_string)
+        md_string = _RE_BASE64_IMAGE.sub("", md_string)
 
         return md_string
