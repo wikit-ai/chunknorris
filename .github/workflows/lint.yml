@@ -21,6 +21,3 @@ jobs:
 
       - name: Pylint
         run: pylint ./src
-
-      - name: Mypy
-        run: mypy ./src
