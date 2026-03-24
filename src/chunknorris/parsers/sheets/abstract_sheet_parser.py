@@ -1,5 +1,5 @@
 import re
-from typing import Generic, TypeVar
+from typing import Generic
 
 import pandas as pd
 
