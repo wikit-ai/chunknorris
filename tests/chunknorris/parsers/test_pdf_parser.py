@@ -16,8 +16,8 @@ def test_parse_file(pdf_parser: PdfParser, pdf_filepath: str):
     assert len(pdf_parser.tables) == 1
     # Assert teble cells have been parsed correctly
     assert len(pdf_parser.tables[0].cells) == 18
-    # Assert the merged cell are unpacked on multiple cells when converting to markdown
-    assert len(re.findall("No", pdf_parser.tables[0].to_markdown())) == 5
+    # Assert the merged cell are lead to outputing the tables as HTML
+    assert len(re.findall("No", pdf_parser.tables[0].to_markdown())) == 2
     ### Table of content detection ###
     # Assert table of content has been found
     assert len(pdf_parser.toc) == 10
@@ -39,9 +39,9 @@ def test_parse_tables(pdf_parser: PdfParser, pdf_tables_filepath: str):
     assert len(pdf_parser.tables[0].cells) == 18
     assert pdf_parser.tables[0].to_pandas().shape == (4, 5)
     table_0_as_md = pdf_parser.tables[0].to_markdown()
-    assert len(re.findall("Col2", table_0_as_md)) == 4
-    assert len(re.findall("Col3 Col4", table_0_as_md)) == 4
-    assert len(re.findall("Col5", table_0_as_md)) == 4
+    assert len(re.findall("Col2", table_0_as_md)) == 1
+    assert len(re.findall("Col3 Col4", table_0_as_md)) == 1
+    assert len(re.findall("Col5", table_0_as_md)) == 3
 
 
 def test_parse_string(pdf_parser: PdfParser, pdf_filepath: str):
