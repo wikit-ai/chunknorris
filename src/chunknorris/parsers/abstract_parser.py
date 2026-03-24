@@ -19,3 +19,6 @@ class AbstractParser(ABC, Generic[InputT]):
     @abstractmethod
     def parse_file(self, filepath: str) -> Any:
         pass
+
+
+AnyParser = AbstractParser[str] | AbstractParser[bytes]
