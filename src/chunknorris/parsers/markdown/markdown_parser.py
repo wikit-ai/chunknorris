@@ -13,7 +13,7 @@ _RE_BASE64_IMAGE = re.compile(
 )
 
 
-class MarkdownParser(AbstractParser):
+class MarkdownParser(AbstractParser[str]):
 
     def parse_string(self, string: str) -> MarkdownDoc:
         """Parses a markdown-formatted string.

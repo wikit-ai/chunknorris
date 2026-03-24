@@ -22,7 +22,7 @@ _MARKDOWNIFY_OPTIONS: dict = {
 }
 
 
-class HTMLParser(AbstractParser):
+class HTMLParser(AbstractParser[str]):
 
     def parse_string(self, string: str) -> MarkdownDoc:
         """Parses an HTML-formatted string.
