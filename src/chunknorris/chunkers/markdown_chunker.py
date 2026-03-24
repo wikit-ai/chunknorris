@@ -21,6 +21,7 @@ class MarkdownChunker(AbstractChunker):
 
     def __init__(
         self,
+        *,
         max_headers_to_use: Literal["h1", "h2", "h3", "h4", "h5", "h6"] = "h4",
         max_chunk_word_count: int = 200,
         hard_max_chunk_word_count: int = 400,
