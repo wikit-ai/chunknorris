@@ -117,6 +117,8 @@ class PdfParser(
         self.filepath = filepath
         if Path(filepath).suffix.lower() != ".pdf":
             raise PdfParserException("Only .pdf files can be passed to PdfParser.")
+        if self._document is not None:
+            self._document.close()
         self.document = pymupdf.open(filepath, filetype="pdf")
         return self._parse_and_export(page_start, page_end)
 
@@ -136,20 +138,25 @@ class PdfParser(
         Returns:
             MarkdownDoc: The MarkdownDoc to be passed to MarkdownChunker.
         """
+        if self._document is not None:
+            self._document.close()
         self.document = pymupdf.open(stream=string, filetype="pdf")
         return self._parse_and_export(page_start, page_end)
 
     def _parse_and_export(self, page_start: int, page_end: int | None) -> MarkdownDoc:
         """Shared implementation for parse_file and parse_string.
-        Runs the parse pipeline and guarantees the document is closed on exit.
+        The document is kept open after parsing so that plotting methods
+        (plot_pdf, plot_drawings, etc.) remain usable. Call cleanup_memory()
+        or parse a new file to release it.
         """
         try:
             self._set_page_range(page_start, page_end)
             self._parse_document()
             return self.to_markdown_doc()
-        finally:
+        except Exception:
             self._document.close()
             self._document = None
+            raise
 
     def _set_page_range(self, page_start: int, page_end: int | None) -> None:
         """Initializes the self.page_start and self.page_end
