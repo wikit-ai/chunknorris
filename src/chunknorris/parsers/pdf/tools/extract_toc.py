@@ -13,12 +13,20 @@ class PdfTocExtraction(PdfParserState):
     Intended to be a component inherited by pdfParser => PdfParser(PdfTocExtraction)
     """
 
+    _TOC_MAX_PAGE: int = 15  # pages to scan for TOC entries
+    _TOC_MAX_GAP: int = 10  # non-matching lines before assuming TOC is over
+    _MAX_HEADER_TEXT_LENGTH: int = 100  # blocks longer than this are unlikely to be headers
+
     # Compiled patterns used to detect header levels from numeric schemas (e.g. 1., 1.1, 1.1.1)
     _HEADER_PATTERNS: list[tuple[int, re.Pattern[str]]] = [
         (3, re.compile(r"^(\d+)[\s\.\)]+(\d+)[\s\.\)]+(\d+)")),
         (2, re.compile(r"^(\d+)[\s\.\)]+(\d+)")),
         (1, re.compile(r"^(\d+)[\s\.\)]*")),
     ]
+    # Compiled pattern used to detect table-of-content entries (title + dot leaders + page number)
+    _TOC_PATTERN: re.Pattern[str] = re.compile(
+        r"(.+?)(?:\s+)?[\.\_\-\s….]{5,}(?:\s+)?(?:[pP]\.\s*)?(\d+)"
+    )
 
     def get_toc(self) -> list[TocTitle]:
         """Gets the table of content of a document.
@@ -62,7 +70,7 @@ class PdfTocExtraction(PdfParserState):
         Returns:
             list[TocTitle] | None: The toc titles found in metadatas
         """
-        toc = self.document.get_toc() if self.document is not None else []  # type: ignore : missing typing in pymupdf | Document.get_toc() -> list[tuple[int, str, int, dict[str, Any]]]
+        toc = self.document.get_toc()  # type: ignore : missing typing in pymupdf | Document.get_toc() -> list[tuple[int, str, int, dict[str, Any]]]
         if not toc:
             return []
 
@@ -94,20 +102,16 @@ class PdfTocExtraction(PdfParserState):
             list[TocTitle]: The potential titles of the table of content
                 and their caracteristics
         """
-        toc_pattern = re.compile(
-            r"(.+?)(?:\s+)?[\.\_\-\s….]{5,}(?:\s+)?(?:[pP]\.\s*)?(\d+)"
-        )
-
         toc_titles: list[TocTitle] = []
         until_last_match_counter = 0
-        # browse through lines up to page 15 to get those which might be TOC
+        # browse through lines up to _TOC_MAX_PAGE to get those which might be TOC
         for i, line in enumerate(self.lines):
-            if line.page >= 15:
-                continue
+            if line.page >= self._TOC_MAX_PAGE:
+                break  # lines are page-ordered, no need to scan further
             until_last_match_counter += 1
-            if len(toc_titles) > 3 and until_last_match_counter > 10:
+            if len(toc_titles) > 3 and until_last_match_counter > self._TOC_MAX_GAP:
                 break  # likely we have found a TOC and are now browsing through document
-            match = re.match(toc_pattern, line.text)
+            match = re.match(self._TOC_PATTERN, line.text)
             # regex may match ZIP codes or phone numbers => check page is less than 3 numbers
             if match and len(match[2]) < 4:
                 until_last_match_counter = 0
@@ -248,7 +252,7 @@ class PdfTocExtraction(PdfParserState):
             if (
                 block.orientation != (1.0, 0.0)
                 or block.is_empty
-                or len(block.text) > 100
+                or len(block.text) > self._MAX_HEADER_TEXT_LENGTH
             ):
                 # do not consider non-horizontal text or long texts as they are unlikely to be headers
                 continue

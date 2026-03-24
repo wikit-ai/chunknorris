@@ -1,9 +1,9 @@
 import os
 from collections import Counter, defaultdict
 from itertools import groupby
-from math import isclose
+
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import pymupdf  # type: ignore : no stubs
 
@@ -40,7 +40,12 @@ class PdfParser(
 ):
     """Class that parses the document."""
 
-    table_finder: TableFinder = TableFinder()
+    # Tolerance (pts) for grouping spans on the same y-position into one line
+    _LINE_Y_TOLERANCE: int = 3
+    # Extra gap (pts) added on top of body_line_spacing to detect block boundaries
+    _BLOCK_SPACING_TOLERANCE: int = 2
+
+    table_finder: TableFinder
     extract_tables: bool = True
     add_headers: bool = True
     use_ocr: Literal["always", "auto", "never"] = "auto"
@@ -78,17 +83,14 @@ class PdfParser(
             table_finder (TableFinder | None, optional): the table finder to use for parsing the tables.
                 If None, defauts to a TableFinder with default parameters.
         """
+        super().__init__()
         self.add_headers = add_headers
         self.extract_tables = extract_tables
         self.use_ocr = use_ocr
         self.ocr_language = ocr_language
         self.body_line_spacing = body_line_spacing
+        self._configured_body_line_spacing = body_line_spacing  # preserved for cleanup reset
         self.table_finder = table_finder
-        # Initialise mutable per-instance state (avoids sharing class-level defaults)
-        self.spans = []
-        self.lines = []
-        self.blocks = []
-        self.tables = []
 
         if self.use_ocr != "never":
             self.check_ocr_config_is_valid()
@@ -116,11 +118,7 @@ class PdfParser(
         if Path(filepath).suffix.lower() != ".pdf":
             raise PdfParserException("Only .pdf files can be passed to PdfParser.")
         self.document = pymupdf.open(filepath, filetype="pdf")
-        self._set_page_range(page_start, page_end)
-
-        self._parse_document()
-
-        return self.to_markdown_doc()
+        return self._parse_and_export(page_start, page_end)
 
     @timeit
     @validate_args
@@ -139,11 +137,19 @@ class PdfParser(
             MarkdownDoc: The MarkdownDoc to be passed to MarkdownChunker.
         """
         self.document = pymupdf.open(stream=string, filetype="pdf")
-        self._set_page_range(page_start, page_end)
+        return self._parse_and_export(page_start, page_end)
 
-        self._parse_document()
-
-        return self.to_markdown_doc()
+    def _parse_and_export(self, page_start: int, page_end: int | None) -> MarkdownDoc:
+        """Shared implementation for parse_file and parse_string.
+        Runs the parse pipeline and guarantees the document is closed on exit.
+        """
+        try:
+            self._set_page_range(page_start, page_end)
+            self._parse_document()
+            return self.to_markdown_doc()
+        finally:
+            self._document.close()
+            self._document = None
 
     def _set_page_range(self, page_start: int, page_end: int | None) -> None:
         """Initializes the self.page_start and self.page_end
@@ -174,10 +180,11 @@ class PdfParser(
         self.lines = PdfParser._create_lines(self.spans)
         self.blocks = self._create_blocks(self.lines)
         self._set_document_specifications()
+        self._flag_footnotes(self.spans)
         self.main_title = self._get_document_main_title()
         self.toc = self.get_toc() if self.add_headers else []
 
-    def check_ocr_config_is_valid(self):
+    def check_ocr_config_is_valid(self) -> None:
         """Check that the OCR configuration is valid."""
         tessdata_location = os.environ.get("TESSDATA_PREFIX")
         if not tessdata_location:
@@ -248,7 +255,7 @@ class PdfParser(
         Returns:
             list[TextSpan]: a list of textspan objects
         """
-        page_dict: dict[str, str] = textpage.extractDICT()  # type: ignore : missing typing in pymupdf
+        page_dict: dict[str, Any] = textpage.extractDICT()  # type: ignore : missing typing in pymupdf
 
         return [
             TextSpan(page=page_number, orientation=line["dir"], **span)
@@ -280,29 +287,66 @@ class PdfParser(
         return spans
 
     def _flag_headers_footers(self, spans: list[TextSpan]) -> list[TextSpan]:
-        """Flags spans that are headers and footers (inplace)
-        We consider that if a bbox is present at the same place on a page
-        on more that 33% of the pages of the document, it is a header or footer.
-        Process:
-        - Count the bbox locations of all spans.
-        - Remove spans having bbox location count superior to document's page count / 3
+        """Flags spans that are headers and footers (inplace).
+        A span is considered a header/footer if spans with the same vertical
+        band (y0 rounded to 5 pts) and font size appear on more than 33% of pages.
+        This catches varying elements like page numbers that share y-position and
+        font size but differ in text or exact x position.
 
         Args:
-            spans (TextSpan): the list of spans with attribute is_header_footer updated.
+            spans (list[TextSpan]): the list of spans with attribute is_header_footer updated.
         """
         if self.document.page_count <= 2:  # type: ignore : missing typing in pymupdf | document.page_count : int
             return spans
 
-        bbox_location_counts = Counter((span.bbox) for span in spans)
-        header_footer_bboxes = {
-            bbox: count
-            for bbox, count in bbox_location_counts.items()
-            if count > self.document.page_count / 3  # type: ignore : missing typing in pymupdf | document.page_count : int
+        # Map (y-band, fontsize) -> set of pages where it appears
+        sig_pages: defaultdict[tuple, set] = defaultdict(set)
+        for span in spans:
+            sig = (round(span.bbox.y0 / 5) * 5, span.fontsize)  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+            sig_pages[sig].add(span.page)
+
+        header_footer_sigs = {
+            sig
+            for sig, pages in sig_pages.items()
+            if len(pages) > self.document.page_count / 3  # type: ignore : missing typing in pymupdf | document.page_count : int
         }
         for span in spans:
-            span.is_header_footer = span.bbox in header_footer_bboxes
+            sig = (round(span.bbox.y0 / 5) * 5, span.fontsize)  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+            span.is_header_footer = sig in header_footer_sigs
 
         return spans
+
+    def _flag_footnotes(self, spans: list[TextSpan]) -> None:
+        """Flags spans that belong to footnotes (inplace).
+        A span is considered a footnote if its font size is smaller than the
+        minimum body font size and it sits in the bottom 20 % of its page.
+        Footnote spans are NOT excluded from the output; they are rendered as
+        blockquotes in the final markdown to visually separate them.
+
+        Must be called after _set_document_specifications so that
+        self.main_body_fontsizes is available.
+
+        Args:
+            spans (list[TextSpan]): the list of spans to annotate.
+        """
+        if not self.main_body_fontsizes:
+            return
+        min_body_fontsize = min(self.main_body_fontsizes)
+
+        # Pre-compute page heights once to avoid repeated document access
+        page_heights: dict[int, float] = {
+            page.number: page.rect.height  # type: ignore : missing typing in pymupdf | Page.number : int, Rect.height : float
+            for page in self.document.pages(start=self.page_start, stop=self.page_end)  # type: ignore : missing typing in pymupdf
+        }
+
+        for span in spans:
+            if span.is_header_footer or span.isin_table or span.is_superscripted:
+                continue
+            page_height = page_heights.get(span.page, float("inf"))
+            span.is_footnote = (
+                span.fontsize < min_body_fontsize
+                and span.bbox.y0 > page_height * 0.8  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+            )
 
     @staticmethod
     def _create_lines(spans: list[TextSpan]) -> list[TextLine]:
@@ -311,6 +355,8 @@ class PdfParser(
         Spans can be merged if:
         - they do not belong to table or header/footer
         - they have the same y positions
+        Non-dominant orientations per page are filtered out to remove rotated
+        watermarks or margin labels (e.g. "CONFIDENTIAL", arXiv IDs).
         Args:
             spans (list[TextSpan]): the list of spans.
 
@@ -325,7 +371,25 @@ class PdfParser(
         spans_to_merge = [
             span for span in spans if not span.is_header_footer and not span.isin_table
         ]
-        # group spans by page
+
+        # Determine dominant text orientation per page.
+        # Pages where one orientation dominates keep only that orientation,
+        # which removes rotated watermarks and margin stamps without discarding
+        # legitimately rotated pages (e.g. landscape scans).
+        page_orientation_counts: defaultdict[int, Counter] = defaultdict(Counter)
+        for span in spans_to_merge:
+            page_orientation_counts[span.page][span.orientation] += 1
+        page_dominant_orientation: dict[int, tuple] = {
+            page: counts.most_common(1)[0][0]
+            for page, counts in page_orientation_counts.items()
+        }
+        spans_to_merge = [
+            span for span in spans_to_merge
+            if span.orientation == page_dominant_orientation.get(span.page, (1.0, 0.0))
+        ]
+
+        # Group spans by page. _extract_spans yields spans in page order, so groupby
+        # produces exactly one group per page without needing a sort.
         spans_grouped_per_page = (
             list(spans_on_page)
             for _, spans_on_page in groupby(spans_to_merge, key=lambda span: span.page)
@@ -333,7 +397,13 @@ class PdfParser(
         for spans_on_page in spans_grouped_per_page:
             buffer = [spans_on_page[0]]
             for span in spans_on_page[1:]:
-                if isclose(span.origin.y, buffer[-1].origin.y, abs_tol=3) or span.is_superscripted:  # type: ignore : missing typing in pymupdf | Point.y : float
+                # Adaptive tolerance: larger fonts tolerate a bigger y-offset between
+                # spans on the same visual line (e.g. mixed font sizes in headings).
+                y_tolerance = max(
+                    PdfParser._LINE_Y_TOLERANCE,
+                    0.25 * buffer[-1].line_height,
+                )
+                if abs(span.origin.y - buffer[-1].origin.y) <= y_tolerance or span.is_superscripted:  # type: ignore : missing typing in pymupdf | Point.y : float
                     buffer.append(span)
                 else:
                     lines.append(TextLine(buffer))
@@ -355,12 +425,30 @@ class PdfParser(
         Returns:
             float: the value of the linespace.
         """
+        # Focus on the most common fontsize so that list items, titles, or footnotes
+        # with different fontsizes do not skew the body linespacing estimate.
+        fontsize_counts = Counter(line.fontsize for line in lines if not line.is_empty)
+        body_fontsize = fontsize_counts.most_common(1)[0][0] if fontsize_counts else None
+
         linespace_counts = Counter(
-            (
-                round(curr_line.bbox.y0 - prev_line.bbox.y1, 1)  # type: ignore : missing typing in pymupdf | Rect.y0 : float
-                for curr_line, prev_line in zip(lines[1:], lines[:-1])
+            round(curr_line.bbox.y0 - prev_line.bbox.y1, 1)  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+            for curr_line, prev_line in zip(lines[1:], lines[:-1])
+            # Negative spacings occur between columns in multi-column layouts; skip them
+            # as they would corrupt the linespace estimate used for block merging.
+            if curr_line.bbox.y0 >= prev_line.bbox.y0  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+            and (
+                body_fontsize is None
+                or (prev_line.fontsize == body_fontsize and curr_line.fontsize == body_fontsize)
             )
         )
+
+        if not linespace_counts:
+            # Fallback: use all lines if no body-fontsize pairs were found
+            linespace_counts = Counter(
+                round(curr_line.bbox.y0 - prev_line.bbox.y1, 1)  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+                for curr_line, prev_line in zip(lines[1:], lines[:-1])
+                if curr_line.bbox.y0 >= prev_line.bbox.y0  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+            )
 
         return max(linespace_counts, key=linespace_counts.get)
 
@@ -392,7 +480,7 @@ class PdfParser(
             if (
                 buffer[-1].is_empty
                 or line.fontsize != buffer[-1].fontsize
-                or line.bbox.y0 - self.body_line_spacing - 2 > buffer[-1].bbox.y1  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+                or line.bbox.y0 - self.body_line_spacing - self._BLOCK_SPACING_TOLERANCE > buffer[-1].bbox.y1  # type: ignore : missing typing in pymupdf | Rect.y0 : float
                 or line.bbox.y1 <= buffer[-1].bbox.y0  # type: ignore : missing typing in pymupdf | Rect.y0 : float
             ):  # type: ignore : missing typing in pymupdf | Rect.y0 : float
                 blocks.append(TextBlock(buffer))
@@ -404,10 +492,11 @@ class PdfParser(
 
         return blocks
 
-    def cleanup_memory(self):
+    def cleanup_memory(self) -> None:
         """Cleans up memory by reseting all objects created to parse the document."""
-        self.document.close()
-        self._document = None
+        if self._document is not None:
+            self._document.close()
+            self._document = None
         self.filepath = None
         self.page_start = 0
         self.page_end = None
@@ -415,7 +504,10 @@ class PdfParser(
         self.lines = []
         self.blocks = []
         self.tables = []
+        self.toc = []
         self.main_title = ""
         self.document_fontsizes = []
         self.main_body_fontsizes = []
         self.main_body_is_bold = False
+        # restore the user-configured value; auto-detected value is no longer valid
+        self.body_line_spacing = self._configured_body_line_spacing
