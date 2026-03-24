@@ -172,18 +172,24 @@ class Chunk(BaseModel):
         """
         if self._word_count_cache is None:
             text_content = "\n".join(line.text for line in self.content)
-            self._word_count_cache = len(re.findall(r"\w+", Chunk._cleanup_text(text_content)))
+            self._word_count_cache = len(
+                re.findall(r"\w+", Chunk._cleanup_text(text_content))
+            )
         return self._word_count_cache
 
     @computed_field
     @property
     def start_page(self) -> int | None:
-        return min((line.page for line in self.content if line.page is not None), default=None)
+        return min(
+            (line.page for line in self.content if line.page is not None), default=None
+        )
 
     @computed_field
     @property
     def end_page(self) -> int | None:
-        return max((line.page for line in self.content if line.page is not None), default=None)
+        return max(
+            (line.page for line in self.content if line.page is not None), default=None
+        )
 
     def __str__(self) -> str:
         return self.get_text()

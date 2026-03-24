@@ -87,7 +87,10 @@ class MarkdownChunker(AbstractChunker):
         current_node = tree
         id_counter = 0
         for line in md_lines:
-            if line.is_header and (line_level := line.get_header_level()) <= max_header_level_to_use:
+            if (
+                line.is_header
+                and (line_level := line.get_header_level()) <= max_header_level_to_use
+            ):
                 while (
                     current_node.parent is not None
                     and line_level <= current_node.title.get_header_level()
@@ -246,7 +249,8 @@ class MarkdownChunker(AbstractChunker):
             if current_word_count > split_word_size:
                 chunks.append(
                     MarkdownChunker._create_new_chunk_from_lines(
-                        chunk.headers + list(filter(None, subchunk_start_headers)), line_buffer
+                        chunk.headers + list(filter(None, subchunk_start_headers)),
+                        line_buffer,
                     )
                 )
                 line_buffer = []

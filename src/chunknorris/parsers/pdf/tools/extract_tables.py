@@ -63,7 +63,8 @@ class PdfTableExtraction(PdfParserState):
         table_x1 = max(c[2] for c in raw_cells)
         table_y1 = max(c[3] for c in raw_cells)
         spans_in_table = [
-            span for span in spans_on_page
+            span
+            for span in spans_on_page
             if not (
                 span.bbox.x1 <= table_x0  # type: ignore : missing typing in pymuPdf | Rect coords : float
                 or span.bbox.x0 >= table_x1  # type: ignore
@@ -72,7 +73,9 @@ class PdfTableExtraction(PdfParserState):
             )
         ]
 
-        small_bboxes = [PdfTableExtraction._get_smaller_bbox(span.bbox) for span in spans_in_table]
+        small_bboxes = [
+            PdfTableExtraction._get_smaller_bbox(span.bbox) for span in spans_in_table
+        ]
 
         cells: list[Cell] = []
         for cell_coords in raw_cells:

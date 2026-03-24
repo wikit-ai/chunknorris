@@ -73,13 +73,19 @@ class PdfTable:
     def _y_lines(self) -> list[int]:
         """Sorted unique y-edge coordinates (rounded to int) of all cells."""
         coords = self._coords
-        return sorted(set(coords[:, 1].round().astype(int)) | set(coords[:, 3].round().astype(int)))
+        return sorted(
+            set(coords[:, 1].round().astype(int))
+            | set(coords[:, 3].round().astype(int))
+        )
 
     @cached_property
     def _x_lines(self) -> list[int]:
         """Sorted unique x-edge coordinates (rounded to int) of all cells."""
         coords = self._coords
-        return sorted(set(coords[:, 0].round().astype(int)) | set(coords[:, 2].round().astype(int)))
+        return sorted(
+            set(coords[:, 0].round().astype(int))
+            | set(coords[:, 2].round().astype(int))
+        )
 
     @cached_property
     def has_merged_cells(self) -> bool:
@@ -745,7 +751,9 @@ class TableFinder:
         if not cells.size:
             return np.empty((0, 4), dtype=np.float32)
 
-        cells = TableFinder._remove_cells_with_invalid_borders(cells, lines_combinations)
+        cells = TableFinder._remove_cells_with_invalid_borders(
+            cells, lines_combinations
+        )
         cells = TableFinder._remove_nesting_cells(cells)
         if cells.shape[0] > 1:
             LOGGER.warning(

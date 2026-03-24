@@ -15,7 +15,9 @@ class PdfTocExtraction(PdfParserState):
 
     _TOC_MAX_PAGE: int = 15  # pages to scan for TOC entries
     _TOC_MAX_GAP: int = 10  # non-matching lines before assuming TOC is over
-    _MAX_HEADER_TEXT_LENGTH: int = 100  # blocks longer than this are unlikely to be headers
+    _MAX_HEADER_TEXT_LENGTH: int = (
+        100  # blocks longer than this are unlikely to be headers
+    )
 
     # Compiled patterns used to detect header levels from numeric schemas (e.g. 1., 1.1, 1.1.1)
     _HEADER_PATTERNS: list[tuple[int, re.Pattern[str]]] = [

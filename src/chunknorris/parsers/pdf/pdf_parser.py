@@ -89,7 +89,9 @@ class PdfParser(
         self.use_ocr = use_ocr
         self.ocr_language = ocr_language
         self.body_line_spacing = body_line_spacing
-        self._configured_body_line_spacing = body_line_spacing  # preserved for cleanup reset
+        self._configured_body_line_spacing = (
+            body_line_spacing  # preserved for cleanup reset
+        )
         self.table_finder = table_finder
 
         if self.use_ocr != "never":
@@ -391,7 +393,8 @@ class PdfParser(
             for page, counts in page_orientation_counts.items()
         }
         spans_to_merge = [
-            span for span in spans_to_merge
+            span
+            for span in spans_to_merge
             if span.orientation == page_dominant_orientation.get(span.page, (1.0, 0.0))
         ]
 
@@ -435,7 +438,9 @@ class PdfParser(
         # Focus on the most common fontsize so that list items, titles, or footnotes
         # with different fontsizes do not skew the body linespacing estimate.
         fontsize_counts = Counter(line.fontsize for line in lines if not line.is_empty)
-        body_fontsize = fontsize_counts.most_common(1)[0][0] if fontsize_counts else None
+        body_fontsize = (
+            fontsize_counts.most_common(1)[0][0] if fontsize_counts else None
+        )
 
         linespace_counts = Counter(
             round(curr_line.bbox.y0 - prev_line.bbox.y1, 1)  # type: ignore : missing typing in pymupdf | Rect.y0 : float
@@ -445,7 +450,10 @@ class PdfParser(
             if curr_line.bbox.y0 >= prev_line.bbox.y0  # type: ignore : missing typing in pymupdf | Rect.y0 : float
             and (
                 body_fontsize is None
-                or (prev_line.fontsize == body_fontsize and curr_line.fontsize == body_fontsize)
+                or (
+                    prev_line.fontsize == body_fontsize
+                    and curr_line.fontsize == body_fontsize
+                )
             )
         )
 

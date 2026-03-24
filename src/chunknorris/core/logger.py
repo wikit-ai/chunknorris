@@ -13,7 +13,9 @@ _LEVELS: dict[str, int] = {
 }
 
 
-def set_log_level(level: Literal["debug", "info", "warning", "error", "critical"]) -> None:
+def set_log_level(
+    level: Literal["debug", "info", "warning", "error", "critical"],
+) -> None:
     """Set ChunkNorris log level.
 
     Args:
