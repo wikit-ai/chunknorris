@@ -42,7 +42,7 @@ class CustomMarkdownConverter(MarkdownConverter):
     on td/tr/th are needed.
     """
 
-    def convert_table(self, el: Tag, _text: str, parent_tags: Any) -> str:
+    def convert_table(self, el: Tag, text: str, parent_tags: Any) -> str:
         if _has_merged_cells(el):
             return "\n\n" + str(_strip_attrs(el)) + "\n\n"
         try:
