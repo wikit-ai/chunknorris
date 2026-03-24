@@ -84,6 +84,11 @@ class PdfParser(
         self.ocr_language = ocr_language
         self.body_line_spacing = body_line_spacing
         self.table_finder = table_finder
+        # Initialise mutable per-instance state (avoids sharing class-level defaults)
+        self.spans = []
+        self.lines = []
+        self.blocks = []
+        self.tables = []
 
         if self.use_ocr != "never":
             self.check_ocr_config_is_valid()
@@ -263,7 +268,7 @@ class PdfParser(
         Returns:
             list[TextSpan] : the list of spans with added attribute "isin_table".
         """
-        page_tables = defaultdict(list[pymupdf.Rect])
+        page_tables: defaultdict[int, list[pymupdf.Rect]] = defaultdict(list)
         for table in self.tables:
             page_tables[table.page].append(table.bbox)
 
@@ -285,7 +290,7 @@ class PdfParser(
         Args:
             spans (TextSpan): the list of spans with attribute is_header_footer updated.
         """
-        if not self.document.page_count > 2:  # type: ignore : missing typing in pymupdf | document.page_count : int
+        if self.document.page_count <= 2:  # type: ignore : missing typing in pymupdf | document.page_count : int
             return spans
 
         bbox_location_counts = Counter((span.bbox) for span in spans)

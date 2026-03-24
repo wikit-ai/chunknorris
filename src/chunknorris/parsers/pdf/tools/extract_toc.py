@@ -1,5 +1,4 @@
 import re
-from collections import Counter
 from itertools import groupby
 
 from thefuzz import fuzz  # type: ignore : no stubs
@@ -14,14 +13,12 @@ class PdfTocExtraction(PdfParserState):
     Intended to be a component inherited by pdfParser => PdfParser(PdfTocExtraction)
     """
 
-    @property
-    def header_patterns(self) -> list[tuple[int, re.Pattern[str]]]:
-        """A list of tuple (level, pattern) used to match the potential headers"""
-        return [
-            (3, re.compile(r"^(\d+)[\s\.\)]+(\d+)[\s\.\)]+(\d+)")),
-            (2, re.compile(r"^(\d+)[\s\.\)]+(\d+)")),
-            (1, re.compile(r"^(\d+)[\s\.\)]*")),
-        ]
+    # Compiled patterns used to detect header levels from numeric schemas (e.g. 1., 1.1, 1.1.1)
+    _HEADER_PATTERNS: list[tuple[int, re.Pattern[str]]] = [
+        (3, re.compile(r"^(\d+)[\s\.\)]+(\d+)[\s\.\)]+(\d+)")),
+        (2, re.compile(r"^(\d+)[\s\.\)]+(\d+)")),
+        (1, re.compile(r"^(\d+)[\s\.\)]*")),
+    ]
 
     def get_toc(self) -> list[TocTitle]:
         """Gets the table of content of a document.
@@ -104,7 +101,9 @@ class PdfTocExtraction(PdfParserState):
         toc_titles: list[TocTitle] = []
         until_last_match_counter = 0
         # browse through lines up to page 15 to get those which might be TOC
-        for i, line in enumerate(filter(lambda x: x.page < 15, self.lines)):
+        for i, line in enumerate(self.lines):
+            if line.page >= 15:
+                continue
             until_last_match_counter += 1
             if len(toc_titles) > 3 and until_last_match_counter > 10:
                 break  # likely we have found a TOC and are now browsing through document
@@ -194,7 +193,7 @@ class PdfTocExtraction(PdfParserState):
         Returns:
             int | None: the header level. Returns None if the regex didn't match any level
         """
-        for level, pattern in self.header_patterns:
+        for level, pattern in self._HEADER_PATTERNS:
             if re.match(pattern, header_text):
                 return level
 
@@ -204,22 +203,22 @@ class PdfTocExtraction(PdfParserState):
         to set which ones are the section's headers.
         """
         for title in toc:
+            title_text_lower = title.text.lower()
             pages_to_look_on = range(title.page - 1, title.page + 2)
             blocks_to_consider = (
                 block for block in self.blocks if block.page in pages_to_look_on
             )
             best_ratio, best_block = 0, None
             for block in blocks_to_consider:
+                block_text_lower = block.text.lower()
                 # if the first line of the block corresponds to the title text -> toc title
-                if block.lines[0].text.lower() == title.text.lower():
+                if block.lines[0].text.lower() == title_text_lower:
                     block.lines[0].is_toc_element = True
                     best_ratio = 100
                     best_block = block
                     break
                 # else check if title text is similar to block text
-                ratio = fuzz.ratio(  # type: ignore : missing typing in fuzz | fuzz.ratio(s1 : str, s2: str) -> int
-                    title.text.lower(), block.text.lower()
-                )
+                ratio = fuzz.ratio(title_text_lower, block_text_lower)  # type: ignore : missing typing in fuzz | fuzz.ratio(s1 : str, s2: str) -> int
                 if ratio > best_ratio:
                     best_ratio = ratio
                     best_block = block
@@ -239,12 +238,11 @@ class PdfTocExtraction(PdfParserState):
         if not self.main_body_fontsizes or not self.document_fontsizes:
             return toc
         biggest_body_fontsize = max(self.main_body_fontsizes)
-        header_fontsizes = (
-            fontsize
-            for fontsize in self.document_fontsizes
-            if fontsize > biggest_body_fontsize
-        )
-        header_fontsizes = sorted(header_fontsizes, reverse=True)[:5]
+        header_fontsizes = sorted(
+            (fs for fs in self.document_fontsizes if fs > biggest_body_fontsize),
+            reverse=True,
+        )[:5]
+        header_fontsizes_set = set(header_fontsizes)
         for block in self.blocks:
             supposed_header_level = None
             if (
@@ -254,7 +252,7 @@ class PdfTocExtraction(PdfParserState):
             ):
                 # do not consider non-horizontal text or long texts as they are unlikely to be headers
                 continue
-            elif block.fontsize in header_fontsizes:  # likely to be a header
+            elif block.fontsize in header_fontsizes_set:  # likely to be a header
                 supposed_header_level = header_fontsizes.index(block.fontsize) + 1
             elif (
                 block.fontsize == biggest_body_fontsize
@@ -293,18 +291,21 @@ class PdfTocExtraction(PdfParserState):
         spans_on_first_page = [s for s in self.spans if s.page == 0 and not s.is_empty]
         if spans_on_first_page and self.main_body_fontsizes:
             # Get the 2 biggest fontsizes of 1st page
-            first_page_biggest_fontsizes = sorted(
-                Counter(
-                    span.fontsize
-                    for span in spans_on_first_page
-                    if not span.is_empty and span.orientation == (1.0, 0.0)
-                ),
-                reverse=True,
-            )[:2]
+            first_page_biggest_fontsizes = set(
+                sorted(
+                    {
+                        span.fontsize
+                        for span in spans_on_first_page
+                        if not span.is_empty and span.orientation == (1.0, 0.0)
+                    },
+                    reverse=True,
+                )[:2]
+            )
+            main_body_fontsizes_set = set(self.main_body_fontsizes)
             title_spans = (
                 s
                 for s in spans_on_first_page
-                if s.fontsize not in self.main_body_fontsizes
+                if s.fontsize not in main_body_fontsizes_set
                 and s.fontsize in first_page_biggest_fontsizes
             )
             main_title = " ".join((s.text for s in title_spans)).strip()

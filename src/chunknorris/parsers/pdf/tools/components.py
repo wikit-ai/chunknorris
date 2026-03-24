@@ -1,4 +1,5 @@
 from collections import defaultdict
+from functools import cached_property
 from typing import Literal
 
 import pymupdf  # type: ignore : no stubs
@@ -16,6 +17,8 @@ INVALID_CHAR_MAP = {
     "": "- ",  # arrow-like bullet
     "": "- ",  # triangle-like bullet
 }
+# Pre-built translation table for O(1) per-character lookup, single pass over the string
+_CHAR_TRANSLATION_TABLE = str.maketrans(INVALID_CHAR_MAP)
 
 
 class Link:
@@ -146,7 +149,7 @@ class TextSpan:
 
     @property
     def is_empty(self) -> bool:
-        return self.text.isspace()
+        return not self.text or self.text.isspace()
 
     @staticmethod
     def _remove_invalid_characters(text: str) -> str:
@@ -158,11 +161,7 @@ class TextSpan:
         Returns:
             str: the cleanedup text
         """
-        # TODO : find more computationaly efficient method ? Maybe use str.translate() in conjunction with str.maketrans()
-        for char, replacement in INVALID_CHAR_MAP.items():
-            text = text.replace(char, replacement)
-
-        return text
+        return text.translate(_CHAR_TRANSLATION_TABLE)
 
     def to_markdown(self) -> str:
         """Format the span's text to markdown format
@@ -206,55 +205,55 @@ class TextLine:
 
         self.is_toc_element = False
 
-    @property
+    @cached_property
     def text(self) -> str:
         return "".join((span.text for span in self.spans)).strip()
 
-    @property
+    @cached_property
     def bbox(self) -> pymupdf.Rect:
         bbox = self.spans[0].bbox
         for span in self.spans[1:]:
             bbox = bbox.include_rect(span.bbox)  # type: ignore : missing typing in pymuPdf | Rect.include_rect(r: Rect) -> Rect
         return bbox
 
-    @property
+    @cached_property
     def line_height(self) -> float:
         lineheight_occurences_map: dict[float, int] = defaultdict(int)
         for span in self.spans:
             lineheight_occurences_map[span.line_height] += len(span.text)
         return max(lineheight_occurences_map, key=lineheight_occurences_map.get)
 
-    @property
+    @cached_property
     def fontsize(self) -> float:
         fontsize_occurences_map: dict[float, int] = defaultdict(int)
         for span in self.spans:
             fontsize_occurences_map[span.fontsize] += len(span.text)
         return max(fontsize_occurences_map, key=fontsize_occurences_map.get)
 
-    @property
+    @cached_property
     def origin(self) -> pymupdf.Point:
         return pymupdf.Point(
             min((span.origin.x for span in self.spans)),  # type: ignore : missing typing in pymuPdf | Point.x -> float
             max((span.origin.y for span in self.spans)),  # type: ignore : missing typing in pymuPdf | Point.y -> float
         )
 
-    @property
+    @cached_property
     def page(self) -> int:
         return self.spans[0].page
 
-    @property
+    @cached_property
     def orientation(self) -> tuple[float, float]:
         return self.spans[0].orientation
 
-    @property
+    @cached_property
     def is_empty(self) -> bool:
         return all(span.is_empty for span in self.spans)
 
-    @property
+    @cached_property
     def is_bold(self) -> bool:
         return all(span.is_bold for span in self.spans if not span.is_empty)
 
-    @property
+    @cached_property
     def is_bullet_point(self) -> bool:
         return self.text.startswith("- ")
 
@@ -292,22 +291,22 @@ class TextBlock:
         # Attributes to modify while parsing the pdf
         self.section_title = None  # store the TocTitle if block is a ssection title
 
-    @property
+    @cached_property
     def text(self):
         return " ".join((line.text for line in self.lines))
 
-    @property
+    @cached_property
     def bbox(self) -> pymupdf.Rect:
         bbox = self.lines[0].bbox
         for line in self.lines[1:]:
             bbox = bbox.include_rect(line.bbox)  # type: ignore : missing typing in pymuPdf | Rect.include_rect(r: Rect) -> Rect
         return bbox
 
-    @property
+    @cached_property
     def page(self) -> int:
         return self.lines[0].page
 
-    @property
+    @cached_property
     def orientation(self) -> tuple[float, float]:
         return self.lines[0].orientation
 
@@ -319,15 +318,15 @@ class TextBlock:
     def order(self) -> int:
         return min(self.lines, key=lambda x: x.order).order
 
-    @property
+    @cached_property
     def is_empty(self) -> bool:
         return all(line.is_empty for line in self.lines)
 
-    @property
+    @cached_property
     def is_bold(self) -> bool:
         return all(line.is_bold for line in self.lines if not line.is_empty)
 
-    @property
+    @cached_property
     def fontsize(self) -> float:
         fontsize_occurences_map: dict[float, int] = defaultdict(int)
         for line in self.lines:
