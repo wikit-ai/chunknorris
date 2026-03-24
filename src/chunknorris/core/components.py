@@ -4,7 +4,7 @@ import json
 import os
 import re
 from copy import deepcopy
-from typing import Any
+from typing import Any, Iterator
 from unicodedata import normalize
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
@@ -130,7 +130,7 @@ class MarkdownLine(BaseModel):
         return self.text.startswith("|") or self.text.startswith("<table>")
 
     @property
-    def is_header(self):
+    def is_header(self) -> bool:
         return self.text.lstrip("- ").startswith("#") and not self.isin_code_block
 
     @property
@@ -235,6 +235,7 @@ class TocTree:
     content: list[MarkdownLine]
     parent: TocTree | None
     children: list[TocTree]
+    _word_count_cache: int | None
 
     def __init__(
         self,
@@ -250,6 +251,7 @@ class TocTree:
         self.id = id
         self.parent = parent
         self.children = [] if children is None else children
+        self._word_count_cache = None
 
     def add_child(self, child: TocTree) -> None:
         """Adds a child to the list of TocTree.
@@ -305,6 +307,58 @@ class TocTree:
         self.parent = None
         for child in self.children:
             child.remove_circular_refs()
+
+    def get_parent_headers(self) -> list[MarkdownLine]:
+        """Gets the list of ancestor header lines, ordered outermost to innermost.
+
+        Returns:
+            list[MarkdownLine]: ancestor titles, empty-title root excluded.
+        """
+        headers: list[MarkdownLine] = []
+        node = self
+        while node.parent:
+            node = node.parent
+            headers.append(node.title)
+        return list(reversed([h for h in headers if h.text]))
+
+    def estimate_word_count(self) -> int:
+        """Estimates the total word count of this section (title + content + all descendants).
+        Uses whitespace splitting — intentionally approximate for threshold checks.
+        Result is cached since the tree is not modified during chunking.
+        """
+        if self._word_count_cache is not None:
+            return self._word_count_cache
+        count = len(self.title.text.split()) + sum(
+            len(line.text.split()) for line in self.content
+        )
+        for child in self.children:
+            count += child.estimate_word_count()
+        self._word_count_cache = count
+        return count
+
+    def iter_content_lines(self) -> Iterator[MarkdownLine]:
+        """Yields all lines in this section: title, content, then children recursively."""
+        yield self.title
+        yield from self.content
+        for child in self.children:
+            yield from child.iter_content_lines()
+
+    def to_chunk(self, parent_headers: list[MarkdownLine] | None = None) -> Chunk:
+        """Builds a Chunk from this TocTree element.
+
+        Args:
+            parent_headers: ancestor header lines. If None, derived by traversing the parent chain.
+
+        Returns:
+            Chunk: the chunk for this section.
+        """
+        if parent_headers is None:
+            parent_headers = self.get_parent_headers()
+        return Chunk(
+            headers=parent_headers,
+            content=list(self.iter_content_lines()),
+            start_line=self.title.line_idx,
+        )
 
     def get_text(self, content_only: bool = False) -> str:
         """Builds the text content of a toc tree
