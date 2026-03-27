@@ -440,7 +440,10 @@ class TableFinder:
         # Get cells
         cells = self._get_cells(intersections, lines_coordinates)
         if not cells.size or not TableFinder._table_sanity_check(cells):
-            return lines_coordinates, intersections, np.empty((0, 4))
+            if cells.size:
+                cells = TableFinder._fill_topleft_gap(cells, intersections)
+            if not cells.size or not TableFinder._table_sanity_check(cells):
+                return lines_coordinates, intersections, np.empty((0, 4))
 
         return lines_coordinates, intersections, cells
 
@@ -1014,6 +1017,73 @@ class TableFinder:
                     combos.append(new)
 
         return np.unique(np.vstack(combos), axis=0)
+
+    @staticmethod
+    def _fill_topleft_gap(
+        cells: npt.NDArray[np.float32],
+        intersections: npt.NDArray[np.float32],
+    ) -> npt.NDArray[np.float32]:
+        """Recover tables where top-left cells are missing.
+
+        In multiindex tables the top-left corner block has no border lines,
+        so those cells fail border validation, cannot be resolved as merged cells,
+        and are silently dropped — causing the sanity check to fail.
+
+        This method detects whether the missing cells form a rectangular block
+        anchored exactly at the top-left of the intersection grid (first K columns
+        × first L rows).  If so it re-adds them as empty cells and the sanity
+        check will pass on the second attempt.
+
+        Only called when the sanity check has already failed, so there is no
+        performance impact on correctly-formed tables.
+
+        Args:
+            cells (npt.NDArray[np.float32]): currently detected cells, shape (n, 4).
+            intersections (npt.NDArray[np.float32]): all grid intersection points,
+                shape (m, 2).
+
+        Returns:
+            npt.NDArray[np.float32]: cells with top-left gap filled, or the original
+                cells array if the gap does not match the expected pattern.
+        """
+        full_grid = TableFinder.get_table_cells_without_merged_cells(intersections)
+
+        # Find full-grid cells not covered by any detected cell.
+        # "Covered" means some detected cell fully contains the grid cell.
+        # Shapes after broadcasting: (n_fg, 1) vs (n_cells,) → (n_fg, n_cells)
+        fg_x0 = full_grid[:, 0:1]
+        fg_y0 = full_grid[:, 1:2]
+        fg_x1 = full_grid[:, 2:3]
+        fg_y1 = full_grid[:, 3:4]
+
+        covered = (
+            (cells[:, 0] <= fg_x0)
+            & (cells[:, 1] <= fg_y0)
+            & (cells[:, 2] >= fg_x1)
+            & (cells[:, 3] >= fg_y1)
+        ).any(axis=1)
+
+        if covered.all():
+            return cells
+
+        missing = full_grid[~covered]
+
+        # The missing cells must form a rectangle anchored at the top-left:
+        # their x0 values must be the first K unique column-starts of the grid,
+        # and their y0 values must be the first L unique row-starts.
+        xs = np.unique(full_grid[:, 0])
+        ys = np.unique(full_grid[:, 1])
+        missing_xs = np.unique(missing[:, 0])
+        missing_ys = np.unique(missing[:, 1])
+
+        if not np.array_equal(missing_xs, xs[: len(missing_xs)]):
+            return cells
+        if not np.array_equal(missing_ys, ys[: len(missing_ys)]):
+            return cells
+        if len(missing) != len(missing_xs) * len(missing_ys):
+            return cells
+
+        return np.unique(np.vstack((cells, missing)), axis=0)
 
     @staticmethod
     def _table_sanity_check(cells_coords: npt.NDArray[np.float32]) -> bool:
