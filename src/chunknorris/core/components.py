@@ -4,10 +4,10 @@ import json
 import os
 import re
 from copy import deepcopy
-from typing import Any
+from typing import Any, Iterator
 from unicodedata import normalize
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
 
 class MarkdownDoc(BaseModel):
@@ -127,10 +127,10 @@ class MarkdownLine(BaseModel):
     @property
     def isin_table(self) -> bool:
         """whether or not the line belongs to a table"""
-        return self.text.startswith("|")
+        return self.text.startswith("|") or self.text.startswith("<table>")
 
     @property
-    def is_header(self):
+    def is_header(self) -> bool:
         return self.text.lstrip("- ").startswith("#") and not self.isin_code_block
 
     @property
@@ -162,6 +162,7 @@ class Chunk(BaseModel):
     headers: list[MarkdownLine]
     content: list[MarkdownLine]
     start_line: int
+    _word_count_cache: int | None = PrivateAttr(default=None)
 
     @computed_field
     @property
@@ -169,26 +170,26 @@ class Chunk(BaseModel):
         """Gets the amount of words in the chunk's content
         (headers not included)
         """
-        text_content = "\n".join((line.text for line in self.content))
-        return len(re.findall(r"\w+", Chunk._cleanup_text(text_content)))
+        if self._word_count_cache is None:
+            text_content = "\n".join(line.text for line in self.content)
+            self._word_count_cache = len(
+                re.findall(r"\w+", Chunk._cleanup_text(text_content))
+            )
+        return self._word_count_cache
 
     @computed_field
     @property
     def start_page(self) -> int | None:
-        pages = [line.page for line in self.content if line.page is not None]
-        if pages:
-            return min(pages)
-        else:
-            return None
+        return min(
+            (line.page for line in self.content if line.page is not None), default=None
+        )
 
     @computed_field
     @property
     def end_page(self) -> int | None:
-        pages = [line.page for line in self.content if line.page is not None]
-        if pages:
-            return max(pages)
-        else:
-            return None
+        return max(
+            (line.page for line in self.content if line.page is not None), default=None
+        )
 
     def __str__(self) -> str:
         return self.get_text()
@@ -204,9 +205,9 @@ class Chunk(BaseModel):
             str: the text
         """
         text = ""
-        if prepend_headers:
-            text += "\n\n".join((header.text for header in self.headers)) + "\n\n"
-        text += "\n".join((line.text for line in self.content))
+        if prepend_headers and self.headers:
+            text += "\n\n".join(header.text for header in self.headers) + "\n\n"
+        text += "\n".join(line.text for line in self.content)
         if remove_links:
             text = Chunk.remove_links(text)
 
@@ -223,11 +224,7 @@ class Chunk(BaseModel):
             str: the formated text
         """
         pattern = r"\[?!?\[(.*?)\](\(.*\)\])?\((.*\..+?)(\s.*)?\)"
-        matches = re.finditer(pattern, text)
-        for match in matches:
-            text = text.replace(match[0], match[1])
-
-        return text
+        return re.sub(pattern, r"\1", text)
 
     @staticmethod
     def _cleanup_text(text: str) -> str:
@@ -244,6 +241,7 @@ class TocTree:
     content: list[MarkdownLine]
     parent: TocTree | None
     children: list[TocTree]
+    _word_count_cache: int | None
 
     def __init__(
         self,
@@ -259,6 +257,7 @@ class TocTree:
         self.id = id
         self.parent = parent
         self.children = [] if children is None else children
+        self._word_count_cache = None
 
     def add_child(self, child: TocTree) -> None:
         """Adds a child to the list of TocTree.
@@ -314,6 +313,58 @@ class TocTree:
         self.parent = None
         for child in self.children:
             child.remove_circular_refs()
+
+    def get_parent_headers(self) -> list[MarkdownLine]:
+        """Gets the list of ancestor header lines, ordered outermost to innermost.
+
+        Returns:
+            list[MarkdownLine]: ancestor titles, empty-title root excluded.
+        """
+        headers: list[MarkdownLine] = []
+        node = self
+        while node.parent:
+            node = node.parent
+            headers.append(node.title)
+        return list(reversed([h for h in headers if h.text]))
+
+    def estimate_word_count(self) -> int:
+        """Estimates the total word count of this section (title + content + all descendants).
+        Uses whitespace splitting — intentionally approximate for threshold checks.
+        Result is cached since the tree is not modified during chunking.
+        """
+        if self._word_count_cache is not None:
+            return self._word_count_cache
+        count = len(self.title.text.split()) + sum(
+            len(line.text.split()) for line in self.content
+        )
+        for child in self.children:
+            count += child.estimate_word_count()
+        self._word_count_cache = count
+        return count
+
+    def iter_content_lines(self) -> Iterator[MarkdownLine]:
+        """Yields all lines in this section: title, content, then children recursively."""
+        yield self.title
+        yield from self.content
+        for child in self.children:
+            yield from child.iter_content_lines()
+
+    def to_chunk(self, parent_headers: list[MarkdownLine] | None = None) -> Chunk:
+        """Builds a Chunk from this TocTree element.
+
+        Args:
+            parent_headers: ancestor header lines. If None, derived by traversing the parent chain.
+
+        Returns:
+            Chunk: the chunk for this section.
+        """
+        if parent_headers is None:
+            parent_headers = self.get_parent_headers()
+        return Chunk(
+            headers=parent_headers,
+            content=list(self.iter_content_lines()),
+            start_line=self.title.line_idx,
+        )
 
     def get_text(self, content_only: bool = False) -> str:
         """Builds the text content of a toc tree

@@ -1,4 +1,3 @@
-import logging
 import os
 from argparse import ArgumentParser
 
@@ -8,6 +7,9 @@ from src.chunknorris.chunkers import MarkdownChunker
 from src.chunknorris.exceptions import PageNotFoundException, TextNotFoundException
 from src.chunknorris.parsers import DocxParser, PdfParser
 from src.chunknorris.pipelines import BasePipeline
+from src.chunknorris import set_log_level
+
+set_log_level("warning")
 
 # To run this test, use the following :
 # python -m tests.test_scripts.test_on_all_files --file_type pdf
@@ -21,18 +23,15 @@ argparser.add_argument(
     choices=["pdf", "docx"],
     required=True,
     help="The type of file format to run the test on.",
+    default="pdf",
 )
 argparser.add_argument(
     "--files_dir",
     type=str,
-    default=r"C:\Users\mathi\Wikit\Data",
+    default=r"C:\Users\mathi\Wikit\Data\Miscelaneous",
     help="The type of file format to run the test on.",
 )
 args = argparser.parse_args()
-
-# disable chunknorris logging INFO
-logger = logging.getLogger()
-logger.setLevel(level=logging.WARNING)
 
 
 file_to_test: list[str] = []

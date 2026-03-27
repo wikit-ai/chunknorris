@@ -10,7 +10,7 @@ from ..abstract_parser import AbstractParser
 from .schemas import JupyterNotebookContent
 
 
-class JupyterNotebookParser(AbstractParser):
+class JupyterNotebookParser(AbstractParser[str]):
     """Class used to parse jupyter notebooks (.ipynb)."""
 
     def __init__(self, include_code_cells_outputs: bool = False) -> None:

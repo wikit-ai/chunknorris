@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Generic, TypeVar
 
-from pydantic import validate_call
+InputT = TypeVar("InputT", str, bytes)
 
 
-class AbstractParser(ABC):
+class AbstractParser(ABC, Generic[InputT]):
     """A parser is meant to parse either a string
     of a document provided as a file path.
     Either way, its output must be ingestable by a chunker.
@@ -12,12 +12,13 @@ class AbstractParser(ABC):
     must be the same.
     """
 
-    @validate_call
     @abstractmethod
-    def parse_string(self, string: str) -> Any:
+    def parse_string(self, string: InputT) -> Any:
         pass
 
-    @validate_call
     @abstractmethod
     def parse_file(self, filepath: str) -> Any:
         pass
+
+
+AnyParser = AbstractParser[str] | AbstractParser[bytes]

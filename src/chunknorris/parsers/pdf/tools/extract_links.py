@@ -38,7 +38,7 @@ class PdfLinkExtraction(PdfParserState):
             for page in self.document.pages(self.page_start, self.page_end)  # type: ignore | missing typing in pymupdf: Document.Pages() -> Generator(Page)
         }
         for page_n, links_on_page in links_per_page_map.items():
-            if not links_on_page or not page_n in spans_per_page_map:
+            if not links_on_page or page_n not in spans_per_page_map:
                 continue  # No links to bind on that page, or no spans to bind links to
             links_bboxes = np.array([link.bbox for link in links_per_page_map[page_n]])
             spans_bboxes = np.array([span.bbox for span in spans_per_page_map[page_n]])
@@ -138,7 +138,7 @@ class PdfLinkExtraction(PdfParserState):
         best_idx, best_area = idx_area_tuples[0]
         if len(idx_area_tuples) == 1:
             return best_idx
-        elif len(idx_area_tuples) > 1:
+        else:
             if best_area / 2 > idx_area_tuples[1][1]:
                 return best_idx
             else:
