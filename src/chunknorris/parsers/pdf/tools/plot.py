@@ -3,6 +3,7 @@ from itertools import groupby
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
+from PIL import Image
 import numpy as np
 import pymupdf  # type: ignore : not stubs
 
@@ -285,7 +286,7 @@ class PdfPlotter(PdfParserState):
                 continue
 
             prev_block_location = (0, 0)
-            for block in blocks_per_page[page.number]:
+            for block in blocks_per_page[page.number]:  # type: ignore[reportUnknownMemberType] # missing typing pymupdf.Page.number : int
                 block_location = (
                     block.bbox.x1 - (block.bbox.x1 - block.bbox.x0) / 2,  # type: ignore : missing typing in pymupdf
                     block.bbox.y1 - (block.bbox.y1 - block.bbox.y0) / 2,  # type: ignore : missing typing in pymupdf
@@ -297,3 +298,25 @@ class PdfPlotter(PdfParserState):
                 prev_block_location = block_location
 
             PdfPlotter.show_page(page, dpi=dpi)
+
+    def get_pages_as_images(
+        self, page_numbers: int | list[int] | None = None, resolution: int = 100
+    ) -> Image.Image | list[Image.Image]:
+        """Get the images of the specified pages from PDF.
+
+        If page_numbers is an int -> returns an Image of the page
+        If page_numbers is None -> returns images for all pages
+        else returns a list of Images for specified pages.
+        """
+        indices = (
+            [page_numbers]
+            if isinstance(page_numbers, int)
+            else list(page_numbers or range(self.document.page_count))  # type: ignore
+        )
+
+        def _render(n: int) -> Image.Image:
+            pix = self.document.load_page(n).get_pixmap(dpi=resolution, alpha=False)  # type: ignore
+            return Image.frombuffer("RGB", (pix.width, pix.height), pix.samples, "raw", "RGB", 0, 1)  # type: ignore
+
+        images = [_render(n) for n in indices]
+        return images[0] if isinstance(page_numbers, int) else images
