@@ -116,12 +116,7 @@ class PdfParser(
         Returns:
             MarkdownDoc: The MarkdownDoc to be passed to MarkdownChunker.
         """
-        self.filepath = filepath
-        if Path(filepath).suffix.lower() != ".pdf":
-            raise PdfParserException("Only .pdf files can be passed to PdfParser.")
-        if self._document is not None:
-            self._document.close()
-        self.document = pymupdf.open(filepath, filetype="pdf")
+        self.read_file(filepath)
         return self._parse_and_export(page_start, page_end)
 
     @timeit
@@ -140,10 +135,27 @@ class PdfParser(
         Returns:
             MarkdownDoc: The MarkdownDoc to be passed to MarkdownChunker.
         """
-        if self._document is not None:
-            self._document.close()
-        self.document = pymupdf.open(stream=string, filetype="pdf")
+        self.read_file(string)
         return self._parse_and_export(page_start, page_end)
+
+    def read_file(self, filepath_or_stream: str | bytes) -> None:
+        """Wrapper of pymupdf.open() that simply read the file content.
+        Isolates the file opening to set self.document without running the parsing
+        so that methods that don't need the parsing but need self.document can be run.
+
+        Args:
+            filepath_or_stream (str | bytes): Filepath to a pdf file, or byte stream.
+        """
+        if isinstance(self._document, pymupdf.Document):
+            self._document.close()
+
+        if isinstance(filepath_or_stream, str):
+            self.filepath = filepath_or_stream
+            if Path(filepath_or_stream).suffix.lower() != ".pdf":
+                raise PdfParserException("Only .pdf files can be passed to PdfParser.")
+            self.document = pymupdf.open(filepath_or_stream, filetype="pdf")
+        else:
+            self.document = pymupdf.open(stream=filepath_or_stream, filetype="pdf")
 
     def _parse_and_export(self, page_start: int, page_end: int | None) -> MarkdownDoc:
         """Shared implementation for parse_file and parse_string.
@@ -156,7 +168,8 @@ class PdfParser(
             self._parse_document()
             return self.to_markdown_doc()
         except Exception:
-            self._document.close()
+            if isinstance(self._document, pymupdf.Document):
+                self._document.close()
             self._document = None
             raise
 
@@ -309,15 +322,18 @@ class PdfParser(
             return spans
 
         # Map (y-band, fontsize) -> set of pages where it appears
-        sig_pages: defaultdict[tuple, set] = defaultdict(set)
+        sig_pages: defaultdict[tuple[float, float], set[int]] = defaultdict(set)
         for span in spans:
-            sig = (round(span.bbox.y0 / 5) * 5, span.fontsize)  # type: ignore : missing typing in pymupdf | Rect.y0 : float
+            sig = (
+                round(span.bbox.y0 / 5) * 5,  # type: ignore[reportUnknownMemberType] # missing typing in pymupdf | Rect.y0 : float
+                span.fontsize,
+            )
             sig_pages[sig].add(span.page)
 
         header_footer_sigs = {
             sig
             for sig, pages in sig_pages.items()
-            if len(pages) > self.document.page_count / 3  # type: ignore : missing typing in pymupdf | document.page_count : int
+            if len(pages) > self.document.page_count / 3  # type: ignore : missing typing in pymupdf # document.page_count : int
         }
         for span in spans:
             sig = (round(span.bbox.y0 / 5) * 5, span.fontsize)  # type: ignore : missing typing in pymupdf | Rect.y0 : float
@@ -385,13 +401,17 @@ class PdfParser(
         # Pages where one orientation dominates keep only that orientation,
         # which removes rotated watermarks and margin stamps without discarding
         # legitimately rotated pages (e.g. landscape scans).
-        page_orientation_counts: defaultdict[int, Counter] = defaultdict(Counter)
+        page_orientation_counts: defaultdict[int, Counter[tuple[float, float]]] = (
+            defaultdict(Counter)
+        )
         for span in spans_to_merge:
             page_orientation_counts[span.page][span.orientation] += 1
-        page_dominant_orientation: dict[int, tuple] = {
+        print(page_orientation_counts)
+        page_dominant_orientation: dict[int, tuple[float, float]] = {
             page: counts.most_common(1)[0][0]
             for page, counts in page_orientation_counts.items()
         }
+        print(page_dominant_orientation)
         spans_to_merge = [
             span
             for span in spans_to_merge

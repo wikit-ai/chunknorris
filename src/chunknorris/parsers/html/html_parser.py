@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from typing import Any
 
 from ...core.components import MarkdownDoc
 from ...core.custom_markdownify import (
@@ -11,7 +12,7 @@ _RE_BLANK_LINES = re.compile(r"(?:\n\s*){3,}")
 _RE_BASE64_IMAGE = re.compile(
     r"data:image/(?:bmp|gif|ico|jpg|jpeg|png|svg|webp|x-icon|svg\+xml);base64,[a-zA-Z0-9+/]+=*"
 )
-_MARKDOWNIFY_OPTIONS: dict = {
+_MARKDOWNIFY_OPTIONS: dict[str, Any] = {
     "autolinks": False,
     "heading_style": "ATX",
     "strip": ["figure", "img"],
