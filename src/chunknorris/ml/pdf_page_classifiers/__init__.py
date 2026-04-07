@@ -118,7 +118,8 @@ def load_classifier(
         print(result["needs_image_embedding"], result["predicted_classes"])
     """
     if backend is None:
-        from chunknorris.ml import get_ml_backend
+        # pylint: disable=import-outside-toplevel
+        from chunknorris.ml._backend import get_ml_backend
 
         backend = get_ml_backend()
 
@@ -147,8 +148,9 @@ def load_classifier(
 
 
 def _load_onnx(repo_or_dir: str, is_hf: bool) -> Any:
+    # pylint: disable=import-outside-toplevel
     from .classifier_onnx import PDFPageClassifierONNX
-    from .hf_utils import (
+    from .hf_utils import (  # pylint: disable=import-outside-toplevel
         _ONNX_FP32_FILES,
         _ONNX_INT8_FILES,
         _download_with_int8_fallback,
@@ -163,8 +165,13 @@ def _load_onnx(repo_or_dir: str, is_hf: bool) -> Any:
 
 
 def _load_openvino(repo_or_dir: str, device: str, is_hf: bool) -> Any:
+    # pylint: disable=import-outside-toplevel
     from .classifier_ov import PDFPageClassifierOV
-    from .hf_utils import _OV_FP32_FILES, _OV_INT8_FILES, _download_with_int8_fallback
+    from .hf_utils import (  # pylint: disable=import-outside-toplevel
+        _OV_FP32_FILES,
+        _OV_INT8_FILES,
+        _download_with_int8_fallback,
+    )
 
     model_dir = (
         _download_with_int8_fallback(repo_or_dir, _OV_INT8_FILES, _OV_FP32_FILES)
