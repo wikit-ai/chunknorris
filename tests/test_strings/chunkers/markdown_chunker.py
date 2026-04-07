@@ -116,7 +116,7 @@ MD_BIG_CHUNK_OUT = [
     "# This is header 1\n\n## This is header 2.1\n\nword word word word word word word word word word",
     "# This is header 1\n\n## This is header 2.1\n\nword word word word word word word word word word",
     "# This is header 1\n\n## This is header 2.1\n\nword word word word word word word word word word",
-    "# This is header 1\n\n## This is header 2.2\n\n## This is header 2.2\n\nword word word word word word word word word word",
+    "# This is header 1\n\n## This is header 2.1\n\n## This is header 2.2\n\nword word word word word word word word word word",
     "# This is header 1\n\n## This is header 2.2\n\nword word word word word word word word word word",
     "# This is header 1\n\n## This is header 2.2\n\nword word word word word word word word word word",
 ]

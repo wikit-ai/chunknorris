@@ -2,14 +2,14 @@ from abc import ABC, abstractmethod
 
 from ..chunkers.abstract_chunker import AbstractChunker
 from ..core.components import Chunk
-from ..parsers.abstract_parser import AbstractParser
+from ..parsers.abstract_parser import AnyParser
 
 
 class AbstractPipeline(ABC):
-    parser: AbstractParser
+    parser: AnyParser
     chunker: AbstractChunker
 
-    def __init__(self, parser: AbstractParser, chunker: AbstractChunker) -> None:
+    def __init__(self, parser: AnyParser, chunker: AbstractChunker) -> None:
         self.parser = parser
         self.chunker = chunker
 

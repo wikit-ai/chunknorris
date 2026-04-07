@@ -1,4 +1,5 @@
 import re
+from functools import cached_property
 from operator import attrgetter
 from typing import Any
 
@@ -47,25 +48,65 @@ class PdfTable:
         self.cells = cells
         self.page = page
 
-    @property
+    @cached_property
+    def _coords(self) -> npt.NDArray[np.float32]:
+        return np.array([[c.x0, c.y0, c.x1, c.y1] for c in self.cells], dtype=np.float32)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+
+    @cached_property
     def bbox(self) -> pymupdf.Rect:
-        return pymupdf.Rect(
-            min(self.cells, key=lambda cell: cell.x0).x0,  # type: ignore : missing typing in pymuPdf | Rect.x0 : float
-            min(self.cells, key=lambda cell: cell.y0).y0,  # type: ignore : missing typing in pymuPdf | Rect.y0 : float
-            max(self.cells, key=lambda cell: cell.x1).x1,  # type: ignore : missing typing in pymuPdf | Rect.x1 : float
-            max(self.cells, key=lambda cell: cell.y1).y1,  # type: ignore : missing typing in pymuPdf | Rect.y1 : float
-        )
+        mins = self._coords.min(axis=0)
+        maxs = self._coords.max(axis=0)
+        return pymupdf.Rect(mins[0], mins[1], maxs[2], maxs[3])
 
     @property
     def is_header_footer(self) -> bool:
         return all(span.is_header_footer for cell in self.cells for span in cell.spans)
 
-    @property
+    @cached_property
     def order(self) -> int:
-        return min(
-            (span for cell in self.cells for span in cell.spans),
-            key=attrgetter("order"),
-        ).order
+        spans = [span for cell in self.cells for span in cell.spans]
+        if not spans:
+            return 0
+        return min(spans, key=attrgetter("order")).order
+
+    @cached_property
+    def _y_lines(self) -> list[int]:
+        """Sorted unique y-edge coordinates (rounded to int) of all cells."""
+        coords = self._coords
+        return sorted(
+            set(coords[:, 1].round().astype(int))
+            | set(coords[:, 3].round().astype(int))
+        )
+
+    @cached_property
+    def _x_lines(self) -> list[int]:
+        """Sorted unique x-edge coordinates (rounded to int) of all cells."""
+        coords = self._coords
+        return sorted(
+            set(coords[:, 0].round().astype(int))
+            | set(coords[:, 2].round().astype(int))
+        )
+
+    @cached_property
+    def has_merged_cells(self) -> bool:
+        """Returns True if any cell in the table spans multiple rows or columns."""
+        n_rows = len(self._y_lines) - 1
+        n_cols = len(self._x_lines) - 1
+        return len(self.cells) < n_rows * n_cols
+
+    @cached_property
+    def _grid(self) -> list[list[Cell]]:
+        """Grid of cells as if no cells were merged (inner cache for get_table_grid)."""
+        coords = self._coords
+        y_lines = sorted(set(coords[:, 1]) | set(coords[:, 3]))
+        x_lines = sorted(set(coords[:, 0]) | set(coords[:, 2]))
+        grid_cells: list[list[Cell]] = []
+        for y0, y1 in zip(y_lines[:-1], y_lines[1:]):
+            row_cells: list[Cell] = []
+            for x0, x1 in zip(x_lines[:-1], x_lines[1:]):
+                row_cells.append(Cell(x0, y0, x1, y1))
+            grid_cells.append(row_cells)
+        return grid_cells
 
     def get_table_grid(self) -> list[list[Cell]]:
         """Gets the grid of the table.
@@ -75,66 +116,114 @@ class PdfTable:
         Returns:
             list[list[Cells]] : the list of cells, organized by row
         """
-        y_lines = sorted(
-            list(
-                set(cell.y0 for cell in self.cells)  # type: ignore : missing typing in pymuPdf | Rect.y0 : float
-                | set(cell.y1 for cell in self.cells)  # type: ignore : missing typing in pymuPdf | Rect.y1 : float
-            )
-        )
-        x_lines = sorted(
-            list(
-                set(cell.x0 for cell in self.cells)  # type: ignore : missing typing in pymuPdf | Rect.x0 : float
-                | set(cell.x1 for cell in self.cells)  # type: ignore : missing typing in pymuPdf | Rect.x1 : float
-            )
-        )
-        grid_cells: list[list[Cell]] = []
-        for y0, y1 in zip(y_lines[:-1], y_lines[1:]):
-            row_cells: list[Cell] = []
-            for x0, x1 in zip(x_lines[:-1], x_lines[1:]):
-                row_cells.append(Cell(x0, y0, x1, y1))
-            grid_cells.append(row_cells)
+        return self._grid
 
-        return grid_cells
-
-    def to_pandas(self) -> pd.DataFrame:
+    def to_pandas(self, has_header: bool = True) -> pd.DataFrame:
         """Transforms this table to a pd.DataFrame
+
+        Args:
+            has_header (bool): whether the first row should be used as column headers.
+                Defaults to True.
 
         Returns:
             pd.DataFrame : the table as dataframe
         """
         grid_cells = self.get_table_grid()
+        ac = self._coords
         df_constructor: list[list[str]] = []
         for grid_row in grid_cells:
             row_text: list[str] = []
             for grid_cell in grid_row:
-                cell_text = ""
-                for cell in self.cells:
-                    if cell.contains(grid_cell):  # type: ignore : missing typing in pymuPdf | Rect.contains(r: Rect | Point) -> bool
-                        for span in cell.spans:
-                            cell_text += (
-                                " " + span.text
-                                if not span.link
-                                else f"[{span.text}]({span.link.uri})"
-                            )
-                row_text.append(cell_text)
+                # Vectorized containment: find actual cell(s) that fully contain this grid sub-cell
+                mask = (
+                    (ac[:, 0] <= grid_cell.x0)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+                    & (ac[:, 1] <= grid_cell.y0)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+                    & (ac[:, 2] >= grid_cell.x1)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+                    & (ac[:, 3] >= grid_cell.y1)  # type: ignore : missing typing in pymuPdf | Rect coords : float
+                )
+                parts: list[str] = []
+                for i in np.where(mask)[0]:
+                    for span in self.cells[i].spans:
+                        parts.append(
+                            f"[{span.text}]({span.link.uri})"
+                            if span.link
+                            else span.text
+                        )
+                row_text.append(" ".join(parts))
             df_constructor.append(row_text)
 
+        if has_header:
+            df = pd.DataFrame(df_constructor[1:], columns=df_constructor[0])
+        else:
+            df = pd.DataFrame(df_constructor)
         df = (
-            pd.DataFrame(df_constructor[1:], columns=df_constructor[0])
-            .drop_duplicates()
-            .dropna(axis=0, how="all")  # type: ignore | type of dropna in partially unknown
-            .dropna(axis=1, how="all")  # type: ignore | type of dropna in partially unknown
+            df.drop_duplicates()
+            .dropna(axis=0, how="all")  # type: ignore | type of dropna is partially unknown
+            .dropna(axis=1, how="all")  # type: ignore | type of dropna is partially unknown
         )
 
         return df
 
-    def to_markdown(self) -> str:
-        """Builds a markdown string from the provided table
+    def to_html(self, has_header: bool = True) -> str:
+        """Builds an HTML string from the provided table, preserving merged cells
+        via colspan/rowspan attributes. Each cell's text is written exactly once,
+        avoiding the duplication that occurs when de-merging.
+
+        Args:
+            has_header (bool): whether the first row should be rendered as <th> elements.
+                Defaults to True.
 
         Returns:
-            str: the markdown string
+            str: the HTML table string
         """
-        table_as_md = self.to_pandas().to_markdown(index=False)
+        y_to_idx = {y: i for i, y in enumerate(self._y_lines)}
+        x_to_idx = {x: i for i, x in enumerate(self._x_lines)}
+
+        rows: dict[int, list[tuple[int, int, int, Cell]]] = {}
+        for cell in self.cells:
+            row_idx = y_to_idx[round(cell.y0)]  # type: ignore : missing typing in pymuPdf | Rect coords : float
+            col_idx = x_to_idx[round(cell.x0)]  # type: ignore
+            rowspan = y_to_idx[round(cell.y1)] - row_idx  # type: ignore
+            colspan = x_to_idx[round(cell.x1)] - col_idx  # type: ignore
+            rows.setdefault(row_idx, []).append((col_idx, colspan, rowspan, cell))
+
+        html_rows = [sorted(rows[i], key=lambda x: x[0]) for i in sorted(rows)]
+
+        parts = ["<table>"]
+        for i, row_cells in enumerate(html_rows):
+            tag = "th" if (has_header and i == 0) else "td"
+            parts.append("<tr>")
+            for col_idx, colspan, rowspan, cell in row_cells:
+                text = " ".join(
+                    f"[{span.text}]({span.link.uri})" if span.link else span.text
+                    for span in cell.spans
+                )
+                attrs = ""
+                if colspan > 1:
+                    attrs += f' colspan="{colspan}"'
+                if rowspan > 1:
+                    attrs += f' rowspan="{rowspan}"'
+                parts.append(f"<{tag}{attrs}>{text}</{tag}>")
+            parts.append("</tr>")
+        parts.append("</table>")
+
+        return "".join(parts)
+
+    def to_markdown(self, has_header: bool = True) -> str:
+        """Builds a markdown string from the provided table.
+        Falls back to HTML when the table contains merged cells, to avoid
+        duplicating cell text across de-merged sub-cells.
+
+        Args:
+            has_header (bool): whether the first row should be used as column headers.
+                Defaults to True.
+
+        Returns:
+            str: the markdown (or HTML) string
+        """
+        if self.has_merged_cells:
+            return self.to_html(has_header=has_header)
+        table_as_md = self.to_pandas(has_header=has_header).to_markdown(index=False)
         table_as_md = re.sub(r"\s{3,}", "  ", table_as_md)
         table_as_md = re.sub(r"-{3,}", "---", table_as_md)
 
@@ -196,12 +285,12 @@ class TableFinder:
         for table_lines in lines_grouped_by_table:
             try:
                 parsed_tables.append(self.build_table(table_lines))
-            except AssertionError:
+            except Exception:
                 LOGGER.warning(
                     "Table parsing failed on page %i (likely because detected lines are not a table).",
                     page.number,  # type: ignore | missing typing in pymupdf page.number -> int
+                    exc_info=True,
                 )
-                pass
         # remove tables with no cells
         return [tab for tab in parsed_tables if tab[2].size]
 
@@ -281,15 +370,15 @@ class TableFinder:
             drawing_items: list[tuple[Any]] = []
             for item in drawing["items"]:
                 if item[0] == "re":
-                    if item[1].width < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.witdh : float
-                        mid_x = (item[1].x1 - item[1].x0) / 2 + item[1].x0  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
+                    if item[1].width < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.width : float
+                        mid_x = (item[1].x0 + item[1].x1) / 2  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
                         item = (
                             "l",
                             pymupdf.Point(mid_x, item[1].y0),  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
                             pymupdf.Point(mid_x, item[1].y1),  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
                         )
                     elif item[1].height < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.height : float
-                        mid_y = (item[1].y1 - item[1].y0) / 2 + item[1].y0  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
+                        mid_y = (item[1].y0 + item[1].y1) / 2  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
                         item = (
                             "l",
                             pymupdf.Point(item[1].x0, mid_y),  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
@@ -351,7 +440,10 @@ class TableFinder:
         # Get cells
         cells = self._get_cells(intersections, lines_coordinates)
         if not cells.size or not TableFinder._table_sanity_check(cells):
-            return lines_coordinates, intersections, np.empty((0, 4))
+            if cells.size:
+                cells = TableFinder._fill_topleft_gap(cells, intersections)
+            if not cells.size or not TableFinder._table_sanity_check(cells):
+                return lines_coordinates, intersections, np.empty((0, 4))
 
         return lines_coordinates, intersections, cells
 
@@ -361,6 +453,10 @@ class TableFinder:
         """
         Find all intersection points between line segments.
 
+        All lines are guaranteed axis-aligned (H or V) by _filter_lines upstream,
+        so we split them and compute intersections analytically in O(n_h * n_v)
+        instead of the general O(n^2) formula.
+
         Args:
             coordinates (npt.NDArray[np.float32]): A numpy array of shape (n_lines, 4) where each row is the coordinates
                 of the points of the lines like (x0, y0, x1, y1).
@@ -369,53 +465,36 @@ class TableFinder:
             (npt.NDArray[np.float32]): A numpy array of shape (n_intersections, 2) where each row is a the coordinates
                 an intersection point between 2 segments like (x, y).
         """
-        # Extract coordinates
-        x1, y1, x2, y2 = self._bounding_boxes(coordinates)
-        # Create matrices for pairwise combinations
-        n = coordinates.shape[0]
-        x1_tile = np.tile(x1, (n, 1))
-        y1_tile = np.tile(y1, (n, 1))
-        x2_tile = np.tile(x2, (n, 1))
-        y2_tile = np.tile(y2, (n, 1))
-        x3_tile = x1_tile.T
-        y3_tile = y1_tile.T
-        x4_tile = x2_tile.T
-        y4_tile = y2_tile.T
-        # Calculate denominators
-        denom = (x1_tile - x2_tile) * (y3_tile - y4_tile) - (y1_tile - y2_tile) * (
-            x3_tile - x4_tile
-        )
-        # Avoid division by zero for parallel lines
-        denom[denom == 0] = np.nan
-        # Calculate intersection points
-        px = (
-            (x1_tile * y2_tile - y1_tile * x2_tile) * (x3_tile - x4_tile)
-            - (x1_tile - x2_tile) * (x3_tile * y4_tile - y3_tile * x4_tile)
-        ) / denom
-        py = (
-            (x1_tile * y2_tile - y1_tile * x2_tile) * (y3_tile - y4_tile)
-            - (y1_tile - y2_tile) * (x3_tile * y4_tile - y3_tile * x4_tile)
-        ) / denom
-        # Check if intersection points are within the segments
-        within_segment1 = (
-            (np.minimum(x1_tile, x2_tile) - self.snap_tolerance <= px)
-            & (px <= np.maximum(x1_tile, x2_tile) + self.snap_tolerance)
-            & (np.minimum(y1_tile, y2_tile) - self.snap_tolerance <= py)
-            & (py <= np.maximum(y1_tile, y2_tile) + self.snap_tolerance)
-        )
-        within_segment2 = (
-            (np.minimum(x3_tile, x4_tile) - self.snap_tolerance <= px)
-            & (px <= np.maximum(x3_tile, x4_tile) + self.snap_tolerance)
-            & (np.minimum(y3_tile, y4_tile) - self.snap_tolerance <= py)
-            & (py <= np.maximum(y3_tile, y4_tile) + self.snap_tolerance)
-        )
-        valid_intersections = within_segment1 & within_segment2
-        # Extract valid intersection points
-        intersections = np.column_stack(
-            (px[valid_intersections], py[valid_intersections])
-        )
+        is_horizontal = coordinates[:, 1] == coordinates[:, 3]
+        h = coordinates[is_horizontal]
+        v = coordinates[~is_horizontal]
 
-        return np.unique(intersections, axis=0)
+        if not h.size or not v.size:
+            return np.empty((0, 2), dtype=np.float32)
+
+        tol = self.snap_tolerance
+        # Use min/max to handle unordered endpoints from pymupdf
+        hx0 = np.minimum(h[:, 0], h[:, 2])
+        hx1 = np.maximum(h[:, 0], h[:, 2])
+        hy = h[:, 1]  # == h[:, 3] guaranteed by _filter_lines
+
+        vx = v[:, 0]  # == v[:, 2] guaranteed by _filter_lines
+        vy0 = np.minimum(v[:, 1], v[:, 3])
+        vy1 = np.maximum(v[:, 1], v[:, 3])
+
+        # Broadcast to shape (n_h, n_v): H line i intersects V line j iff
+        # vx[j] is within H line i's x-range AND hy[i] is within V line j's y-range
+        valid = (
+            (hx0[:, None] - tol <= vx[None, :])
+            & (vx[None, :] <= hx1[:, None] + tol)
+            & (vy0[None, :] - tol <= hy[:, None])
+            & (hy[:, None] <= vy1[None, :] + tol)
+        )
+        hi, vi = np.where(valid)
+        if not hi.size:
+            return np.empty((0, 2), dtype=np.float32)
+
+        return np.unique(np.column_stack([vx[vi], hy[hi]]), axis=0)
 
     def normalize_table_grid(
         self, grid_points: npt.NDArray[np.float32]
@@ -432,6 +511,7 @@ class TableFinder:
         Returns:
             npt.NDArray[np.float32] : the aligned points.
         """
+        grid_points = grid_points.copy()
         x = grid_points[:, 0]
         groups_by_x = self._get_grouped_idxes(x)
         for group in groups_by_x:
@@ -450,11 +530,16 @@ class TableFinder:
         of the groups.
         For examples, if values = [2, 3, 5, 10] and threshold = 2,
         it will return [[0,1], [2], [3]]"""
-        x = np.sort(values)
+        sorted_idxs = np.argsort(values)
+        x = np.asarray(values)[sorted_idxs]
         diff = x[1:] - x[:-1]
-        gps = np.concatenate([[0], np.cumsum(diff >= self.line_width_threshold)])
+        # Use line_width_threshold here (not snap_tolerance): normalization needs a
+        # slightly larger window than intersection detection to produce a clean, minimal
+        # grid. snap_tolerance=3 keeps too many near-duplicate points distinct, bloating
+        # the grid and slowing downstream cell detection.
+        split_at = np.where(diff >= self.line_width_threshold)[0] + 1
 
-        return [np.argsort(values)[gps == i] for i in range(gps[-1] + 1)]
+        return np.split(sorted_idxs, split_at)
 
     def _normalize_lines_grid(
         self,
@@ -470,11 +555,11 @@ class TableFinder:
                 as an array of shape (n_intersections, 2)
 
         Returns:
-            npt.NDArray[np.float32]: _description_
+            npt.NDArray[np.float32]: line coordinates remapped onto the intersection grid,
+                shape (n_lines, 4).
         """
-        sorted_x_y = np.sort(intersections, axis=0)
-        x_targets = np.unique(sorted_x_y[:, 0])
-        y_targets = np.unique(sorted_x_y[:, 1])
+        x_targets = np.unique(intersections[:, 0])
+        y_targets = np.unique(intersections[:, 1])
 
         x_bins = (x_targets[1:] + x_targets[:-1]) / 2
         y_bins = (y_targets[1:] + y_targets[:-1]) / 2
@@ -505,22 +590,6 @@ class TableFinder:
 
         return x1, y1, x2, y2
 
-    def _bboxes_intersect_or_nearly(
-        self,
-        bbox_a: tuple[float],
-        bbox_b: tuple[float],
-    ) -> bool:
-        """Check if two bounding boxes of lines a and b intersect or are nearly intersecting.
-        Arguments must be bbox coordinates as a tuple representing (x1, y1, x2, y2)."""
-        x1a, y1a, x2a, y2a = bbox_a
-        x1b, y1b, x2b, y2b = bbox_b
-        return (
-            (x1a <= x2b + self.snap_tolerance)
-            & (x2a + self.snap_tolerance >= x1b)
-            & (y1a <= y2b + self.snap_tolerance)
-            & (y2a + self.snap_tolerance >= y1b)
-        )
-
     def _build_adjacency_matrix(
         self, coordinates: npt.NDArray[np.float32]
     ) -> npt.NDArray[np.bool_]:
@@ -535,16 +604,14 @@ class TableFinder:
                 line intersects with other lines.
         """
         x1, y1, x2, y2 = TableFinder._bounding_boxes(coordinates)
-
-        n = len(coordinates)
-        adjacency_matrix = np.zeros((n, n), dtype=bool)
-        for i in range(n):
-            for j in range(i + 1, n):
-                if self._bboxes_intersect_or_nearly(
-                    (x1[i], y1[i], x2[i], y2[i]), (x1[j], y1[j], x2[j], y2[j])
-                ):
-                    adjacency_matrix[i, j] = True
-                    adjacency_matrix[j, i] = True
+        tol = self.snap_tolerance
+        adjacency_matrix = (
+            (x1[:, None] <= x2[None, :] + tol)
+            & (x2[:, None] + tol >= x1[None, :])
+            & (y1[:, None] <= y2[None, :] + tol)
+            & (y2[:, None] + tol >= y1[None, :])
+        )
+        np.fill_diagonal(adjacency_matrix, False)
 
         return adjacency_matrix
 
@@ -684,17 +751,22 @@ class TableFinder:
                 corresponding to provided points.
         """
         cells = TableFinder._get_potential_cells_for_point(topleft_point, intersections)
-        if cells.size:
-            cells = TableFinder._remove_cells_with_invalid_borders(
-                cells, lines_combinations
+        if not cells.size:
+            return np.empty((0, 4), dtype=np.float32)
+
+        cells = TableFinder._remove_cells_with_invalid_borders(
+            cells, lines_combinations
+        )
+        cells = TableFinder._remove_nesting_cells(cells)
+        if cells.shape[0] > 1:
+            LOGGER.warning(
+                "Merged cell resolution produced %d candidates for point (%g, %g); "
+                "expected 0 or 1. Keeping the first.",
+                cells.shape[0],
+                topleft_point[0],
+                topleft_point[1],
             )
-            cells = TableFinder._remove_nesting_cells(cells)
-            assert cells.shape[0] in [
-                0,
-                1,
-            ], "Error, only 1 or 0 cells should be returned."
-        else:
-            cells = np.empty((0, 4), dtype=np.float32)
+            return cells[:1]
 
         return cells
 
@@ -773,21 +845,24 @@ class TableFinder:
         """
         x0, y0, x1, y1 = TableFinder._bounding_boxes(cells_coords)
         # build array of shape (n_cells, 4, 4), in which we have the coords of the 4 borders of each cell.
-        left_lines = np.array([x0, y0, x0, y1]).T
-        top_lines = np.array([x0, y0, x1, y0]).T
-        right_lines = np.array([x1, y0, x1, y1]).T
-        bottom_lines = np.array([x0, y1, x1, y1]).T
+        left_lines = np.stack([x0, y0, x0, y1], axis=1)
+        top_lines = np.stack([x0, y0, x1, y0], axis=1)
+        right_lines = np.stack([x1, y0, x1, y1], axis=1)
+        bottom_lines = np.stack([x0, y1, x1, y1], axis=1)
 
         cells_borders = np.stack(
             [left_lines, top_lines, right_lines, bottom_lines], axis=1
+        )  # (n_cells, 4, 4)
+        # Encode each 4-float border as bytes for vectorized membership test via np.isin
+        dt = np.dtype(
+            [("a", np.float32), ("b", np.float32), ("c", np.float32), ("d", np.float32)]
         )
-        lines_coordinates_set = set(map(tuple, lines_coordinates))
-        valid_borders_mask = np.array(
-            [
-                [tuple(border) in lines_coordinates_set for border in cell_borders]
-                for cell_borders in cells_borders
-            ],
-            np.bool_,
+        borders_struct = (
+            cells_borders.reshape(-1, 4).astype(np.float32).view(dt).ravel()
+        )
+        lines_struct = lines_coordinates.astype(np.float32).view(dt).ravel()
+        valid_borders_mask = np.isin(borders_struct, lines_struct).reshape(
+            len(cells_coords), 4
         )
 
         return valid_borders_mask
@@ -821,24 +896,6 @@ class TableFinder:
         return cells_coords[containment_mask]
 
     @staticmethod
-    def point_is_on_line(
-        point: tuple[float, float],
-        line: tuple[float, float, float, float],
-        tolerance: float = 1e-6,
-    ) -> bool:
-        """Check if a point is on a line segment."""
-        x1, y1, x2, y2 = line
-        x, y = point
-        # Check if the point lies on the line using vector cross product
-        if abs((y - y1) * (x2 - x1) - (x - x1) * (y2 - y1)) > tolerance:
-            return False
-        # Check if the point is within the line segment bounds
-        if min(x1, x2) <= x <= max(x1, x2) and min(y1, y2) <= y <= max(y1, y2):
-            return True
-
-        return False
-
-    @staticmethod
     def subdivide_lines(
         lines: npt.NDArray[np.float32], intersections: npt.NDArray[np.float32]
     ) -> npt.NDArray[np.float32]:
@@ -856,30 +913,36 @@ class TableFinder:
         Returns:
             npt.NDArray[np.float32]: the cooridiantes of subdivided lines.
         """
-        new_lines: list[tuple[float, float, float, float]] = []
+        lx0, ly0, lx1, ly1 = lines[:, 0], lines[:, 1], lines[:, 2], lines[:, 3]
+        px, py = intersections[:, 0], intersections[:, 1]
 
-        for line in lines:
-            split_points: list[tuple[float, float]] = []
+        # Vectorized point-on-line check: shape (n_lines, n_intersections)
+        cross = (py[None, :] - ly0[:, None]) * (lx1 - lx0)[:, None] - (
+            px[None, :] - lx0[:, None]
+        ) * (ly1 - ly0)[:, None]
+        on_line = (
+            (np.abs(cross) < 1e-6)
+            & (np.minimum(lx0, lx1)[:, None] <= px[None, :])
+            & (px[None, :] <= np.maximum(lx0, lx1)[:, None])
+            & (np.minimum(ly0, ly1)[:, None] <= py[None, :])
+            & (py[None, :] <= np.maximum(ly0, ly1)[:, None])
+        )
 
-            # Check each intersection to see if it lies on the line
-            for intersection in intersections:
-                if TableFinder.point_is_on_line(intersection, line):
-                    split_points.append(intersection)
-            # Sort the split points in the order they appear on the line
-            x0, y0 = line[:2]
-            split_points.sort(
-                key=lambda p, x0=x0, y0=y0: abs(p[0] - x0) + abs(p[1] - y0)
-            )
-            # Subdivide the line at each of these split points
-            x1, y1 = line[:2]
-            for x, y in split_points:
-                new_lines.append([x1, y1, x, y])
-                x1, y1 = x, y
-            new_lines.append([x1, y1, line[2], line[3]])
-        # Get uniues lines and remove lines that are actually points
-        new_lines = np.unique(np.array(new_lines), axis=0)
-        return new_lines[
-            (new_lines[:, 0] != new_lines[:, 2]) | (new_lines[:, 1] != new_lines[:, 3])
+        new_lines: list[npt.NDArray[np.float32]] = []
+        for i, line in enumerate(lines):
+            split_pts = intersections[on_line[i]]
+            # Sort split points along the line's varying coordinate (lines are axis-aligned)
+            is_h = line[1] == line[3]
+            order = np.argsort(split_pts[:, 0] if is_h else split_pts[:, 1])
+            split_pts = split_pts[order]
+            # Build ordered sequence: start → split points → end, then zip consecutive pairs
+            all_pts = np.vstack([[line[0], line[1]], split_pts, [line[2], line[3]]])
+            new_lines.append(np.column_stack([all_pts[:-1], all_pts[1:]]))
+
+        new_lines_arr = np.unique(np.vstack(new_lines), axis=0)
+        return new_lines_arr[
+            (new_lines_arr[:, 0] != new_lines_arr[:, 2])
+            | (new_lines_arr[:, 1] != new_lines_arr[:, 3])
         ]
 
     @staticmethod
@@ -903,77 +966,124 @@ class TableFinder:
             npt.NDArray[np.float32]: An array of shape (n, 4) containing
             all the coordinates of the segments + every possible recombination.
         """
-        combined_lines = lines_coordinates
-        n_prev_combined_lines = -1
+        # Instead of a fixpoint loop, compute all combinations in one pass:
+        # group collinear segments (same y for H-lines, same x for V-lines),
+        # find connected chains (segments sharing exact endpoints), then enumerate
+        # all O(n²) (start_i, end_j) super-segment pairs within each chain.
+        is_h = lines_coordinates[:, 1] == lines_coordinates[:, 3]
+        combos: list[npt.NDArray[np.float32]] = [lines_coordinates]
 
-        while len(combined_lines) != n_prev_combined_lines:
-            n_prev_combined_lines = len(combined_lines)
-            new_combinations: list[list[float]] = []
-            # Build dictionaries for quick lookup of start and end points
-            start_to_indices: dict[tuple[float, float], list[int]] = {}
-            for idx, line in enumerate(combined_lines):
-                start_point = (line[0], line[1])
-                start_to_indices.setdefault(start_point, []).append(idx)
+        for lines, axis_col, pos0_col, pos1_col in (
+            (lines_coordinates[is_h], 1, 0, 2),  # H: group by y, vary along x
+            (lines_coordinates[~is_h], 0, 1, 3),  # V: group by x, vary along y
+        ):
+            if not lines.size:
+                continue
 
-            for idx, (x0, y0, x1, y1) in enumerate(combined_lines):
-                # Look for lines that start where the current line ends
-                end_point = (x1, y1)
-                if end_point in start_to_indices:
-                    # Combine with all lines starting at the end point
-                    for next_idx in start_to_indices[end_point]:
-                        # only pay attention to vertical/horizontal lines
-                        if (
-                            combined_lines[next_idx][2] == x0
-                            or combined_lines[next_idx][3] == y1
-                        ):
-                            new_line = [
-                                x0,
-                                y0,
-                                combined_lines[next_idx][2],
-                                combined_lines[next_idx][3],
-                            ]
-                            new_combinations.append(new_line)
+            axis_vals = lines[:, axis_col]
+            # Normalise direction so start <= end
+            c0 = np.minimum(lines[:, pos0_col], lines[:, pos1_col])
+            c1 = np.maximum(lines[:, pos0_col], lines[:, pos1_col])
 
-            if new_combinations:
-                # Add new combinations and remove duplicates
-                combined_lines = np.unique(
-                    np.vstack(
-                        (combined_lines, np.array(new_combinations, dtype=np.float32))
-                    ),
-                    axis=0,
-                )
+            for ax in np.unique(axis_vals):
+                mask = axis_vals == ax
+                g_c0 = c0[mask]
+                g_c1 = c1[mask]
+                order = np.argsort(g_c0)
+                g_c0 = g_c0[order]
+                g_c1 = g_c1[order]
 
-        return combined_lines
+                # Connected components: a boundary exists where no current segment
+                # ends exactly at the next segment's start (i.e. there is a gap).
+                running_max_end = np.maximum.accumulate(g_c1)
+                is_new_comp = np.concatenate([[True], g_c0[1:] > running_max_end[:-1]])
+                comp_ids = np.cumsum(is_new_comp) - 1
 
-    @staticmethod  # TODO : investigate if possible to replace _get_recombined_lines with this one
-    def _get_recombined_lines_v2(
-        lines_coordinates: npt.NDArray[np.float32],
+                for comp_id in range(int(comp_ids[-1]) + 1):
+                    seg_mask = comp_ids == comp_id
+                    seg_c0 = g_c0[seg_mask]
+                    seg_c1 = g_c1[seg_mask]
+                    n = len(seg_c0)
+                    if n < 2:
+                        continue  # single segment — no new combinations
+
+                    # All (i, j) pairs with i < j: super-segment from start[i] to end[j]
+                    ii, jj = np.triu_indices(n, k=1)
+                    fixed = np.full(len(ii), ax, dtype=np.float32)
+                    if axis_col == 1:  # H lines: y is fixed
+                        new = np.column_stack([seg_c0[ii], fixed, seg_c1[jj], fixed])
+                    else:  # V lines: x is fixed
+                        new = np.column_stack([fixed, seg_c0[ii], fixed, seg_c1[jj]])
+                    combos.append(new)
+
+        return np.unique(np.vstack(combos), axis=0)
+
+    @staticmethod
+    def _fill_topleft_gap(
+        cells: npt.NDArray[np.float32],
+        intersections: npt.NDArray[np.float32],
     ) -> npt.NDArray[np.float32]:
-        """WARNING : IMPLEMENTATION DOESN'T WORK
-        I leave it here for further investigation as it might be faster and easier to read
-        than current used implementation : _get_recombined_lines.
-        """
-        prev_n_lines = -1  # dummy to go in while loop
-        while prev_n_lines < lines_coordinates.shape[0]:
-            prev_n_lines = lines_coordinates.shape[0]
-            start_points = lines_coordinates[:, :2]
-            end_points = lines_coordinates[:, 2:]
-            # Get mask where start point and endpoints match
-            mask = (start_points[:, np.newaxis, :] == end_points[np.newaxis, :, :]).all(
-                axis=2
-            )  # PROBLEM WITH THIS LINE
-            new_lines = np.hstack(
-                [start_points[mask.any(axis=0)], end_points[mask.any(axis=1)]]
-            )
-            new_lines = new_lines[
-                (new_lines[:, 0] == new_lines[:, 2])
-                | (new_lines[:, 1] == new_lines[:, 3])
-            ]  # only vertical and horizontal lines
-            lines_coordinates = np.unique(
-                np.vstack([new_lines, lines_coordinates]), axis=0
-            )
+        """Recover tables where top-left cells are missing.
 
-        return lines_coordinates
+        In multiindex tables the top-left corner block has no border lines,
+        so those cells fail border validation, cannot be resolved as merged cells,
+        and are silently dropped — causing the sanity check to fail.
+
+        This method detects whether the missing cells form a rectangular block
+        anchored exactly at the top-left of the intersection grid (first K columns
+        × first L rows).  If so it re-adds them as empty cells and the sanity
+        check will pass on the second attempt.
+
+        Only called when the sanity check has already failed, so there is no
+        performance impact on correctly-formed tables.
+
+        Args:
+            cells (npt.NDArray[np.float32]): currently detected cells, shape (n, 4).
+            intersections (npt.NDArray[np.float32]): all grid intersection points,
+                shape (m, 2).
+
+        Returns:
+            npt.NDArray[np.float32]: cells with top-left gap filled, or the original
+                cells array if the gap does not match the expected pattern.
+        """
+        full_grid = TableFinder.get_table_cells_without_merged_cells(intersections)
+
+        # Find full-grid cells not covered by any detected cell.
+        # "Covered" means some detected cell fully contains the grid cell.
+        # Shapes after broadcasting: (n_fg, 1) vs (n_cells,) → (n_fg, n_cells)
+        fg_x0 = full_grid[:, 0:1]
+        fg_y0 = full_grid[:, 1:2]
+        fg_x1 = full_grid[:, 2:3]
+        fg_y1 = full_grid[:, 3:4]
+
+        covered = (
+            (cells[:, 0] <= fg_x0)
+            & (cells[:, 1] <= fg_y0)
+            & (cells[:, 2] >= fg_x1)
+            & (cells[:, 3] >= fg_y1)
+        ).any(axis=1)
+
+        if covered.all():
+            return cells
+
+        missing = full_grid[~covered]
+
+        # The missing cells must form a rectangle anchored at the top-left:
+        # their x0 values must be the first K unique column-starts of the grid,
+        # and their y0 values must be the first L unique row-starts.
+        xs = np.unique(full_grid[:, 0])
+        ys = np.unique(full_grid[:, 1])
+        missing_xs = np.unique(missing[:, 0])
+        missing_ys = np.unique(missing[:, 1])
+
+        if not np.array_equal(missing_xs, xs[: len(missing_xs)]):
+            return cells
+        if not np.array_equal(missing_ys, ys[: len(missing_ys)]):
+            return cells
+        if len(missing) != len(missing_xs) * len(missing_ys):
+            return cells
+
+        return np.unique(np.vstack((cells, missing)), axis=0)
 
     @staticmethod
     def _table_sanity_check(cells_coords: npt.NDArray[np.float32]) -> bool:
@@ -988,12 +1098,7 @@ class TableFinder:
             bool: returns True if the sanity check is passed, and False if the table
                 is likely to be a false detection.
         """
-        x0, y0, x1, y1 = (
-            cells_coords[:, 0],
-            cells_coords[:, 1],
-            cells_coords[:, 2],
-            cells_coords[:, 3],
-        )
+        x0, y0, x1, y1 = cells_coords.T
 
         table_area = (np.max(x1) - np.min(x0)) * (np.max(y1) - np.min(y0))
         cells_areas = np.abs((x1 - x0) * (y1 - y0))

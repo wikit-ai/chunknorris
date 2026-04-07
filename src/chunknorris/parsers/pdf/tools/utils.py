@@ -17,16 +17,19 @@ class PdfParserState:
     filepath: str | None = None
     page_start: int = 0
     page_end: int | None = None
-    spans: list[TextSpan] = []
-    lines: list[TextLine] = []
-    blocks: list[TextBlock] = []
-    tables: list[PdfTable] = []
     table_finder: TableFinder = TableFinder()
     main_title: str = ""
-    main_body_fontsizes: list[float] = []
-    document_fontsizes: list[float] = []
     main_body_is_bold: bool = False
     document_orientation: Literal["portrait", "landscape"]
+
+    def __init__(self) -> None:
+        # Mutable per-instance state — must NOT be class-level to avoid sharing across instances
+        self.spans: list[TextSpan] = []
+        self.lines: list[TextLine] = []
+        self.blocks: list[TextBlock] = []
+        self.tables: list[PdfTable] = []
+        self.main_body_fontsizes: list[float] = []
+        self.document_fontsizes: list[float] = []
 
     @property
     def document(self) -> pymupdf.Document:
@@ -65,7 +68,7 @@ class DocSpecsExtraction(PdfParserState):
         page_rect: pymupdf.Rect = self.document[0].rect
         self.document_orientation = "portrait" if page_rect.height > page_rect.width else "landscape"  # type: ignore missing typing in pymupdf | Rect.height : float, Rect.width : float
 
-    def _set_document_font_specs(self):
+    def _set_document_font_specs(self) -> None:
         """Set the specifications of various specifications
         regarding the fonts in the document.
         Stores the attributes in :

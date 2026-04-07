@@ -1,4 +1,3 @@
-import re
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
@@ -6,10 +5,10 @@ from typing import Literal
 import pandas as pd
 
 from ...core.components import MarkdownDoc
-from ..abstract_parser import AbstractParser
+from .abstract_sheet_parser import AbstractSheetParser
 
 
-class ExcelParser(AbstractParser):
+class ExcelParser(AbstractSheetParser[bytes]):
     """Parser for spreadsheets, such as Excel workbooks (.xslx). For a list of handled filetypes,
     refer to https://pandas.pydata.org/docs/reference/api/pandas.read_excel.html"""
 
@@ -110,45 +109,6 @@ class ExcelParser(AbstractParser):
                     )
 
         return output_string
-
-    @staticmethod
-    def convert_df_to_markdown_table(df: pd.DataFrame) -> str:
-        """Converts a DataFrame to markdown.
-        Wraps tabula's method pd.DataFrame.to_markdown()
-        between pre and post processing.
-        Preprocess :
-        - Remove \n in text columns
-        PostProcess :
-        - Replace multiple spaces with 2 spaces.
-
-        Args:
-            df (pd.DataFrame): the dataframe to convert.
-
-        Returns:
-            str: a markdown formatted table.
-        """
-        dtypes = df.apply(  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
-            lambda x: pd.api.types.infer_dtype(x, skipna=True)  # type: ignore | x: pd.Series[Any/co]
-        )
-        string_cols = dtypes[dtypes == "string"].index  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
-        df[string_cols] = df[string_cols].apply(lambda x: x.str.replace("\n", " "))  # type: ignore | x: pd.Series[Any] -> pd.Series[str]
-        md_string = df.to_markdown(index=False)
-        md_string = re.sub(r"\s{3,}", "  ", md_string)
-        md_string = re.sub(r"-{3,}", "---", md_string)
-
-        return md_string
-
-    @staticmethod
-    def convert_df_to_json_lines(df: pd.DataFrame) -> str:
-        """Converts a DataFrame to json lines.
-
-        Args:
-            df (pd.DataFrame): the dataframe to convert.
-
-        Returns:
-            str: the json lines.
-        """
-        return df.to_json(orient="records", force_ascii=False, lines=True)  # type: ignore | df.to_json() -> str
 
     def _determine_best_format(
         self, df: pd.DataFrame

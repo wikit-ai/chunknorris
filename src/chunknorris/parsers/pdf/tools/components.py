@@ -1,8 +1,15 @@
+import re
 from collections import defaultdict
+from functools import cached_property
 from typing import Literal
 
 import pymupdf  # type: ignore : no stubs
 from pydantic import BaseModel, Field
+
+# Matches common numbered-list prefixes: "1. ", "1) ", "a. ", "a) ", "(i) ", "(A) "
+_NUMBERED_LIST_RE = re.compile(
+    r"^\s*(\d+[.)]\s+|[a-zA-Z][.)]\s+|\([a-zA-Z0-9ivxlIVXL]+\)\s+)"
+)
 
 # TODO : Find list of special bullet-list caracters
 INVALID_CHAR_MAP = {
@@ -16,6 +23,8 @@ INVALID_CHAR_MAP = {
     "": "- ",  # arrow-like bullet
     "": "- ",  # triangle-like bullet
 }
+# Pre-built translation table for O(1) per-character lookup, single pass over the string
+_CHAR_TRANSLATION_TABLE = str.maketrans(INVALID_CHAR_MAP)
 
 
 class Link:
@@ -29,10 +38,10 @@ class Link:
 
 class TocTitle(BaseModel):
     text: str = Field(description="The title's text.")
-    source: Literal["metadata", "regex", "fontsize"] = (
-        Field(description="The method used to obtain the title."),
+    source: Literal["metadata", "regex", "fontsize"] = Field(
+        description="The method used to obtain the title."
     )
-    page: int = (Field(description="The destination page refered by the title."),)
+    page: int = Field(description="The destination page refered by the title.")
     level: int | None = Field(
         default=None,
         description="The title's level. From 1 to 6, such as html headers.",
@@ -62,12 +71,13 @@ class TextSpan:
     flags: int
     ascender: float
     descender: float
-    origin = pymupdf.Point
+    origin: pymupdf.Point
     page: int
     # attributes to be modified while processing the pdf
     order: int  # the order of the span among all spans
     isin_table: bool  # whether or not the span is in a table
     is_header_footer: bool  # whether the span is a header or footer
+    is_footnote: bool  # whether the span belongs to a footnote
     link: Link | None  # The link bound to this span, if a link is bound
 
     def __init__(
@@ -106,6 +116,7 @@ class TextSpan:
         self.order = 0
         self.isin_table = False
         self.is_header_footer = False
+        self.is_footnote = False
         self.link = None
 
     @property
@@ -118,23 +129,23 @@ class TextSpan:
 
     @property
     def is_superscripted(self) -> bool:
-        return self.flags & pymupdf.TEXT_FONT_SUPERSCRIPT
+        return bool(self.flags & pymupdf.TEXT_FONT_SUPERSCRIPT)
 
     @property
     def is_italic(self) -> bool:
-        return self.flags & pymupdf.TEXT_FONT_ITALIC
+        return bool(self.flags & pymupdf.TEXT_FONT_ITALIC)
 
     @property
     def is_serifed(self) -> bool:
-        return self.flags & pymupdf.TEXT_FONT_SERIFED
+        return bool(self.flags & pymupdf.TEXT_FONT_SERIFED)
 
     @property
     def is_monospaced(self) -> bool:
-        return self.flags & pymupdf.TEXT_FONT_MONOSPACED
+        return bool(self.flags & pymupdf.TEXT_FONT_MONOSPACED)
 
     @property
     def is_bold(self) -> bool:
-        return self.flags & pymupdf.TEXT_FONT_BOLD
+        return bool(self.flags & pymupdf.TEXT_FONT_BOLD)
 
     @property
     def line_height(self) -> float:
@@ -146,7 +157,7 @@ class TextSpan:
 
     @property
     def is_empty(self) -> bool:
-        return self.text.isspace()
+        return not self.text or self.text.isspace()
 
     @staticmethod
     def _remove_invalid_characters(text: str) -> str:
@@ -158,11 +169,7 @@ class TextSpan:
         Returns:
             str: the cleanedup text
         """
-        # TODO : find more computationaly efficient method ? Maybe use str.translate() in conjunction with str.maketrans()
-        for char, replacement in INVALID_CHAR_MAP.items():
-            text = text.replace(char, replacement)
-
-        return text
+        return text.translate(_CHAR_TRANSLATION_TABLE)
 
     def to_markdown(self) -> str:
         """Format the span's text to markdown format
@@ -206,61 +213,69 @@ class TextLine:
 
         self.is_toc_element = False
 
-    @property
+    @cached_property
     def text(self) -> str:
         return "".join((span.text for span in self.spans)).strip()
 
-    @property
+    @cached_property
     def bbox(self) -> pymupdf.Rect:
         bbox = self.spans[0].bbox
         for span in self.spans[1:]:
             bbox = bbox.include_rect(span.bbox)  # type: ignore : missing typing in pymuPdf | Rect.include_rect(r: Rect) -> Rect
         return bbox
 
-    @property
+    @cached_property
     def line_height(self) -> float:
         lineheight_occurences_map: dict[float, int] = defaultdict(int)
         for span in self.spans:
             lineheight_occurences_map[span.line_height] += len(span.text)
         return max(lineheight_occurences_map, key=lineheight_occurences_map.get)
 
-    @property
+    @cached_property
     def fontsize(self) -> float:
         fontsize_occurences_map: dict[float, int] = defaultdict(int)
         for span in self.spans:
             fontsize_occurences_map[span.fontsize] += len(span.text)
         return max(fontsize_occurences_map, key=fontsize_occurences_map.get)
 
-    @property
+    @cached_property
     def origin(self) -> pymupdf.Point:
         return pymupdf.Point(
             min((span.origin.x for span in self.spans)),  # type: ignore : missing typing in pymuPdf | Point.x -> float
             max((span.origin.y for span in self.spans)),  # type: ignore : missing typing in pymuPdf | Point.y -> float
         )
 
-    @property
+    @cached_property
     def page(self) -> int:
         return self.spans[0].page
 
-    @property
+    @cached_property
     def orientation(self) -> tuple[float, float]:
         return self.spans[0].orientation
 
-    @property
+    @cached_property
     def is_empty(self) -> bool:
         return all(span.is_empty for span in self.spans)
 
-    @property
+    @cached_property
     def is_bold(self) -> bool:
         return all(span.is_bold for span in self.spans if not span.is_empty)
 
-    @property
+    @cached_property
     def is_bullet_point(self) -> bool:
         return self.text.startswith("- ")
+
+    @cached_property
+    def is_numbered_list(self) -> bool:
+        return bool(_NUMBERED_LIST_RE.match(self.text))
 
     @property
     def is_header_footer(self) -> bool:
         return all(span.is_header_footer for span in self.spans)
+
+    @property
+    def is_footnote(self) -> bool:
+        return all(span.is_footnote for span in self.spans if not span.is_empty)
 
     @property
     def order(self) -> int:
@@ -292,22 +307,22 @@ class TextBlock:
         # Attributes to modify while parsing the pdf
         self.section_title = None  # store the TocTitle if block is a ssection title
 
-    @property
-    def text(self):
+    @cached_property
+    def text(self) -> str:
         return " ".join((line.text for line in self.lines))
 
-    @property
+    @cached_property
     def bbox(self) -> pymupdf.Rect:
         bbox = self.lines[0].bbox
         for line in self.lines[1:]:
             bbox = bbox.include_rect(line.bbox)  # type: ignore : missing typing in pymuPdf | Rect.include_rect(r: Rect) -> Rect
         return bbox
 
-    @property
+    @cached_property
     def page(self) -> int:
         return self.lines[0].page
 
-    @property
+    @cached_property
     def orientation(self) -> tuple[float, float]:
         return self.lines[0].orientation
 
@@ -316,18 +331,22 @@ class TextBlock:
         return all(line.is_header_footer for line in self.lines)
 
     @property
+    def is_footnote(self) -> bool:
+        return all(line.is_footnote for line in self.lines if not line.is_empty)
+
+    @property
     def order(self) -> int:
         return min(self.lines, key=lambda x: x.order).order
 
-    @property
+    @cached_property
     def is_empty(self) -> bool:
         return all(line.is_empty for line in self.lines)
 
-    @property
+    @cached_property
     def is_bold(self) -> bool:
         return all(line.is_bold for line in self.lines if not line.is_empty)
 
-    @property
+    @cached_property
     def fontsize(self) -> float:
         fontsize_occurences_map: dict[float, int] = defaultdict(int)
         for line in self.lines:
@@ -343,14 +362,33 @@ class TextBlock:
         if self.is_empty:
             return ""
         md_string = ""
-        for line in self.lines:
-            if line.is_bullet_point or line.is_toc_element:
+        for i, line in enumerate(self.lines):
+            if line.is_bullet_point or line.is_toc_element or line.is_numbered_list:
                 md_string += "\n\n" + line.to_markdown().strip() + "\n\n"
             else:
-                md_string += " " + line.to_markdown().strip()
+                line_md = line.to_markdown().strip()
+                prev_line = self.lines[i - 1] if i > 0 else None
+                if (
+                    prev_line is not None
+                    and not prev_line.is_bullet_point
+                    and not prev_line.is_toc_element
+                    and prev_line.text.rstrip().endswith("-")
+                    and line.text
+                    and line.text[0].islower()
+                ):
+                    # Hyphenated word at line break: strip the hyphen and join directly
+                    stripped = md_string.rstrip()
+                    if stripped.endswith("-"):
+                        md_string = stripped[:-1] + line_md
+                    else:
+                        md_string += " " + line_md
+                else:
+                    md_string += " " + line_md
         if self.section_title:
             level = self.section_title.level or 0
             return "\n\n#" + "#" * level + " " + md_string.strip() + "\n\n"
+        if self.is_footnote:
+            return "> *" + md_string.strip() + "*"
         return md_string.strip()
 
     def __str__(self) -> str:
