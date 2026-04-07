@@ -6,6 +6,6 @@ Usage::
     set_ml_backend("openvino")   # validated + dependency-checked immediately
 """
 
-from chunknorris.ml._backend import get_ml_backend, set_ml_backend
+from ._backend import get_ml_backend, set_ml_backend
 
 __all__ = ["get_ml_backend", "set_ml_backend"]

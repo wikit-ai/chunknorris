@@ -30,7 +30,7 @@ def set_ml_backend(backend: str) -> None:
             f"Unknown backend {backend!r}. Choose 'auto', 'onnx', or 'openvino'."
         )
     # pylint: disable=import-outside-toplevel
-    from chunknorris.ml.pdf_page_classifiers import check_dependencies
+    from .pdf_page_classifiers import check_dependencies
 
     check_dependencies(backend)
     global _preferred_backend

@@ -105,12 +105,11 @@ class PdfPageClassification(PdfParserState):
             for i, (img, pred) in enumerate(zip(images, predictions))
         ]
 
-    def get_images_of_pages_to_embed(self) -> list[PdfPageSnapshot]:
+    def get_images_of_pages_to_embed(self) -> list[PILImage]:
         """Return only the images of the pages that require a visual (image) embedding.
 
         Returns:
-            Filtered list of :class:`PdfPageSnapshot` where
-            ``needs_image_embedding`` is ``True``.
+            Filtered list of PIL.Image for which the model predicted ``needs_image_embedding`` is ``True``.
 
         Raises:
             RuntimeError: If ML features were not enabled at initialisation.
