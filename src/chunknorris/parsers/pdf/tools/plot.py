@@ -3,9 +3,9 @@ from itertools import groupby
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
-from PIL import Image
 import numpy as np
 import pymupdf  # type: ignore : not stubs
+from PIL import Image
 
 from .components import TextBlock, TextLine, TextSpan
 from .extract_tables import PdfTable
@@ -322,10 +322,7 @@ class PdfPlotter(PdfParserState):
             otherwise a list of images.
         """
         if page_numbers is None:
-            if (
-                self._page_images is None
-                or self._page_images_resolution != resolution
-            ):
+            if self._page_images is None or self._page_images_resolution != resolution:
                 indices = list(range(self.page_start, self.page_end or self.document.page_count))  # type: ignore
                 self._page_images = [self._render_page(n, resolution) for n in indices]
                 self._page_images_resolution = resolution

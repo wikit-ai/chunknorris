@@ -1,14 +1,14 @@
 from collections import Counter
 from typing import TYPE_CHECKING, Literal
 
-if TYPE_CHECKING:
-    from PIL.Image import Image as PILImage
-
 import pymupdf  # type: ignore : no stubs
 
 from ....exceptions.exceptions import PdfParserException
 from .components import TextBlock, TextLine, TextSpan
 from .components_tables import PdfTable, TableFinder
+
+if TYPE_CHECKING:
+    from PIL.Image import Image as PILImage
 
 
 class PdfParserState:

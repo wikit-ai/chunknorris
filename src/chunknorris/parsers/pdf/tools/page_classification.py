@@ -17,7 +17,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from ....decorators.decorators import timeit
-
 from .components_ml import PdfPageSnapshot
 from .utils import PdfParserState
 
@@ -49,6 +48,7 @@ class PdfPageClassification(PdfParserState):
         ``enable_ml_features=True``.  Raises :exc:`ImportError` immediately if
         the required inference backend is not installed.
         """
+        # pylint: disable=import-outside-toplevel
         from ....ml import get_ml_backend
         from ....ml.pdf_page_classifiers import load_classifier
 

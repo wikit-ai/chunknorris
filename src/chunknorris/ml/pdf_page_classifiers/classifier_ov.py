@@ -1,6 +1,7 @@
 """OpenVINO-based PDF page classifier for production inference."""
 
 from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any, Literal
@@ -9,16 +10,15 @@ import numpy as np
 import numpy.typing as npt
 
 try:
-    from openvino import Core
-    from openvino import CompiledModel
+    from openvino import CompiledModel, Core
 except ImportError as _e:
     raise ImportError(
         "openvino is required for OpenVINO inference.\n"
         "Install with: pip install openvino"
     ) from _e
 
-from .base_classifier import _BasePDFPageClassifier
 from ...core.logger import LOGGER
+from .base_classifier import _BasePDFPageClassifier
 
 
 class PDFPageClassifierOV(_BasePDFPageClassifier):

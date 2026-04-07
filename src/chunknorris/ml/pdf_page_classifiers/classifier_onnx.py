@@ -1,6 +1,7 @@
 """PDF page classifier for production inference."""
 
 from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any, Literal
@@ -8,8 +9,8 @@ from typing import Any, Literal
 import numpy as np
 import numpy.typing as npt
 
-from .base_classifier import _BasePDFPageClassifier
 from ...core.logger import LOGGER
+from .base_classifier import _BasePDFPageClassifier
 
 try:
     import onnxruntime as ort
