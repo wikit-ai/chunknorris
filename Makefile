@@ -1,12 +1,18 @@
 .PHONY: black pylint pytest all
 
+isort:
+	isort ./src
+	isort ./tests
+
 black:
-	black --check --verbose ./src
+	black --verbose ./src
+	black --verbose ./tests
 
 pylint:
 	pylint ./src
+	pylint ./tests
 
 pytest:
 	pytest ./tests
 
-all: black pylint pytest
+all: isort black pylint pytest

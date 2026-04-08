@@ -1,0 +1,4 @@
+openvino>=2026.0
+Pillow
+numpy
+huggingface-hub

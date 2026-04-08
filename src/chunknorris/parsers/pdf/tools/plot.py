@@ -3,9 +3,9 @@ from itertools import groupby
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
-from PIL import Image
 import numpy as np
 import pymupdf  # type: ignore : not stubs
+from PIL import Image
 
 from .components import TextBlock, TextLine, TextSpan
 from .extract_tables import PdfTable
@@ -302,21 +302,39 @@ class PdfPlotter(PdfParserState):
     def get_pages_as_images(
         self, page_numbers: int | list[int] | None = None, resolution: int = 100
     ) -> Image.Image | list[Image.Image]:
-        """Get the images of the specified pages from PDF.
+        """Get the rendered images of PDF pages.
 
-        If page_numbers is an int -> returns an Image of the page
-        If page_numbers is None -> returns images for all pages
-        else returns a list of Images for specified pages.
+        When *page_numbers* is ``None`` (default), all pages in the parsed
+        range (``page_start`` to ``page_end``) are returned and the result is
+        cached in ``self._page_images`` so that repeated calls and
+        :meth:`classify_pages` share the same objects without re-rendering or
+        duplicating memory.  Passing an explicit *page_numbers* value bypasses
+        the cache.
+
+        Args:
+            page_numbers: A single page index (returns a single ``Image``), a
+                list of page indices, or ``None`` to get all parsed pages.
+            resolution: Rendering resolution in DPI.  Changing the resolution
+                invalidates the cache.
+
+        Returns:
+            A single ``PIL.Image.Image`` when *page_numbers* is an ``int``,
+            otherwise a list of images.
         """
+        if page_numbers is None:
+            if self._page_images is None or self._page_images_resolution != resolution:
+                indices = list(range(self.page_start, self.page_end or self.document.page_count))  # type: ignore
+                self._page_images = [self._render_page(n, resolution) for n in indices]
+                self._page_images_resolution = resolution
+            return list(self._page_images)
+
         indices = (
-            [page_numbers]
-            if isinstance(page_numbers, int)
-            else list(page_numbers or range(self.document.page_count))  # type: ignore
+            [page_numbers] if isinstance(page_numbers, int) else list(page_numbers)
         )
-
-        def _render(n: int) -> Image.Image:
-            pix = self.document.load_page(n).get_pixmap(dpi=resolution, alpha=False)  # type: ignore
-            return Image.frombuffer("RGB", (pix.width, pix.height), pix.samples, "raw", "RGB", 0, 1)  # type: ignore
-
-        images = [_render(n) for n in indices]
+        images = [self._render_page(n, resolution) for n in indices]
         return images[0] if isinstance(page_numbers, int) else images
+
+    def _render_page(self, page_number: int, resolution: int) -> Image.Image:
+        """Render a single PDF page to a PIL image."""
+        pix = self.document.load_page(page_number).get_pixmap(dpi=resolution, alpha=False)  # type: ignore
+        return Image.frombuffer("RGB", (pix.width, pix.height), pix.samples, "raw", "RGB", 0, 1)  # type: ignore

@@ -8,8 +8,8 @@ import numpy.typing as npt
 import pandas as pd
 import pymupdf  # type: ignore | No stubs
 
-from .components import TextSpan
 from ....core.logger import LOGGER
+from .components import TextSpan
 
 
 class Cell(pymupdf.Rect):

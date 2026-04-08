@@ -1,11 +1,14 @@
 from collections import Counter
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import pymupdf  # type: ignore : no stubs
 
 from ....exceptions.exceptions import PdfParserException
 from .components import TextBlock, TextLine, TextSpan
 from .components_tables import PdfTable, TableFinder
+
+if TYPE_CHECKING:
+    from PIL.Image import Image as PILImage
 
 
 class PdfParserState:
@@ -30,6 +33,11 @@ class PdfParserState:
         self.tables: list[PdfTable] = []
         self.main_body_fontsizes: list[float] = []
         self.document_fontsizes: list[float] = []
+        # Page image cache — populated lazily by get_pages_as_images().
+        # Stored here so cleanup_memory() can release them and PdfPageClassification
+        # can reference the same objects without duplication.
+        self._page_images: list[PILImage] | None = None
+        self._page_images_resolution: int = 100
 
     @property
     def document(self) -> pymupdf.Document:

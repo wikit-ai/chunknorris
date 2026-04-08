@@ -1,8 +1,12 @@
 import re
 
 import pymupdf  # type: ignore -> no stubs
+from PIL.Image import Image as PILImage
 
+from chunknorris import set_ml_backend
 from chunknorris.core.components import MarkdownDoc
+from chunknorris.ml.pdf_page_classifiers.classifier_onnx import PDFPageClassifierONNX
+from chunknorris.ml.pdf_page_classifiers.classifier_ov import PDFPageClassifierOV
 from chunknorris.parsers import PdfParser
 
 
@@ -48,3 +52,34 @@ def test_parse_string(pdf_parser: PdfParser, pdf_filepath: str):
     byte_string = pymupdf.open(pdf_filepath).tobytes()  # type: ignore -> missing typing : pymupdf.open() -> pymupdf.Document
     md_string = pdf_parser.parse_string(byte_string)
     assert isinstance(md_string, MarkdownDoc)
+
+
+def test_get_pages_as_images(pdf_parser: PdfParser, pdf_filepath: str):
+    pdf_parser.read_file(pdf_filepath)
+
+    all_img = pdf_parser.get_pages_as_images(page_numbers=None)
+    img_page_5 = pdf_parser.get_pages_as_images(page_numbers=5)
+    img_page_567 = pdf_parser.get_pages_as_images(page_numbers=[5, 6, 7])
+    assert isinstance(img_page_5, PILImage)
+    assert isinstance(all_img, list)
+    assert isinstance(img_page_567, list)
+    assert len(all_img) == pdf_parser.document.page_count  # type: ignore
+    assert len(img_page_567) == 3
+    # assert the indexes of page work fine
+    assert all_img[5] == img_page_5 == img_page_567[0]
+
+
+def test_set_ml_backend():
+    set_ml_backend("openvino")
+    parser = PdfParser(enable_ml_features=True)
+    isinstance(parser._page_classifier, PDFPageClassifierOV)
+    set_ml_backend("onnx")
+    parser = PdfParser(enable_ml_features=True)
+    isinstance(parser._page_classifier, PDFPageClassifierONNX)
+
+
+def test_classify_pages(pdf_filepath: str):
+    parser = PdfParser(enable_ml_features=True)
+    parser.read_file(pdf_filepath)
+    preds = parser.classify_pages()
+    assert len(preds) == parser.document.page_count  # type: ignore

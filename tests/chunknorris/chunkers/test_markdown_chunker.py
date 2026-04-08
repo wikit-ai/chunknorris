@@ -1,4 +1,5 @@
 import tiktoken
+
 from chunknorris.chunkers import MarkdownChunker
 from chunknorris.core.components import Chunk, MarkdownDoc
 
