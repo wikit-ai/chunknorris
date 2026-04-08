@@ -58,8 +58,8 @@ class PDFPageClassifierONNX(_BasePDFPageClassifier):
         """Load a classifier from a deployment directory.
 
         The directory must contain:
-          - ``model.onnx``  — exported by save_for_deployment
-          - ``config.json`` — written by save_for_deployment
+          - ``model.onnx``
+          - ``config.json``
 
         Args:
             model_dir: Path to the deployment directory.
