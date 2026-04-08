@@ -53,10 +53,10 @@ class PDFPageClassifierOV(_BasePDFPageClassifier):
             device: OpenVINO device string (``"CPU"``, ``"GPU"``, ``"AUTO"``).
         """
         super().__init__(config)
-        compiled: CompiledModel = Core().compile_model(model_path, device)
+        compiled: CompiledModel = Core().compile_model(model_path, device)  # type: ignore
         self._session: CompiledModel = compiled
-        self._input_name: str = compiled.input(0).get_any_name()
-        self._output = compiled.output(0)
+        self._input_name: str = compiled.input(0).get_any_name()  # type: ignore
+        self._output = compiled.output(0)  # type: ignore
 
     @property
     def backend(self) -> Literal["openvino"]:
@@ -91,12 +91,10 @@ class PDFPageClassifierOV(_BasePDFPageClassifier):
         if not config_path.exists():
             raise FileNotFoundError(f"config.json not found in {model_dir}")
 
-        # Search order: prefer INT8 over FP32, HF/Optimum names over legacy names
+        # Search order: prefer INT8 over FP32, HF/Optimum names
         candidates = [
-            "openvino_model_int8.xml",  # HF-style INT8 (preferred)
-            "openvino_model.xml",  # HF-style FP32
-            "model_ov_int8.xml",  # legacy local INT8
-            "model_ov.xml",  # legacy local FP32
+            "openvino_model_int8.xml",
+            "openvino_model.xml",
         ]
         for candidate in candidates:
             if (path / candidate).exists():
@@ -121,4 +119,4 @@ class PDFPageClassifierOV(_BasePDFPageClassifier):
     def _run_batch(
         self, batch_input: npt.NDArray[np.float32]
     ) -> npt.NDArray[np.float32]:
-        return self._session({self._input_name: batch_input})[self._output]
+        return self._session({self._input_name: batch_input})[self._output]  # type: ignore
