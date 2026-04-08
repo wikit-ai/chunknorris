@@ -23,6 +23,9 @@ from .utils import PdfParserState
 if TYPE_CHECKING:
     from PIL.Image import Image as PILImage
 
+    from ....ml.pdf_page_classifiers.classifier_onnx import PDFPageClassifierONNX
+    from ....ml.pdf_page_classifiers.classifier_ov import PDFPageClassifierOV
+
 
 class PdfPageClassification(PdfParserState):
     """Mixin that adds ML-based page classification to the PDF parser.
@@ -38,7 +41,7 @@ class PdfPageClassification(PdfParserState):
     instructions rather than silently returning empty results.
     """
 
-    _page_classifier: Any | None = None
+    _page_classifier: PDFPageClassifierOV | PDFPageClassifierONNX | None = None
     _ml_enabled: bool = False
 
     def _load_page_classifier(self) -> None:

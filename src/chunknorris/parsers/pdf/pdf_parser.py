@@ -64,7 +64,7 @@ class PdfParser(
         body_line_spacing: float | None = None,
         enable_ml_features: bool = False,
     ) -> None:
-        """Initializes a pdf parser.
+        """Initializes a PDF parser.
 
         Args:
             extract_tables (bool, optional): whether or not tables should be extracted.
