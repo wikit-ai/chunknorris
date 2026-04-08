@@ -5,6 +5,47 @@ from __future__ import annotations
 _preferred_backend: str = "auto"
 
 
+def _is_installed(package: str) -> bool:
+    """Return True if *package* can be imported without error."""
+    try:
+        __import__(package)
+        return True
+    except ImportError:
+        return False
+
+
+def check_dependencies(backend: str = "auto") -> None:
+    """Check that required ML packages are installed for *backend*.
+
+    Args:
+        backend: ``"auto"``, ``"onnx"``, or ``"openvino"``.
+
+    Raises:
+        ImportError: With a install hint if any package is missing.
+    """
+    missing: list[str] = []
+
+    if not _is_installed("huggingface_hub"):
+        missing.append("huggingface-hub  →  pip install huggingface-hub")
+
+    has_onnx = _is_installed("onnxruntime")
+    has_ov = _is_installed("openvino")
+
+    if backend == "onnx" and not has_onnx:
+        missing.append("onnxruntime  →  pip install onnxruntime")
+    elif backend == "openvino" and not has_ov:
+        missing.append("openvino  →  pip install openvino")
+    elif backend == "auto" and not has_onnx and not has_ov:
+        missing.append(
+            "at least one inference backend:\n"
+            "    onnxruntime  →  pip install onnxruntime\n"
+            "    openvino     →  pip install openvino"
+        )
+
+    if missing:
+        raise ImportError("Missing ML dependencies:\n  - " + "\n  - ".join(missing))
+
+
 def set_ml_backend(backend: str) -> None:
     """Set the preferred ML inference backend for the entire library.
 
@@ -29,9 +70,6 @@ def set_ml_backend(backend: str) -> None:
         raise ValueError(
             f"Unknown backend {backend!r}. Choose 'auto', 'onnx', or 'openvino'."
         )
-    # pylint: disable=import-outside-toplevel
-    from .pdf_page_classifiers import check_dependencies
-
     check_dependencies(backend)
     global _preferred_backend
     _preferred_backend = backend

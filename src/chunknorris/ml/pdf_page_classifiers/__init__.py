@@ -24,54 +24,10 @@ import os
 from pathlib import Path
 from typing import Any
 
+from chunknorris.ml._backend import check_dependencies, get_ml_backend
+
 # Fixed HuggingFace repository — updated by Wikit when new model versions ship.
 _DEFAULT_REPO_ID = "Wikit/pdf-pages-classifier"
-
-
-# ---------------------------------------------------------------------------
-# Dependency checking
-# ---------------------------------------------------------------------------
-
-
-def check_dependencies(backend: str = "auto") -> None:
-    """Check that required ML packages are installed for *backend*.
-
-    Args:
-        backend: ``"auto"``, ``"onnx"``, or ``"openvino"``.
-
-    Raises:
-        ImportError: With a install hint if any package is missing.
-    """
-    missing: list[str] = []
-
-    if not _is_installed("huggingface_hub"):
-        missing.append("huggingface-hub  →  pip install huggingface-hub")
-
-    has_onnx = _is_installed("onnxruntime")
-    has_ov = _is_installed("openvino")
-
-    if backend == "onnx" and not has_onnx:
-        missing.append("onnxruntime  →  pip install onnxruntime")
-    elif backend == "openvino" and not has_ov:
-        missing.append("openvino  →  pip install openvino")
-    elif backend == "auto" and not has_onnx and not has_ov:
-        missing.append(
-            "at least one inference backend:\n"
-            "    onnxruntime  →  pip install onnxruntime\n"
-            "    openvino     →  pip install openvino"
-        )
-
-    if missing:
-        raise ImportError("Missing ML dependencies:\n  - " + "\n  - ".join(missing))
-
-
-def _is_installed(package: str) -> bool:
-    """Return True if *package* can be imported without error."""
-    try:
-        __import__(package)
-        return True
-    except ImportError:
-        return False
 
 
 def _is_hf_repo_id(path: str) -> bool:
@@ -118,9 +74,6 @@ def load_classifier(
         print(result["needs_image_embedding"], result["predicted_classes"])
     """
     if backend is None:
-        # pylint: disable=import-outside-toplevel
-        from chunknorris.ml._backend import get_ml_backend
-
         backend = get_ml_backend()
 
     if backend not in ("auto", "onnx", "openvino"):
