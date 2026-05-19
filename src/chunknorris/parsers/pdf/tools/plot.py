@@ -7,6 +7,8 @@ import numpy as np
 import pymupdf  # type: ignore : not stubs
 from PIL import Image
 
+from ....decorators.decorators import mem_debug
+
 from .components import TextBlock, TextLine, TextSpan
 from .extract_tables import PdfTable
 from .utils import PdfParserState
@@ -321,18 +323,24 @@ class PdfPlotter(PdfParserState):
             A single ``PIL.Image.Image`` when *page_numbers* is an ``int``,
             otherwise a list of images.
         """
-        if page_numbers is None:
-            if self._page_images is None or self._page_images_resolution != resolution:
-                indices = list(range(self.page_start, self.page_end or self.document.page_count))  # type: ignore
-                self._page_images = [self._render_page(n, resolution) for n in indices]
-                self._page_images_resolution = resolution
-            return list(self._page_images)
+        with mem_debug("get_pages_as_images"):
+            if page_numbers is None:
+                if (
+                    self._page_images is None
+                    or self._page_images_resolution != resolution
+                ):
+                    indices = list(range(self.page_start, self.page_end or self.document.page_count))  # type: ignore
+                    self._page_images = [
+                        self._render_page(n, resolution) for n in indices
+                    ]
+                    self._page_images_resolution = resolution
+                return list(self._page_images)
 
-        indices = (
-            [page_numbers] if isinstance(page_numbers, int) else list(page_numbers)
-        )
-        images = [self._render_page(n, resolution) for n in indices]
-        return images[0] if isinstance(page_numbers, int) else images
+            indices = (
+                [page_numbers] if isinstance(page_numbers, int) else list(page_numbers)
+            )
+            images = [self._render_page(n, resolution) for n in indices]
+            return images[0] if isinstance(page_numbers, int) else images
 
     def _render_page(self, page_number: int, resolution: int) -> Image.Image:
         """Render a single PDF page to a PIL image."""

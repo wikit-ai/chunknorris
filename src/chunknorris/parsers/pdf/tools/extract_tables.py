@@ -3,10 +3,10 @@ from operator import attrgetter
 
 import pymupdf  # type: ignore : no stubs
 
-from chunknorris.decorators.decorators import timeit
 
 from .components import TextSpan
 from .components_tables import Cell, PdfTable
+from ....decorators.decorators import mem_debug, timeit
 from .utils import PdfParserState
 
 
@@ -31,14 +31,15 @@ class PdfTableExtraction(PdfParserState):
         # get tables on all pages
         tables = []
         for page in self.document.pages(start=self.page_start, stop=self.page_end):  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
-            tables_on_page = self.table_finder.build_tables(page)
-            for _, _, tab_cells in tables_on_page:
-                if page.number not in spans_per_page or tab_cells.shape[0] == 1:  # type: ignore : missing typing in pymupdf -> Page.number -> int
-                    continue  # no spans available, or only one cell -> not a table
-                cells = self._get_table_cells(tab_cells, spans_per_page[page.number])  # type: ignore : missing typing in pymupdf -> Page.number -> int
-                # if at least 50% of cells contain a span
-                if sum(bool(cell.spans) for cell in cells) / len(cells) > 0.5:
-                    tables.append(PdfTable(cells, page.number))  # type: ignore : missing typing in pymupdf -> Page.number -> int
+            with mem_debug(f"page {page.number} - table extraction"):  # type: ignore : missing typing in pymupdf -> Page.number -> int
+                tables_on_page = self.table_finder.build_tables(page)
+                for _, _, tab_cells in tables_on_page:
+                    if page.number not in spans_per_page or tab_cells.shape[0] == 1:  # type: ignore : missing typing in pymupdf -> Page.number -> int
+                        continue  # no spans available, or only one cell -> not a table
+                    cells = self._get_table_cells(tab_cells, spans_per_page[page.number])  # type: ignore : missing typing in pymupdf -> Page.number -> int
+                    # if at least 50% of cells contain a span
+                    if sum(bool(cell.spans) for cell in cells) / len(cells) > 0.5:
+                        tables.append(PdfTable(cells, page.number))  # type: ignore : missing typing in pymupdf -> Page.number -> int
 
         return sorted(tables, key=attrgetter("order"))
 

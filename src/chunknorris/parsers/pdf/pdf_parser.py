@@ -7,7 +7,7 @@ from typing import Any, Literal
 import pymupdf  # type: ignore : no stubs
 
 from ...core.components import MarkdownDoc
-from ...decorators.decorators import timeit, validate_args
+from ...decorators.decorators import mem_debug, timeit, validate_args
 from ...exceptions.exceptions import (
     PageNotFoundException,
     PdfParserException,
@@ -158,13 +158,16 @@ class PdfParser(
         """
         self.cleanup_memory()
 
-        if isinstance(filepath_or_stream, str):
-            self.filepath = filepath_or_stream
-            if Path(filepath_or_stream).suffix.lower() != ".pdf":
-                raise PdfParserException("Only .pdf files can be passed to PdfParser.")
-            self.document = pymupdf.open(filepath_or_stream, filetype="pdf")
-        else:
-            self.document = pymupdf.open(stream=filepath_or_stream, filetype="pdf")
+        with mem_debug("read_file"):
+            if isinstance(filepath_or_stream, str):
+                self.filepath = filepath_or_stream
+                if Path(filepath_or_stream).suffix.lower() != ".pdf":
+                    raise PdfParserException(
+                        "Only .pdf files can be passed to PdfParser."
+                    )
+                self.document = pymupdf.open(filepath_or_stream, filetype="pdf")
+            else:
+                self.document = pymupdf.open(stream=filepath_or_stream, filetype="pdf")
 
     def _parse_and_export(self, page_start: int, page_end: int | None) -> MarkdownDoc:
         """Shared implementation for parse_file and parse_string.
@@ -201,19 +204,24 @@ class PdfParser(
 
     def _parse_document(self) -> None:
         """Parses a pdf document."""
-        self.spans = self._create_spans()
+
+        with mem_debug("_create_spans"):
+            self.spans = self._create_spans()
         if not self.spans or all(span.is_header_footer for span in self.spans):
             raise TextNotFoundException(
                 'No text content found in document. You may want to set use_ocr="always".'
             )
         self.tables = self.get_tables() if self.extract_tables else []
         self.spans = self._flag_table_spans(self.spans)
-        self.lines = PdfParser._create_lines(self.spans)
-        self.blocks = self._create_blocks(self.lines)
+        with mem_debug("_create_lines"):
+            self.lines = PdfParser._create_lines(self.spans)
+        with mem_debug("_create_blocks"):
+            self.blocks = self._create_blocks(self.lines)
         self._set_document_specifications()
         self._flag_footnotes(self.spans)
         self.main_title = self._get_document_main_title()
-        self.toc = self.get_toc() if self.add_headers else []
+        with mem_debug("get_toc"):
+            self.toc = self.get_toc() if self.add_headers else []
 
     def check_ocr_config_is_valid(self) -> None:
         """Check that the OCR configuration is valid."""
@@ -536,23 +544,24 @@ class PdfParser(
 
     def cleanup_memory(self) -> None:
         """Cleans up memory by reseting all objects created to parse the document."""
-        if isinstance(self._document, pymupdf.Document):
-            self._document.close()
-        self._document = None
-        self.filepath = None
-        self.page_start = 0
-        self.page_end = None
-        self.spans = []
-        self.lines = []
-        self.blocks = []
-        self.tables = []
-        self.toc = []
-        self.main_title = ""
-        self.document_fontsizes = []
-        self.main_body_fontsizes = []
-        self.main_body_is_bold = False
-        # restore the user-configured value; auto-detected value is no longer valid
-        self.body_line_spacing = self._configured_body_line_spacing
-        # release cached page images — the PIL objects can be large
-        self._page_images = None
-        self._page_images_resolution = 100
+        with mem_debug("cleanup_memory"):
+            if isinstance(self._document, pymupdf.Document):
+                self._document.close()
+            self._document = None
+            self.filepath = None
+            self.page_start = 0
+            self.page_end = None
+            self.spans = []
+            self.lines = []
+            self.blocks = []
+            self.tables = []
+            self.toc = []
+            self.main_title = ""
+            self.document_fontsizes = []
+            self.main_body_fontsizes = []
+            self.main_body_is_bold = False
+            # restore the user-configured value; auto-detected value is no longer valid
+            self.body_line_spacing = self._configured_body_line_spacing
+            # release cached page images — the PIL objects can be large
+            self._page_images = None
+            self._page_images_resolution = 100

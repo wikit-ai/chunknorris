@@ -6,6 +6,8 @@ import numpy as np
 import numpy.typing as npt
 from PIL import Image
 
+from ...decorators.decorators import mem_debug
+
 from .types import PdfPagePrediction
 
 
@@ -188,28 +190,30 @@ class _BasePDFPageClassifier(ABC):  # type: ignore[reportUnusedClass]
 
         all_results: list[PdfPagePrediction] = []
 
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            for batch_start in range(0, len(image_list), batch_size):
-                batch_items = image_list[batch_start : batch_start + batch_size]
+        with mem_debug("classifying pages"):
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                for batch_start in range(0, len(image_list), batch_size):
+                    batch_items = image_list[batch_start : batch_start + batch_size]
 
-                # Load (file I/O + RGB conversion) in parallel, then free after use.
-                loaded: list[Image.Image] = list(
-                    executor.map(self._load_image, batch_items)
-                )
-                # PIL transforms (crop + bicubic resize) in parallel.
-                arrays: list[npt.NDArray[np.float32]] = list(
-                    executor.map(self._pil_to_array, loaded)
-                )
+                    # Load (file I/O + RGB conversion) in parallel, then free after use.
+                    loaded: list[Image.Image] = list(
+                        executor.map(self._load_image, batch_items)
+                    )
+                    # PIL transforms (crop + bicubic resize) in parallel.
+                    arrays: list[npt.NDArray[np.float32]] = list(
+                        executor.map(self._pil_to_array, loaded)
+                    )
 
-                # Vectorised normalization + transpose, then inference.
-                batch_input = self._normalize_batch(arrays)  # (N, C, H, W)
-                probs_batch: npt.NDArray[np.float32] = self._run_batch(batch_input)
+                    # Vectorised normalization + transpose, then inference.
+                    batch_input = self._normalize_batch(arrays)  # (N, C, H, W)
+                    probs_batch: npt.NDArray[np.float32] = self._run_batch(batch_input)
 
-                all_results.extend(
-                    self._format(probs, effective_threshold) for probs in probs_batch
-                )
+                    all_results.extend(
+                        self._format(probs, effective_threshold)
+                        for probs in probs_batch
+                    )
 
-        return all_results[0] if is_single else all_results
+            return all_results[0] if is_single else all_results
 
     def __call__(
         self,
