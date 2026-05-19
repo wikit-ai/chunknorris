@@ -408,6 +408,29 @@ class TableFinder:
 
         return line_coordinates
 
+    @staticmethod
+    def _add_outer_borders(lines: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+        """Infers the 4 outer border lines from the bounding box of all detected lines
+        and appends any that are not already present.
+
+        This lets the rest of the pipeline handle tables that have inner grid lines
+        but no surrounding frame, because all outer cells will have a valid border.
+        """
+        x_min = np.minimum(lines[:, 0], lines[:, 2]).min()
+        y_min = np.minimum(lines[:, 1], lines[:, 3]).min()
+        x_max = np.maximum(lines[:, 0], lines[:, 2]).max()
+        y_max = np.maximum(lines[:, 1], lines[:, 3]).max()
+        outer = np.array(
+            [
+                [x_min, y_min, x_max, y_min],  # top
+                [x_min, y_max, x_max, y_max],  # bottom
+                [x_min, y_min, x_min, y_max],  # left
+                [x_max, y_min, x_max, y_max],  # right
+            ],
+            dtype=np.float32,
+        )
+        return np.unique(np.vstack([lines, outer]), axis=0)
+
     def build_table(
         self, lines_coordinates: npt.NDArray[np.float32]
     ) -> tuple[
@@ -431,6 +454,11 @@ class TableFinder:
         intersections = self.get_line_intersections(lines_coordinates)
         if not intersections.size:
             return lines_coordinates, np.empty((0, 2)), np.empty((0, 4))
+        # Infer missing outer borders: tables without an outer frame have inner H/V
+        # lines but no bounding box, so outer cells fail border validation.
+        # Adding synthetic border lines at the bounding box of existing lines fixes this.
+        lines_coordinates = TableFinder._add_outer_borders(lines_coordinates)
+        intersections = self.get_line_intersections(lines_coordinates)
         intersections = self.normalize_table_grid(intersections)
 
         lines_coordinates = self._normalize_lines_grid(lines_coordinates, intersections)
