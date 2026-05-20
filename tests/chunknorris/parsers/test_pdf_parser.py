@@ -81,5 +81,5 @@ def test_set_ml_backend():
 def test_classify_pages(pdf_filepath: str):
     parser = PdfParser(enable_ml_features=True)
     parser.read_file(pdf_filepath)
-    preds = parser.classify_pages()
+    preds = [pred for pred in parser.classify_pages()]
     assert len(preds) == parser.document.page_count  # type: ignore
