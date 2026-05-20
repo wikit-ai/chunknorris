@@ -1,11 +1,15 @@
 import logging
+import os
+import threading
 import time
 from contextlib import contextmanager
 from functools import wraps
 from inspect import signature
 from typing import Any, Callable, Generator
 
-from ..core.logger import LOGGER
+import psutil
+
+from ..core.logger import LOGGER  # pylint: disable=E0402
 
 MEMORY_WARNING_LIMIT = 800
 
@@ -59,10 +63,6 @@ def mem_debug(label: str, sample_interval: float = 0.05) -> Generator[None, None
     if not LOGGER.isEnabledFor(logging.DEBUG):
         yield
         return
-    import os
-    import threading
-
-    import psutil
 
     proc = psutil.Process(os.getpid())
     mem_before = proc.memory_info().rss

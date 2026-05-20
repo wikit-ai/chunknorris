@@ -3,10 +3,9 @@ from operator import attrgetter
 
 import pymupdf  # type: ignore : no stubs
 
-
+from ....decorators.decorators import mem_debug, timeit
 from .components import TextSpan
 from .components_tables import Cell, PdfTable
-from ....decorators.decorators import mem_debug, timeit
 from .utils import PdfParserState
 
 

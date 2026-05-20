@@ -96,7 +96,9 @@ class PdfPageClassification(PdfParserState):
             # Caller provided pre-rendered images — batch inference only.
             for batch_start in range(0, len(images), batch_size):
                 batch_imgs = images[batch_start : batch_start + batch_size]
-                preds = self._page_classifier.predict(batch_imgs, batch_size=len(batch_imgs))
+                preds = self._page_classifier.predict(
+                    batch_imgs, batch_size=len(batch_imgs)
+                )
                 for j, (img, pred) in enumerate(zip(batch_imgs, preds)):  # type: ignore[arg-type]
                     yield PdfPageSnapshot(
                         page_number=self.page_start + batch_start + j,
@@ -110,7 +112,9 @@ class PdfPageClassification(PdfParserState):
             for batch_start in range(0, len(page_indices), batch_size):
                 batch_range = page_indices[batch_start : batch_start + batch_size]
                 batch_imgs = [self._render_page(n, resolution) for n in batch_range]  # type: ignore[attr-defined]
-                preds = self._page_classifier.predict(batch_imgs, batch_size=len(batch_imgs))
+                preds = self._page_classifier.predict(
+                    batch_imgs, batch_size=len(batch_imgs)
+                )
                 for n, img, pred in zip(batch_range, batch_imgs, preds):  # type: ignore[arg-type]
                     yield PdfPageSnapshot(
                         page_number=n,

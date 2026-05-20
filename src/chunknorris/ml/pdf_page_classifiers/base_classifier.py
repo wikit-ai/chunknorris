@@ -7,7 +7,6 @@ import numpy.typing as npt
 from PIL import Image
 
 from ...decorators.decorators import mem_debug
-
 from .types import PdfPagePrediction
 
 

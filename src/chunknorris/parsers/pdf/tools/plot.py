@@ -8,7 +8,6 @@ import pymupdf  # type: ignore : not stubs
 from PIL import Image
 
 from ....decorators.decorators import mem_debug
-
 from .components import TextBlock, TextLine, TextSpan
 from .extract_tables import PdfTable
 from .utils import PdfParserState
