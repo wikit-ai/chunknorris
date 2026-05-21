@@ -23,24 +23,40 @@ class PdfTableExtraction(PdfParserState):
         Returns:
             PdfTable: the list of tables in the pdf.
         """
-        spans_per_page = {
+        spans_per_page: dict[int, list[TextSpan]] = {
             page: list(spans_on_page)
             for page, spans_on_page in groupby(self.spans, key=lambda span: span.page)
         }
-        # get tables on all pages
-        tables = []
+        tables: list[PdfTable] = []
         for page in self.document.pages(start=self.page_start, stop=self.page_end):  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
-            with mem_debug(f"page {page.number} - table extraction"):  # type: ignore : missing typing in pymupdf -> Page.number -> int
-                tables_on_page = self.table_finder.build_tables(page)
-                for _, _, tab_cells in tables_on_page:
-                    if page.number not in spans_per_page or tab_cells.shape[0] == 1:  # type: ignore : missing typing in pymupdf -> Page.number -> int
-                        continue  # no spans available, or only one cell -> not a table
-                    cells = self._get_table_cells(tab_cells, spans_per_page[page.number])  # type: ignore : missing typing in pymupdf -> Page.number -> int
-                    # if at least 50% of cells contain a span
-                    if sum(bool(cell.spans) for cell in cells) / len(cells) > 0.5:
-                        tables.append(PdfTable(cells, page.number))  # type: ignore : missing typing in pymupdf -> Page.number -> int
-
+            tables.extend(self._extract_page_tables(page, spans_per_page))
         return sorted(tables, key=attrgetter("order"))
+
+    def _extract_page_tables(
+        self,
+        page: pymupdf.Page,  # type: ignore : missing typing in pymupdf
+        spans_per_page: dict[int, list[TextSpan]],
+    ) -> list[PdfTable]:
+        """Extracts tables from a single page.
+
+        Args:
+            page (pymupdf.Page): the page to process.
+            spans_per_page (dict): mapping of page number to spans on that page.
+
+        Returns:
+            list[PdfTable]: tables found on the page.
+        """
+        with mem_debug(f"page {page.number} - table extraction"):  # type: ignore : missing typing in pymupdf -> Page.number -> int
+            tables = []
+            tables_on_page = self.table_finder.build_tables(page)
+            for _, _, tab_cells in tables_on_page:
+                if page.number not in spans_per_page or tab_cells.shape[0] == 1:  # type: ignore : missing typing in pymupdf -> Page.number -> int
+                    continue  # no spans available, or only one cell -> not a table
+                cells = self._get_table_cells(tab_cells, spans_per_page[page.number])  # type: ignore : missing typing in pymupdf -> Page.number -> int
+                # if at least 50% of cells contain a span
+                if sum(bool(cell.spans) for cell in cells) / len(cells) > 0.5:
+                    tables.append(PdfTable(cells, page.number))  # type: ignore : missing typing in pymupdf -> Page.number -> int
+            return tables
 
     def _get_table_cells(
         self, raw_cells: list[pymupdf.Rect], spans_on_page: list[TextSpan]

@@ -1,4 +1,4 @@
-.PHONY: black pylint pytest all
+.PHONY: black lint test all
 
 isort:
 	isort ./src
@@ -8,11 +8,11 @@ black:
 	black --verbose ./src
 	black --verbose ./tests
 
-pylint:
+lint:
 	pylint ./src
 	pylint ./tests
 
-pytest:
+test:
 	pytest ./tests
 
-all: isort black pylint pytest
+all: isort black lint test
