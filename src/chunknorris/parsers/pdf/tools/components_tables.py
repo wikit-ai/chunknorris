@@ -8,8 +8,8 @@ import numpy.typing as npt
 import pandas as pd
 import pymupdf  # type: ignore | No stubs
 
-from .components import TextSpan
 from ....core.logger import LOGGER
+from .components import TextSpan
 
 
 class Cell(pymupdf.Rect):
@@ -295,11 +295,11 @@ class TableFinder:
         return [tab for tab in parsed_tables if tab[2].size]
 
     def _get_table_lines(self, page: pymupdf.Page) -> npt.NDArray[np.float32]:
-        """Gets the lines that are likely to belong to a table. Proceed like so:
-        - Get the drawings on the page (vectors)
-        - Removes the drawings that are due to annotations (i.e. rectangles used to highlight text)
-        - Convert rectangles coordinates to 4 lines coordinates
-        - Remove very short lines that are likely to belong to vector designs
+        """Gets the lines that are likely to belong to a table.
+
+        Processes all drawings in a single pass: annotation filtering, rectangle-to-line
+        conversion, and coordinate extraction happen together to avoid creating intermediate
+        copies of the (potentially large) drawings list.
 
         Args:
             page (pymupdf.Page): the page to get the drawings from.
@@ -309,22 +309,28 @@ class TableFinder:
                 where each row is x1, y1, x2, y2.
         """
         drawings = page.get_drawings()  # type: ignore missing typing in pymupdf
-        drawings = TableFinder._remove_drawings_from_annotations(drawings, page)
-        drawings = self._convert_rectangles_to_lines(drawings)
-        # Get coordinates of all lines
-        line_coordinates = np.array(
-            [
-                (item[1].x, item[1].y, item[2].x, item[2].y)
-                for drawing in drawings
-                for item in drawing["items"]
-                if item[0] == "l"
-            ]
-        ).round()
-        if not line_coordinates.size:
-            return np.empty(shape=(0, 4))
-        line_coordinates = TableFinder._filter_lines(line_coordinates)
+        ann_rects = [a.rect for a in page.annots()]  # type: ignore missing typing in pymupdf
 
-        return line_coordinates
+        line_items: list[tuple[float, float, float, float]] = []
+        for drawing in drawings:
+            if ann_rects and any(ann.contains(drawing["rect"]) for ann in ann_rects):  # type: ignore
+                continue
+            for item in drawing["items"]:
+                if item[0] == "l":
+                    line_items.append((item[1].x, item[1].y, item[2].x, item[2].y))  # type: ignore
+                elif item[0] == "re":
+                    rect = item[1]
+                    if rect.width < self.line_width_threshold:  # type: ignore
+                        mid_x = (rect.x0 + rect.x1) / 2  # type: ignore
+                        line_items.append((mid_x, rect.y0, mid_x, rect.y1))  # type: ignore
+                    elif rect.height < self.line_width_threshold:  # type: ignore
+                        mid_y = (rect.y0 + rect.y1) / 2  # type: ignore
+                        line_items.append((rect.x0, mid_y, rect.x1, mid_y))  # type: ignore
+
+        if not line_items:
+            return np.empty(shape=(0, 4))
+        line_coordinates = np.array(line_items, dtype=np.float32).round()
+        return TableFinder._filter_lines(line_coordinates)
 
     @staticmethod
     def _remove_drawings_from_annotations(
@@ -408,6 +414,29 @@ class TableFinder:
 
         return line_coordinates
 
+    @staticmethod
+    def _add_outer_borders(lines: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+        """Infers the 4 outer border lines from the bounding box of all detected lines
+        and appends any that are not already present.
+
+        This lets the rest of the pipeline handle tables that have inner grid lines
+        but no surrounding frame, because all outer cells will have a valid border.
+        """
+        x_min = np.minimum(lines[:, 0], lines[:, 2]).min()
+        y_min = np.minimum(lines[:, 1], lines[:, 3]).min()
+        x_max = np.maximum(lines[:, 0], lines[:, 2]).max()
+        y_max = np.maximum(lines[:, 1], lines[:, 3]).max()
+        outer = np.array(
+            [
+                [x_min, y_min, x_max, y_min],  # top
+                [x_min, y_max, x_max, y_max],  # bottom
+                [x_min, y_min, x_min, y_max],  # left
+                [x_max, y_min, x_max, y_max],  # right
+            ],
+            dtype=np.float32,
+        )
+        return np.vstack([lines, outer])
+
     def build_table(
         self, lines_coordinates: npt.NDArray[np.float32]
     ) -> tuple[
@@ -431,6 +460,11 @@ class TableFinder:
         intersections = self.get_line_intersections(lines_coordinates)
         if not intersections.size:
             return lines_coordinates, np.empty((0, 2)), np.empty((0, 4))
+        # Infer missing outer borders: tables without an outer frame have inner H/V
+        # lines but no bounding box, so outer cells fail border validation.
+        # Adding synthetic border lines at the bounding box of existing lines fixes this.
+        lines_coordinates = TableFinder._add_outer_borders(lines_coordinates)
+        intersections = self.get_line_intersections(lines_coordinates)
         intersections = self.normalize_table_grid(intersections)
 
         lines_coordinates = self._normalize_lines_grid(lines_coordinates, intersections)
@@ -853,14 +887,16 @@ class TableFinder:
         cells_borders = np.stack(
             [left_lines, top_lines, right_lines, bottom_lines], axis=1
         )  # (n_cells, 4, 4)
-        # Encode each 4-float border as bytes for vectorized membership test via np.isin
+        # Encode each 4-float border as bytes for vectorized membership test via np.isin.
+        # np.ascontiguousarray is a no-op when the array is already C-contiguous float32,
+        # avoiding the redundant copy that .astype(np.float32) would always produce.
         dt = np.dtype(
             [("a", np.float32), ("b", np.float32), ("c", np.float32), ("d", np.float32)]
         )
         borders_struct = (
-            cells_borders.reshape(-1, 4).astype(np.float32).view(dt).ravel()
+            np.ascontiguousarray(cells_borders.reshape(-1, 4)).view(dt).ravel()
         )
-        lines_struct = lines_coordinates.astype(np.float32).view(dt).ravel()
+        lines_struct = np.ascontiguousarray(lines_coordinates).view(dt).ravel()
         valid_borders_mask = np.isin(borders_struct, lines_struct).reshape(
             len(cells_coords), 4
         )

@@ -3,6 +3,7 @@ from itertools import groupby
 
 from thefuzz import fuzz  # type: ignore : no stubs
 
+from ....decorators.decorators import mem_debug
 from .components import TocTitle
 from .utils import PdfParserState
 
@@ -30,6 +31,7 @@ class PdfTocExtraction(PdfParserState):
         r"(.+?)(?:\s+)?[\.\_\-\s….]{5,}(?:\s+)?(?:[pP]\.\s*)?(\d+)"
     )
 
+    @mem_debug("get_toc")
     def get_toc(self) -> list[TocTitle]:
         """Gets the table of content of a document.
         The process:

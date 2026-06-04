@@ -1,14 +1,13 @@
 import os
 from collections import Counter, defaultdict
 from itertools import groupby
-
 from pathlib import Path
 from typing import Any, Literal
 
 import pymupdf  # type: ignore : no stubs
 
 from ...core.components import MarkdownDoc
-from ...decorators.decorators import timeit, validate_args
+from ...decorators.decorators import mem_debug, timeit, validate_args
 from ...exceptions.exceptions import (
     PageNotFoundException,
     PdfParserException,
@@ -18,6 +17,7 @@ from .tools import (
     DocSpecsExtraction,
     PdfExport,
     PdfLinkExtraction,
+    PdfPageClassification,
     PdfParserState,
     PdfPlotter,
     PdfTableExtraction,
@@ -30,6 +30,7 @@ from .tools import (
 
 
 class PdfParser(
+    PdfPageClassification,
     PdfLinkExtraction,
     PdfTableExtraction,
     PdfTocExtraction,
@@ -61,8 +62,9 @@ class PdfParser(
         use_ocr: Literal["always", "auto", "never"] = "auto",
         ocr_language: str = "fra+eng",
         body_line_spacing: float | None = None,
+        enable_ml_features: bool = False,
     ) -> None:
-        """Initializes a pdf parser.
+        """Initializes a PDF parser.
 
         Args:
             extract_tables (bool, optional): whether or not tables should be extracted.
@@ -82,6 +84,11 @@ class PdfParser(
                 Tweak this parameter for better merging of lines into blocks.
             table_finder (TableFinder | None, optional): the table finder to use for parsing the tables.
                 If None, defauts to a TableFinder with default parameters.
+            enable_ml_features (bool, optional): if True, loads the ML page classifier on startup
+                so that :meth:`classify_pages` and :meth:`get_pages_to_embed` are available.
+                Requires ``onnxruntime`` or ``openvino`` and ``huggingface-hub``.
+                Use :func:`chunknorris.ml.set_ml_backend` to select the inference backend.
+                Defaults to False.
         """
         super().__init__()
         self.add_headers = add_headers
@@ -93,6 +100,9 @@ class PdfParser(
             body_line_spacing  # preserved for cleanup reset
         )
         self.table_finder = table_finder
+        self._ml_enabled = enable_ml_features
+        if enable_ml_features:
+            self._load_page_classifier()
 
         if self.use_ocr != "never":
             self.check_ocr_config_is_valid()
@@ -138,6 +148,7 @@ class PdfParser(
         self.read_file(string)
         return self._parse_and_export(page_start, page_end)
 
+    @mem_debug("read_file")
     def read_file(self, filepath_or_stream: str | bytes) -> None:
         """Wrapper of pymupdf.open() that simply read the file content.
         Isolates the file opening to set self.document without running the parsing
@@ -146,8 +157,7 @@ class PdfParser(
         Args:
             filepath_or_stream (str | bytes): Filepath to a pdf file, or byte stream.
         """
-        if isinstance(self._document, pymupdf.Document):
-            self._document.close()
+        self.cleanup_memory()
 
         if isinstance(filepath_or_stream, str):
             self.filepath = filepath_or_stream
@@ -192,6 +202,7 @@ class PdfParser(
 
     def _parse_document(self) -> None:
         """Parses a pdf document."""
+
         self.spans = self._create_spans()
         if not self.spans or all(span.is_header_footer for span in self.spans):
             raise TextNotFoundException(
@@ -222,6 +233,7 @@ class PdfParser(
                     f"Tesseract's {lang}.traineddata file not found at {tessdata_location}. You might need to download the corresponding file from https://github.com/tesseract-ocr/tessdata and place it in {tessdata_location}",
                 )
 
+    @mem_debug("_create_spans")
     def _create_spans(self) -> list[TextSpan]:
         """Prepares the parsed spans.
 
@@ -374,6 +386,7 @@ class PdfParser(
             )
 
     @staticmethod
+    @mem_debug("_create_lines")
     def _create_lines(spans: list[TextSpan]) -> list[TextLine]:
         """Consolidate the consecutive spans by grouping them together
         in a TextLine when possible if they belong to the same line.
@@ -406,12 +419,10 @@ class PdfParser(
         )
         for span in spans_to_merge:
             page_orientation_counts[span.page][span.orientation] += 1
-        print(page_orientation_counts)
         page_dominant_orientation: dict[int, tuple[float, float]] = {
             page: counts.most_common(1)[0][0]
             for page, counts in page_orientation_counts.items()
         }
-        print(page_dominant_orientation)
         spans_to_merge = [
             span
             for span in spans_to_merge
@@ -487,6 +498,7 @@ class PdfParser(
 
         return max(linespace_counts, key=linespace_counts.get)
 
+    @mem_debug("_create_blocks")
     def _create_blocks(self, lines: list[TextLine]) -> list[TextBlock]:
         """Groups lines together into blocks.
         A block is a group of lines the is not separated by extra spacing.
@@ -527,11 +539,12 @@ class PdfParser(
 
         return blocks
 
+    @mem_debug("cleanup_memory")
     def cleanup_memory(self) -> None:
         """Cleans up memory by reseting all objects created to parse the document."""
-        if self._document is not None:
+        if isinstance(self._document, pymupdf.Document):
             self._document.close()
-            self._document = None
+        self._document = None
         self.filepath = None
         self.page_start = 0
         self.page_end = None
@@ -546,3 +559,6 @@ class PdfParser(
         self.main_body_is_bold = False
         # restore the user-configured value; auto-detected value is no longer valid
         self.body_line_spacing = self._configured_body_line_spacing
+        # release cached page images — the PIL objects can be large
+        self._page_images = None
+        self._page_images_resolution = 100
