@@ -156,11 +156,9 @@ class PdfTable:
             df = pd.DataFrame(df_constructor[1:], columns=df_constructor[0])
         else:
             df = pd.DataFrame(df_constructor)
-        df = (
-            df.drop_duplicates()
-            .dropna(axis=0, how="all")  # type: ignore | type of dropna is partially unknown
-            .dropna(axis=1, how="all")  # type: ignore | type of dropna is partially unknown
-        )
+        df = df.drop_duplicates().dropna(axis=0, how="all")  # type: ignore | type of dropna is partially unknown
+        if not df.empty:
+            df = df.dropna(axis=1, how="all")  # type: ignore | type of dropna is partially unknown
 
         return df
 
@@ -224,6 +222,8 @@ class PdfTable:
         if self.has_merged_cells:
             return self.to_html(has_header=has_header)
         table_as_md = self.to_pandas(has_header=has_header).to_markdown(index=False)
+        if not table_as_md:
+            return ""
         table_as_md = re.sub(r"\s{3,}", "  ", table_as_md)
         table_as_md = re.sub(r"-{3,}", "---", table_as_md)
 
