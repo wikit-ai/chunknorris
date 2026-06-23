@@ -322,10 +322,8 @@ class PdfParser(
 
     def _flag_headers_footers(self, spans: list[TextSpan]) -> list[TextSpan]:
         """Flags spans that are headers and footers (inplace).
-        A span is considered a header/footer if spans with the same vertical
-        band (y0 rounded to 5 pts) and font size appear on more than 33% of pages.
-        This catches varying elements like page numbers that share y-position and
-        font size but differ in text or exact x position.
+        A span is considered a header/footer if its exact bbox appears on more
+        than 33% of the pages of the document.
 
         Args:
             spans (list[TextSpan]): the list of spans with attribute is_header_footer updated.
@@ -333,23 +331,16 @@ class PdfParser(
         if self.document.page_count <= 2:  # type: ignore : missing typing in pymupdf | document.page_count : int
             return spans
 
-        # Map (y-band, fontsize) -> set of pages where it appears
-        sig_pages: defaultdict[tuple[float, float], set[int]] = defaultdict(set)
-        for span in spans:
-            sig = (
-                round(span.bbox.y0 / 5) * 5,  # type: ignore[reportUnknownMemberType] # missing typing in pymupdf | Rect.y0 : float
-                span.fontsize,
-            )
-            sig_pages[sig].add(span.page)
-
-        header_footer_sigs = {
-            sig
-            for sig, pages in sig_pages.items()
-            if len(pages) > self.document.page_count / 3  # type: ignore : missing typing in pymupdf # document.page_count : int
+        bbox_location_counts: Counter[pymupdf.Rect] = Counter(
+            span.bbox for span in spans
+        )
+        header_footer_bboxes = {
+            bbox
+            for bbox, count in bbox_location_counts.items()
+            if count > self.document.page_count / 3  # type: ignore : missing typing in pymupdf | document.page_count : int
         }
         for span in spans:
-            sig = (round(span.bbox.y0 / 5) * 5, span.fontsize)  # type: ignore : missing typing in pymupdf | Rect.y0 : float
-            span.is_header_footer = sig in header_footer_sigs
+            span.is_header_footer = span.bbox in header_footer_bboxes
 
         return spans
 
