@@ -3,12 +3,13 @@ from io import StringIO
 from typing import Any
 
 import pandas as pd
-from bs4.element import Tag
+from bs4.element import Tag  # type: ignore : no stubs
 from markdownify import MarkdownConverter  # type: ignore : no stubs
 
 from .logger import LOGGER
 
 _STRUCTURAL_ATTRS = {"rowspan", "colspan"}
+_CONTENT_ATTRS = {"a": {"href", "title"}}
 
 
 def _has_merged_cells(el: Tag) -> bool:
@@ -21,10 +22,12 @@ def _has_merged_cells(el: Tag) -> bool:
 
 def _strip_attrs(el: Tag) -> Tag:
     """Returns a deep copy of the table element with all HTML attributes removed
-    except rowspan and colspan, which are needed to preserve the table structure."""
+    except rowspan and colspan (needed to preserve the table structure) and a few
+    content-bearing attributes such as <a href> (needed to preserve link targets)."""
     el_copy = copy.deepcopy(el)
     for tag in el_copy.find_all(True):
-        tag.attrs = {k: v for k, v in tag.attrs.items() if k in _STRUCTURAL_ATTRS}
+        kept = _STRUCTURAL_ATTRS | _CONTENT_ATTRS.get(tag.name, set())
+        tag.attrs = {k: v for k, v in tag.attrs.items() if k in kept}
     return el_copy
 
 
