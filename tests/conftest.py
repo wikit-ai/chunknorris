@@ -52,7 +52,7 @@ def wikit_parser() -> WikitJsonParser:
 
 @pytest.fixture(scope="session")
 def pdf_parser() -> PdfParser:
-    return PdfParser()
+    return PdfParser(use_ocr="never")
 
 
 @pytest.fixture(scope="session")

@@ -86,7 +86,7 @@ def test_get_pages_as_images(pdf_parser: PdfParser, pdf_filepath: str):
 @requires_ml_backends
 def test_set_ml_backend():
     set_ml_backend("openvino")
-    parser = PdfParser(enable_ml_features=True)
+    parser = PdfParser(enable_ml_features=True, use_ocr="never")
     isinstance(parser._page_classifier, PDFPageClassifierOV)
     set_ml_backend("onnx")
     parser = PdfParser(enable_ml_features=True)
@@ -95,7 +95,7 @@ def test_set_ml_backend():
 
 @requires_ml_backends
 def test_classify_pages(pdf_filepath: str):
-    parser = PdfParser(enable_ml_features=True)
+    parser = PdfParser(enable_ml_features=True, use_ocr="never")
     parser.read_file(pdf_filepath)
     preds = [pred for pred in parser.classify_pages()]
     assert len(preds) == parser.document.page_count  # type: ignore

@@ -1,4 +1,4 @@
-.PHONY: black lint test all release release-check guard-wsl
+.PHONY: isort isort-check black black-check lint test all check release release-check guard-wsl
 
 # The release recipes rely on Unix tools (grep, sed, git). When make is invoked
 # from native Windows (PowerShell/cmd) $(OS) is "Windows_NT" and these break, so
@@ -30,6 +30,16 @@ test:
 	pytest ./tests
 
 all: isort black lint test
+
+# Same checks as `all`, but read-only: isort and black report instead of
+# rewriting. This is what CI runs.
+isort-check:
+	isort --check-only --diff ./src ./tests
+
+black-check:
+	black --check --diff ./src ./tests
+
+check: isort-check black-check lint test
 
 release-check: guard-wsl
 	@test -n "$(VERSION)" || { echo "ERROR: could not read version from pyproject.toml"; exit 1; }
