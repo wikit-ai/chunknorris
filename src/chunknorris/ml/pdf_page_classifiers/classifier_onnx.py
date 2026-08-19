@@ -80,9 +80,9 @@ class PDFPageClassifierONNX(_BasePDFPageClassifier):
                 model_path = path / candidate
                 break
         else:
+            expected = ", ".join(candidates)
             raise FileNotFoundError(
-                f"No ONNX model found in {model_dir}. "
-                f"Expected one of: {', '.join(candidates)}."
+                f"No ONNX model found in {model_dir}. Expected one of: {expected}."
             )
 
         with open(config_path, encoding="utf-8") as f:

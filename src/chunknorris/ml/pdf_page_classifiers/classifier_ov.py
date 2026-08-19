@@ -101,9 +101,10 @@ class PDFPageClassifierOV(_BasePDFPageClassifier):
                 model_path = path / candidate
                 break
         else:
+            expected = ", ".join(candidates)
             raise FileNotFoundError(
                 f"No OpenVINO model found in {model_dir}. "
-                f"Expected one of: {', '.join(candidates)}. "
+                f"Expected one of: {expected}. "
                 "Export with save_for_deployment(..., export_openvino=True)."
             )
 
