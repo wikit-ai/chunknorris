@@ -1,13 +1,27 @@
 import re
 
 import pymupdf  # type: ignore -> no stubs
+import pytest
 from PIL.Image import Image as PILImage
 
 from chunknorris import set_ml_backend
 from chunknorris.core.components import MarkdownDoc
-from chunknorris.ml.pdf_page_classifiers.classifier_onnx import PDFPageClassifierONNX
-from chunknorris.ml.pdf_page_classifiers.classifier_ov import PDFPageClassifierOV
 from chunknorris.parsers import PdfParser
+
+try:
+    from chunknorris.ml.pdf_page_classifiers.classifier_onnx import (
+        PDFPageClassifierONNX,
+    )
+    from chunknorris.ml.pdf_page_classifiers.classifier_ov import PDFPageClassifierOV
+
+    ML_BACKENDS_AVAILABLE = True
+except ImportError:  # the ml-onnx / ml-openvino extras are not installed
+    ML_BACKENDS_AVAILABLE = False
+
+requires_ml_backends = pytest.mark.skipif(
+    not ML_BACKENDS_AVAILABLE,
+    reason="requires the ml-onnx and ml-openvino extras",
+)
 
 
 def test_parse_file(pdf_parser: PdfParser, pdf_filepath: str):
@@ -69,17 +83,19 @@ def test_get_pages_as_images(pdf_parser: PdfParser, pdf_filepath: str):
     assert all_img[5] == img_page_5 == img_page_567[0]
 
 
+@requires_ml_backends
 def test_set_ml_backend():
     set_ml_backend("openvino")
-    parser = PdfParser(enable_ml_features=True)
+    parser = PdfParser(enable_ml_features=True, use_ocr="never")
     isinstance(parser._page_classifier, PDFPageClassifierOV)
     set_ml_backend("onnx")
     parser = PdfParser(enable_ml_features=True)
     isinstance(parser._page_classifier, PDFPageClassifierONNX)
 
 
+@requires_ml_backends
 def test_classify_pages(pdf_filepath: str):
-    parser = PdfParser(enable_ml_features=True)
+    parser = PdfParser(enable_ml_features=True, use_ocr="never")
     parser.read_file(pdf_filepath)
     preds = [pred for pred in parser.classify_pages()]
     assert len(preds) == parser.document.page_count  # type: ignore

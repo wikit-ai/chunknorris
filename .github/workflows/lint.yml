@@ -1,6 +1,18 @@
 name: Lint
 
-on: [push, pull_request]
+on:
+  # Only on the default branch: a push to a branch with an open PR would
+  # otherwise run every job twice (once per event).
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+# Cancel superseded runs on the same ref instead of queueing them up.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
@@ -12,12 +24,41 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements.dev.txt
 
       - name: Install dependencies
         run: pip install -r requirements.dev.txt -r requirements.txt
 
+      - name: Isort
+        run: make isort-check
+
       - name: Black
-        run: black --check --verbose ./src
+        run: make black-check
 
       - name: Pylint
-        run: pylint ./src
+        run: make lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements.dev.txt
+
+      - name: Install dependencies
+        # The ml-onnx / ml-openvino extras are not installed: the tests that need
+        # them download a model from the Hugging Face hub, so they self-skip here.
+        run: pip install -r requirements.dev.txt -e .
+
+      - name: Pytest
+        run: make test

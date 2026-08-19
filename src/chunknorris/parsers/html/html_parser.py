@@ -3,9 +3,9 @@ from pathlib import Path
 from typing import Any
 
 from ...core.components import MarkdownDoc
-from ...core.custom_markdownify import (
+from ...core.custom_markdownify import (  # type: ignore : no stub file
     CustomMarkdownConverter,
-)  # type: ignore : no stub file
+)
 from ..abstract_parser import AbstractParser
 
 _RE_BLANK_LINES = re.compile(r"(?:\n\s*){3,}")
