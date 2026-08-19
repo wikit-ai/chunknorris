@@ -1,6 +1,13 @@
 name: Lint
 
-on: [push, pull_request]
+on:
+  # Only on the default branch: a push to a branch with an open PR would
+  # otherwise run every job twice (once per event).
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
 
 # Cancel superseded runs on the same ref instead of queueing them up.
 concurrency:
