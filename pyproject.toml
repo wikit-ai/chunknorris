@@ -8,6 +8,9 @@ include = ["*"]
 exclude = ["__pycache__"]
 namespaces = true         # true by default
 
+[tool.isort]
+profile = "black"
+
 [tool.mypy]
 mypy_path = "src-stubs"
 
