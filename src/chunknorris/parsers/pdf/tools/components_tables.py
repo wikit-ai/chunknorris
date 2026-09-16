@@ -1,7 +1,6 @@
 import re
 from functools import cached_property
 from operator import attrgetter
-from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -238,7 +237,12 @@ class TableFinder:
     while maintaining table parsing capabilities
     """
 
-    def __init__(self, snap_tolerance: int = 3, line_width_threshold: int = 5):
+    def __init__(
+        self,
+        snap_tolerance: int = 3,
+        line_width_threshold: int = 5,
+        max_lines_per_page: int = 5000,
+    ):
         """Init a tablefinder
 
         Args:
@@ -248,9 +252,16 @@ class TableFinder:
                 in the pdf, to take into account the width of the line.
                 This arg specifies a threshold : all rectangle having a width below it is considered a line.
                 Defaults to 5.
+            max_lines_per_page (int, optional): the maximum amount of table-candidate lines
+                accepted on a page. Building tables is combinatorial : grouping the lines alone
+                allocates a (n_lines, n_lines) boolean matrix, so pages carrying tens of thousands
+                of vector lines (maps, charts, CAD exports) exhaust the memory for lines that are
+                not tables anyway. Table detection is skipped on pages above this threshold.
+                Defaults to 5000.
         """
         self.snap_tolerance = snap_tolerance
         self.line_width_threshold = line_width_threshold
+        self.max_lines_per_page = max_lines_per_page
 
     def build_tables(
         self, page: pymupdf.Page
@@ -297,9 +308,17 @@ class TableFinder:
     def _get_table_lines(self, page: pymupdf.Page) -> npt.NDArray[np.float32]:
         """Gets the lines that are likely to belong to a table.
 
+        Uses Page.get_cdrawings() rather than Page.get_drawings() : the latter is only a
+        python post-processing loop over the former, wrapping every point/rect into
+        pymupdf.Point/pymupdf.Rect objects we do not need. Skipping it makes the extraction
+        about twice as fast on vector-heavy pages.
+
         Processes all drawings in a single pass: annotation filtering, rectangle-to-line
         conversion, and coordinate extraction happen together to avoid creating intermediate
         copies of the (potentially large) drawings list.
+
+        Pages yielding more than self.max_lines_per_page candidate lines are dropped, as
+        building tables out of them is combinatorial (see self.max_lines_per_page).
 
         Args:
             page (pymupdf.Page): the page to get the drawings from.
@@ -308,7 +327,7 @@ class TableFinder:
             npt.NDArray[np.float32]: an array of line coordinates of shape (n_lines, 4)
                 where each row is x1, y1, x2, y2.
         """
-        drawings = page.get_drawings()  # type: ignore missing typing in pymupdf
+        drawings = page.get_cdrawings()  # type: ignore missing typing in pymupdf
         ann_rects = [a.rect for a in page.annots()]  # type: ignore missing typing in pymupdf
 
         line_items: list[tuple[float, float, float, float]] = []
@@ -317,83 +336,38 @@ class TableFinder:
                 continue
             for item in drawing["items"]:
                 if item[0] == "l":
-                    line_items.append((item[1].x, item[1].y, item[2].x, item[2].y))  # type: ignore
+                    (x0, y0), (x1, y1) = item[1], item[2]
+                    line_items.append((x0, y0, x1, y1))
                 elif item[0] == "re":
-                    rect = item[1]
-                    if rect.width < self.line_width_threshold:  # type: ignore
-                        mid_x = (rect.x0 + rect.x1) / 2  # type: ignore
-                        line_items.append((mid_x, rect.y0, mid_x, rect.y1))  # type: ignore
-                    elif rect.height < self.line_width_threshold:  # type: ignore
-                        mid_y = (rect.y0 + rect.y1) / 2  # type: ignore
-                        line_items.append((rect.x0, mid_y, rect.x1, mid_y))  # type: ignore
+                    # Unlike get_drawings(), get_cdrawings() does not normalize rects : one
+                    # drawn right-to-left comes back with x0 > x1, which would otherwise be
+                    # mistaken for a zero-width vertical line and silently dropped.
+                    rx0, ry0, rx1, ry1 = item[1]
+                    x0, x1 = (rx0, rx1) if rx0 <= rx1 else (rx1, rx0)
+                    y0, y1 = (ry0, ry1) if ry0 <= ry1 else (ry1, ry0)
+                    if x1 - x0 < self.line_width_threshold:
+                        mid_x = (x0 + x1) / 2
+                        line_items.append((mid_x, y0, mid_x, y1))
+                    elif y1 - y0 < self.line_width_threshold:
+                        mid_y = (y0 + y1) / 2
+                        line_items.append((x0, mid_y, x1, mid_y))
 
         if not line_items:
             return np.empty(shape=(0, 4))
         line_coordinates = np.array(line_items, dtype=np.float32).round()
-        return TableFinder._filter_lines(line_coordinates)
+        line_coordinates = TableFinder._filter_lines(line_coordinates)
+        if len(line_coordinates) > self.max_lines_per_page:
+            LOGGER.warning(
+                "Page %i holds %i table-candidate lines (max allowed : %i). Skipping table "
+                "detection on this page : such an amount of vectors is very unlikely to be "
+                "tables, and building tables out of them would exhaust time and memory.",
+                page.number,  # type: ignore | missing typing in pymupdf page.number -> int
+                len(line_coordinates),
+                self.max_lines_per_page,
+            )
+            return np.empty(shape=(0, 4))
 
-    @staticmethod
-    def _remove_drawings_from_annotations(
-        drawings: list[dict[str, Any]], page: pymupdf.Page
-    ) -> list[dict[str, Any]]:
-        """Removes the drawings that are likely to be due to annotations, i.e rectangles
-        used to highlight text.
-
-        Args:
-            drawings (list[dict[Any]]): the drawings obtained from Page.get_drawings()
-            page (pymupdf.Page): the page to get the drawings from.
-
-        Returns:
-            list[dict[Any]]: the drawings that are not due to annotations.
-        """
-        annotations = list(page.annots())  # type: ignore :: missing typing in pymupdf -> Page.annots() -> Generator[Annots]
-        if not annotations:
-            return drawings
-
-        filtered_drawings: list[dict[str, Any]] = [
-            drawing
-            for drawing in drawings
-            if not any(annotation.rect.contains(drawing["rect"]) for annotation in annotations)  # type: ignore :: missing typing in pymupdf -> Rect.contains() -> bool
-        ]
-
-        return filtered_drawings
-
-    def _convert_rectangles_to_lines(
-        self, drawings: list[tuple[Any]]
-    ) -> list[dict[str, list[tuple[Any]]]]:
-        """Converts the rectangles to lines if their width
-        is below self.line_width_threshold.
-
-        Args:
-            drawings (list[tuple[Any]]): the drawings extracted from a pymupdf.Page.
-
-        Returns:
-            list[dict[str, list[tuple[Any]]]]: the drawings, same format as pumupdf.Page.get_cdrawings()'s return,
-                with some rectangles converted to lines.
-        """
-        processed_drawings: list[dict[str, list[tuple[Any]]]] = []
-        for drawing in drawings:
-            drawing_items: list[tuple[Any]] = []
-            for item in drawing["items"]:
-                if item[0] == "re":
-                    if item[1].width < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.width : float
-                        mid_x = (item[1].x0 + item[1].x1) / 2  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
-                        item = (
-                            "l",
-                            pymupdf.Point(mid_x, item[1].y0),  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
-                            pymupdf.Point(mid_x, item[1].y1),  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
-                        )
-                    elif item[1].height < self.line_width_threshold:  # type: ignore : missing typing in pymupdf rect.height : float
-                        mid_y = (item[1].y0 + item[1].y1) / 2  # type: ignore : missing typing in pymupdf rect.y0/y1 : float
-                        item = (
-                            "l",
-                            pymupdf.Point(item[1].x0, mid_y),  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
-                            pymupdf.Point(item[1].x1, mid_y),  # type: ignore : missing typing in pymupdf rect.x0/x1 : float
-                        )
-                drawing_items.append(item)
-            processed_drawings.append({"items": drawing_items})
-
-        return processed_drawings
+        return line_coordinates
 
     @staticmethod
     def _filter_lines(
