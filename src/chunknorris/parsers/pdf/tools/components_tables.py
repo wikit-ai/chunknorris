@@ -241,7 +241,7 @@ class TableFinder:
         self,
         snap_tolerance: int = 3,
         line_width_threshold: int = 5,
-        max_lines_per_page: int = 5000,
+        max_lines_per_page: int = 3000,
     ):
         """Init a tablefinder
 

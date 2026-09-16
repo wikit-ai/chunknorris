@@ -45,6 +45,13 @@ class PdfParser(
     _LINE_Y_TOLERANCE: int = 3
     # Extra gap (pts) added on top of body_line_spacing to detect block boundaries
     _BLOCK_SPACING_TOLERANCE: int = 2
+    # Fraction of a page that raster images must cover for it to look scanned
+    _SCANNED_PAGE_IMAGE_COVERAGE: float = 0.8
+    # Characters a scanned page may carry outside of its margins before it is
+    # considered to hold real text
+    _SCANNED_PAGE_MAX_CHARS: int = 50
+    # Top/bottom band of a page where scanner stamps land, as a fraction of its height
+    _PAGE_MARGIN_RATIO: float = 0.08
 
     table_finder: TableFinder
     extract_tables: bool = True
@@ -204,9 +211,15 @@ class PdfParser(
         """Parses a pdf document."""
 
         self.spans = self._create_spans()
-        if not self.spans or all(span.is_header_footer for span in self.spans):
+        if (
+            not self.spans
+            or all(span.is_header_footer for span in self.spans)
+            or self._is_scanned_document()
+        ):
             raise TextNotFoundException(
-                'No text content found in document. You may want to set use_ocr="always".'
+                "No text content found in document, even though OCR was used."
+                if self.use_ocr == "always"
+                else 'No text content found in document. You may want to set use_ocr="always".'
             )
         self.tables = self.get_tables() if self.extract_tables else []
         self.spans = self._flag_table_spans(self.spans)
@@ -216,6 +229,102 @@ class PdfParser(
         self._flag_footnotes(self.spans)
         self.main_title = self._get_document_main_title()
         self.toc = self.get_toc() if self.add_headers else []
+
+    def _is_scanned_document(self) -> bool:
+        """Whether every parsed page is a scanned image holding no real text.
+
+        Scanners routinely stamp a date, a time or a page number onto the image
+        they produce, so such documents do yield a few spans and cannot be spotted
+        by span count alone. Text volume alone is not enough either: a filled-in
+        form or a section divider page legitimately carries a single line. What
+        separates them is that a scan is a page-sized raster image while a digital
+        page is not.
+
+        The decision is deliberately taken for the document as a whole. A single
+        page bearing only a section title must not make the parser give up on the
+        pages around it that do hold text.
+
+        Returns:
+            bool: True if every page in the parsed range is image-covered and
+                nearly textless, meaning the content is only reachable through OCR.
+        """
+        spans_per_page: defaultdict[int, list[TextSpan]] = defaultdict(list)
+        for span in self.spans:
+            spans_per_page[span.page].append(span)
+
+        for page in self.document.pages(start=self.page_start, stop=self.page_end):  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
+            # Cheap check first: a page with real text rules the document out
+            # without ever inspecting its images.
+            if (
+                PdfParser._count_body_chars(spans_per_page[page.number], page.rect)  # type: ignore : missing typing in pymupdf -> page.number : int, page.rect : Rect
+                > self._SCANNED_PAGE_MAX_CHARS
+            ):
+                return False
+            if (
+                PdfParser._get_page_image_coverage(page)
+                < self._SCANNED_PAGE_IMAGE_COVERAGE
+            ):
+                return False
+
+        return True
+
+    @staticmethod
+    def _count_body_chars(spans: list[TextSpan], page_rect: pymupdf.Rect) -> int:
+        """Counts the characters a page holds, ignoring stamps.
+
+        A stamp burnt into a margin by a scanner or a printer (a date, a time, a
+        page number) is not text the document actually carries. Counting it would
+        hide the fact that the page's real content is only reachable through OCR,
+        so spans lying entirely in the top or bottom margin band are discarded,
+        as are spans already flagged as repeated headers/footers.
+
+        Args:
+            spans (list[TextSpan]): the spans found on the page.
+            page_rect (pymupdf.Rect): the rectangle of the page.
+
+        Returns:
+            int: the number of characters outside of the page margins.
+        """
+        margin = page_rect.height * PdfParser._PAGE_MARGIN_RATIO  # type: ignore : missing typing in pymupdf -> Rect.height : float
+        top_limit: float = page_rect.y0 + margin  # type: ignore : missing typing in pymupdf -> Rect.y0 : float
+        bottom_limit: float = page_rect.y1 - margin  # type: ignore : missing typing in pymupdf -> Rect.y1 : float
+
+        return sum(
+            len(span.text.strip())
+            for span in spans
+            if not span.is_header_footer
+            and span.bbox.y1 > top_limit  # type: ignore : missing typing in pymupdf -> Rect.y1 : float
+            and span.bbox.y0 < bottom_limit  # type: ignore : missing typing in pymupdf -> Rect.y0 : float
+        )
+
+    @staticmethod
+    def _get_page_image_coverage(page: pymupdf.Page) -> float:
+        """Computes the fraction of a page covered by raster images.
+
+        Overlapping images are counted once per image rather than once per
+        covered area, so the result is capped at 1.0. Overestimating is harmless
+        here: the value is only compared against a coverage threshold, and the
+        text check has already ruled out pages that carry content.
+
+        Args:
+            page (pymupdf.Page): the page to measure.
+
+        Returns:
+            float: the covered fraction, between 0.0 and 1.0.
+        """
+        page_rect: pymupdf.Rect = page.rect  # type: ignore : missing typing in pymupdf -> page.rect : Rect
+        page_area: float = page_rect.get_area()  # type: ignore : missing typing in pymupdf -> Rect.get_area() : float
+        if not page_area:
+            return 0.0
+
+        covered_area = 0.0
+        for image_info in page.get_image_info():  # type: ignore : missing typing in pymupdf -> page.get_image_info() : list[dict]
+            # Clip to the page: images can bleed outside of it.
+            image_rect = pymupdf.Rect(image_info["bbox"]) & page_rect
+            if not image_rect.is_empty:  # type: ignore : missing typing in pymupdf -> Rect.is_empty : bool
+                covered_area += image_rect.get_area()  # type: ignore : missing typing in pymupdf -> Rect.get_area() : float
+
+        return min(covered_area / page_area, 1.0)
 
     def check_ocr_config_is_valid(self) -> None:
         """Check that the OCR configuration is valid."""
@@ -455,7 +564,10 @@ class PdfParser(
             lines (list[TextLine]): the parsed lines.
 
         Returns:
-            float: the value of the linespace.
+            float: the value of the linespace. 0.0 when it cannot be estimated,
+                i.e. when the document holds fewer than two comparable lines
+                (single-line forms, mostly-scanned pages). Blocks are then split
+                on any gap wider than _BLOCK_SPACING_TOLERANCE.
         """
         # Focus on the most common fontsize so that list items, titles, or footnotes
         # with different fontsizes do not skew the body linespacing estimate.
@@ -486,6 +598,9 @@ class PdfParser(
                 for curr_line, prev_line in zip(lines[1:], lines[:-1])
                 if curr_line.bbox.y0 >= prev_line.bbox.y0  # type: ignore : missing typing in pymupdf | Rect.y0 : float
             )
+
+        if not linespace_counts:
+            return 0.0
 
         return max(linespace_counts, key=linespace_counts.get)
 
