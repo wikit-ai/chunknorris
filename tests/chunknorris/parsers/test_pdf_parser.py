@@ -6,6 +6,7 @@ from PIL.Image import Image as PILImage
 
 from chunknorris import set_ml_backend
 from chunknorris.core.components import MarkdownDoc
+from chunknorris.exceptions.exceptions import TextNotFoundException
 from chunknorris.parsers import PdfParser
 
 try:
@@ -66,6 +67,85 @@ def test_parse_string(pdf_parser: PdfParser, pdf_filepath: str):
     byte_string = pymupdf.open(pdf_filepath).tobytes()  # type: ignore -> missing typing : pymupdf.open() -> pymupdf.Document
     md_string = pdf_parser.parse_string(byte_string)
     assert isinstance(md_string, MarkdownDoc)
+
+
+def test_parse_single_line_document(pdf_parser: PdfParser):
+    """A document holding a single line of text (e.g. a form with one field
+    filled in) yields no consecutive line pair to estimate the body linespacing
+    from. It must still parse instead of raising."""
+    doc = pymupdf.open()
+    page = doc.new_page()  # type: ignore -> missing typing : Document.new_page() -> Page
+    page.insert_text((50, 100), "Nom : Chuck Norris", fontsize=11)  # type: ignore -> missing typing
+
+    parser_output = pdf_parser.parse_string(doc.tobytes())  # type: ignore -> missing typing
+
+    assert isinstance(parser_output, MarkdownDoc)
+    assert "Nom : Chuck Norris" in parser_output.to_string()
+    assert pdf_parser.body_line_spacing == 0.0
+
+
+def _scanned_page(doc: pymupdf.Document, stamp: str | None = None) -> None:
+    """Appends a page made of a single page-sized image, as a scanner produces,
+    optionally stamped with a date/page number in the top margin."""
+    page = doc.new_page()  # type: ignore -> missing typing : Document.new_page() -> Page
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 600, 800))
+    pixmap.clear_with(210)  # type: ignore -> missing typing
+    page.insert_image(page.rect, pixmap=pixmap)  # type: ignore -> missing typing
+    if stamp is not None:
+        page.insert_text((50, 22), stamp, fontsize=7)  # type: ignore -> missing typing
+
+
+@pytest.mark.parametrize(
+    "stamps",
+    [
+        pytest.param([None, None, None], id="no_stamp"),
+        pytest.param(["12/03/2024 09:41"] * 3, id="stamp_same_position"),
+        pytest.param(
+            [
+                "12/03/2024 09:41  Page 1",
+                "12/03/2024 09:42  Page 2",
+                "13/03/2024 10:03  Page 3",
+            ],
+            id="stamp_varying",
+        ),
+        pytest.param(["12/03/2024 09:41"], id="single_page"),
+    ],
+)
+def test_parse_scanned_document_raises(pdf_parser: PdfParser, stamps: list[str | None]):
+    """A document whose pages are images carrying at most a scanner stamp holds no
+    reachable text: it must ask for OCR rather than return the stamps as content."""
+    doc = pymupdf.open()
+    for stamp in stamps:
+        _scanned_page(doc, stamp)
+
+    with pytest.raises(TextNotFoundException):
+        pdf_parser.parse_string(doc.tobytes())  # type: ignore -> missing typing
+
+
+def test_parse_scanned_document_is_decided_document_wide(pdf_parser: PdfParser):
+    """A scanned page sitting next to pages that do hold text must not make the
+    whole document look scanned, and neither must a page-sized image carrying a
+    real paragraph."""
+    doc = pymupdf.open()
+    _scanned_page(doc, "12/03/2024 09:41")
+    page = doc.new_page()  # type: ignore -> missing typing
+    for i in range(20):
+        page.insert_text((50, 80 + i * 18), f"Ligne {i} de contenu reel.", fontsize=11)  # type: ignore -> missing typing
+
+    parser_output = pdf_parser.parse_string(doc.tobytes())  # type: ignore -> missing typing
+
+    assert "Ligne 0 de contenu reel." in parser_output.to_string()
+
+
+def test_parse_section_title_page(pdf_parser: PdfParser):
+    """A section divider page holds a single title and needs no OCR."""
+    doc = pymupdf.open()
+    page = doc.new_page()  # type: ignore -> missing typing
+    page.insert_text((50, 300), "Partie 1", fontsize=24)  # type: ignore -> missing typing
+
+    parser_output = pdf_parser.parse_string(doc.tobytes())  # type: ignore -> missing typing
+
+    assert "Partie 1" in parser_output.to_string()
 
 
 def test_get_pages_as_images(pdf_parser: PdfParser, pdf_filepath: str):
