@@ -23,7 +23,7 @@ chunknorris = "chunknorris.__main__:main"
 
 [project]
 name = "chunknorris"
-version = "1.3.7"
+version = "1.3.8"
 authors = [{ name = "Wikit", email = "dev@wikit.ai" }]
 description = "A package for chunking documents from various formats"
 keywords = [
