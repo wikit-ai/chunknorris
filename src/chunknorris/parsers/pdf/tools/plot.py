@@ -1,5 +1,5 @@
 import random
-from itertools import groupby
+from collections import defaultdict
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
@@ -103,10 +103,12 @@ class PdfPlotter(PdfParserState):
         Returns:
             dict[int,list]: The map of pages to sublists of items
         """
-        return {
-            page: list(items_on_page)
-            for page, items_on_page in groupby(items_list, key=lambda item: item.page)
-        }
+        items_per_page: defaultdict[
+            int, list[TextSpan | TextLine | TextBlock | PdfTable]
+        ] = defaultdict(list)
+        for item in items_list:
+            items_per_page[item.page].append(item)
+        return items_per_page
 
     @staticmethod
     def show_page(page: pymupdf.Page, dpi: int = 100) -> None:
