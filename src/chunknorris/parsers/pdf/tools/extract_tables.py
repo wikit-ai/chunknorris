@@ -1,4 +1,4 @@
-from itertools import groupby
+from collections import defaultdict
 from operator import attrgetter
 
 import pymupdf  # type: ignore : no stubs
@@ -23,10 +23,9 @@ class PdfTableExtraction(PdfParserState):
         Returns:
             PdfTable: the list of tables in the pdf.
         """
-        spans_per_page: dict[int, list[TextSpan]] = {
-            page: list(spans_on_page)
-            for page, spans_on_page in groupby(self.spans, key=lambda span: span.page)
-        }
+        spans_per_page: defaultdict[int, list[TextSpan]] = defaultdict(list)
+        for span in self.spans:
+            spans_per_page[span.page].append(span)
         tables: list[PdfTable] = []
         for page in self.document.pages(start=self.page_start, stop=self.page_end):  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
             tables.extend(self._extract_page_tables(page, spans_per_page))
