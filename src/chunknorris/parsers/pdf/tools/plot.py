@@ -59,7 +59,7 @@ class PdfPlotter(PdfParserState):
             self.lines
         )
         blocks_per_page: dict[int, list[TextBlock]] = PdfPlotter._get_items_per_page(
-            self.blocks
+            self.blocks + self.ocr_blocks  # type: ignore : OCRBlock has the attributes of TextBlock used for plotting
         )
         tables_per_page: dict[int, list[PdfTable]] = PdfPlotter._get_items_per_page(
             self.tables
@@ -282,7 +282,7 @@ class PdfPlotter(PdfParserState):
         doc_to_draw_on = self.get_doc_to_draw_on()
 
         blocks_per_page: dict[int, list[TextBlock]] = PdfPlotter._get_items_per_page(
-            self.blocks
+            self.blocks + self.ocr_blocks  # type: ignore : OCRBlock has the attributes of TextBlock used for plotting
         )
         for page in doc_to_draw_on.pages(page_start, page_end):  # type: ignore : missing typing in pymupdf | Document.pages() -> Generator(Page)
             if not page.number in blocks_per_page:  # type: ignore : missing typing in pymupdf | Page.number -> int

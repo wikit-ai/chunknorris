@@ -42,8 +42,9 @@ nav:
       - "ChunkNorris": index.md
       - Installation: pages/installation.md
       - Getting Started: pages/getting_started.md
+      - OCR: pages/ocr.md
       - How it works: pages/how_it_works.md
-      #- Performance report: pages/performance_report.md # TODO
+      - Performance report: pages/performance_report.md
       - Roadmap: pages/roadmap.md # -> chunknorris image
       - Current limitations: pages/current_limitations.md
       - Contributing: pages/how_to_contribute.md

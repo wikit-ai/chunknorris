@@ -9,6 +9,34 @@ from unicodedata import normalize
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
+# Markdown image reference, such as ![alt](target)
+_RE_IMAGE_REF = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")
+
+
+class DocImage(BaseModel):
+    """An image of a document, referenced in the markdown as ![...](id)."""
+
+    id: str = Field(
+        description="the identifier of the image, used as link target in the markdown"
+    )
+    page: int | None = Field(
+        default=None, description="the page the image belongs to (0-based)"
+    )
+    bbox: tuple[float, float, float, float] | None = Field(
+        default=None,
+        description="the location of the image on the page (x0, y0, x1, y1), in PDF points",
+    )
+    image_type: str | None = Field(
+        default=None,
+        description="the category of the image (chart, screenshot, signature...)",
+    )
+    caption: str | None = Field(
+        default=None, description="a textual description of the image"
+    )
+    base64: str | None = Field(
+        default=None, description="the image, as a base64 encoded data URI"
+    )
+
 
 class MarkdownDoc(BaseModel):
     """A parsed Markdown Formatted-String,
@@ -21,6 +49,7 @@ class MarkdownDoc(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     content: list[MarkdownLine]
     metadata: dict[str, Any] = {}
+    images: dict[str, DocImage] = {}
 
     def to_string(self, keep_track_of_page: bool = False) -> str | dict[int, str]:
         """Get the markdown string corresponding to the document's content
@@ -162,6 +191,7 @@ class Chunk(BaseModel):
     headers: list[MarkdownLine]
     content: list[MarkdownLine]
     start_line: int
+    images: dict[str, DocImage] = {}
     _word_count_cache: int | None = PrivateAttr(default=None)
 
     @computed_field
@@ -193,6 +223,21 @@ class Chunk(BaseModel):
 
     def __str__(self) -> str:
         return self.get_text()
+
+    def get_image_ids(self) -> list[str]:
+        """Gets the ids of the images referenced in the chunk,
+        such as "img-0.jpeg" for ![chart](img-0.jpeg).
+
+        Returns:
+            list[str]: the ids of the images, in order of appearance.
+        """
+        return list(
+            dict.fromkeys(
+                image_id
+                for line in self.headers + self.content
+                for image_id in _RE_IMAGE_REF.findall(line.text)
+            )
+        )
 
     def get_text(self, remove_links: bool = False, prepend_headers: bool = True) -> str:
         """Gets the text of the chunk.

@@ -1,4 +1,5 @@
-import os
+import re
+import warnings
 from collections import Counter, defaultdict
 from itertools import groupby
 from pathlib import Path
@@ -6,12 +7,20 @@ from typing import Any, Literal
 
 import pymupdf  # type: ignore : no stubs
 
-from ...core.components import MarkdownDoc
+from ...core.components import DocImage, MarkdownDoc
+from ...core.logger import LOGGER
 from ...decorators.decorators import mem_debug, timeit, validate_args
 from ...exceptions.exceptions import (
     PageNotFoundException,
     PdfParserException,
     TextNotFoundException,
+)
+from ...ml.ocr import (
+    DocumentOCREngine,
+    OCRBlock,
+    OCREngine,
+    PageOCREngine,
+    TesseractOCR,
 )
 from .tools import (
     DocSpecsExtraction,
@@ -52,12 +61,16 @@ class PdfParser(
     _SCANNED_PAGE_MAX_CHARS: int = 50
     # Top/bottom band of a page where scanner stamps land, as a fraction of its height
     _PAGE_MARGIN_RATIO: float = 0.08
+    # Markdown header line, as returned by the document OCR engines
+    _RE_MD_HEADER: re.Pattern[str] = re.compile(r"^(#{1,6})\s+(.*)$")
+    # Highest header level given to the headers found by OCR, h1 being kept for the main title
+    _OCR_TOP_HEADER_LEVEL: int = 2
 
     table_finder: TableFinder
     extract_tables: bool = True
     add_headers: bool = True
     use_ocr: Literal["always", "auto", "never"] = "auto"
-    ocr_language: str = "fra+eng"
+    ocr_engine: OCREngine
     body_line_spacing: float | None = None
 
     def __init__(
@@ -67,7 +80,8 @@ class PdfParser(
         table_finder: TableFinder = TableFinder(),
         add_headers: bool = True,
         use_ocr: Literal["always", "auto", "never"] = "auto",
-        ocr_language: str = "fra+eng",
+        ocr_engine: OCREngine | None = None,
+        ocr_language: str | None = None,
         body_line_spacing: float | None = None,
         enable_ml_features: bool = False,
     ) -> None:
@@ -83,7 +97,14 @@ class PdfParser(
                 Allows to detect text on images but keep in mind that
                 this might include text you actually do not want, such as screenshots.
                 Must be one of ["always", "auto", "never"]. Default to "auto".
-            ocr_language (str, optional) : the languages to consider for OCR.
+                With a PageOCREngine (such as TesseractOCR), "auto" runs the OCR on the pages that have no text.
+                With a DocumentOCREngine (such as MistralOCR), "auto" runs the OCR on the whole document
+                if no text is found in it.
+            ocr_engine (OCREngine | None, optional): the OCR engine to use, such as
+                TesseractOCR(language="fra+eng") or MistralOCR(image_captioning=True).
+                If None, defaults to TesseractOCR().
+            ocr_language (str, optional) : DEPRECATED, use ocr_engine=TesseractOCR(language=...) instead.
+                The languages to consider for OCR with the default Tesseract engine.
                 Must be a string of 3 letter codes languages separated by "+".
                 Example : "fra+eng+ita"
             body_line_spacing (float, optional) : the size of the space between 2 lines of the body
@@ -101,7 +122,17 @@ class PdfParser(
         self.add_headers = add_headers
         self.extract_tables = extract_tables
         self.use_ocr = use_ocr
-        self.ocr_language = ocr_language
+        if ocr_language is not None:
+            if ocr_engine is not None:
+                raise ValueError(
+                    "ocr_language can't be used along with ocr_engine. Use ocr_engine=TesseractOCR(language=...) instead."
+                )
+            warnings.warn(
+                "ocr_language is deprecated and will be removed in a future version. Use ocr_engine=TesseractOCR(language=...) instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self.ocr_engine = ocr_engine or TesseractOCR(language=ocr_language or "fra+eng")
         self.body_line_spacing = body_line_spacing
         self._configured_body_line_spacing = (
             body_line_spacing  # preserved for cleanup reset
@@ -174,6 +205,15 @@ class PdfParser(
         else:
             self.document = pymupdf.open(stream=filepath_or_stream, filetype="pdf")
 
+    @property
+    def ocr_language(self) -> str | None:
+        """DEPRECATED : the languages used by the Tesseract OCR engine, if used."""
+        return (
+            self.ocr_engine.language
+            if isinstance(self.ocr_engine, TesseractOCR)
+            else None
+        )
+
     def _parse_and_export(self, page_start: int, page_end: int | None) -> MarkdownDoc:
         """Shared implementation for parse_file and parse_string.
         The document is kept open after parsing so that plotting methods
@@ -183,7 +223,25 @@ class PdfParser(
         try:
             self._set_page_range(page_start, page_end)
             self._parse_document()
-            return self.to_markdown_doc()
+            md_doc = self.to_markdown_doc()
+            if self.parsed_using_ocr:
+                md_doc.metadata["ocr"] = {
+                    "engine": self.ocr_engine.name,
+                    "model": self.ocr_engine.model,
+                    "pages": self.ocr_pages,
+                }
+            md_doc.images = {
+                image.id: DocImage(
+                    id=image.id,
+                    page=image.page,
+                    bbox=tuple(image.bbox),  # type: ignore : missing typing in pymupdf -> Rect is an iterable of 4 floats
+                    image_type=image.image_type,
+                    caption=image.caption,
+                    base64=image.base64,
+                )
+                for image in self.ocr_images.values()
+            }
+            return md_doc
         except Exception:
             if isinstance(self._document, pymupdf.Document):
                 self._document.close()
@@ -209,6 +267,14 @@ class PdfParser(
 
     def _parse_document(self) -> None:
         """Parses a pdf document."""
+        uses_document_ocr = isinstance(self.ocr_engine, DocumentOCREngine)
+        if uses_document_ocr and self.use_ocr == "always":
+            LOGGER.info(
+                'Running OCR on the document with %r (use_ocr="always").',
+                self.ocr_engine,
+            )
+            self._parse_document_with_ocr()
+            return
 
         self.spans = self._create_spans()
         if (
@@ -216,6 +282,13 @@ class PdfParser(
             or all(span.is_header_footer for span in self.spans)
             or self._is_scanned_document()
         ):
+            if uses_document_ocr and self.use_ocr == "auto":
+                LOGGER.info(
+                    "No text found in document. Running OCR on the document with %r.",
+                    self.ocr_engine,
+                )
+                self._parse_document_with_ocr()
+                return
             raise TextNotFoundException(
                 "No text content found in document, even though OCR was used."
                 if self.use_ocr == "always"
@@ -229,6 +302,95 @@ class PdfParser(
         self._flag_footnotes(self.spans)
         self.main_title = self._get_document_main_title()
         self.toc = self.get_toc() if self.add_headers else []
+
+    def _parse_document_with_ocr(self) -> None:
+        """Parses the document with the DocumentOCREngine. The document then
+        bypasses the span-based pipeline: only self.ocr_blocks and self.ocr_images are set.
+        """
+        assert isinstance(self.ocr_engine, DocumentOCREngine)
+        self.spans = []
+        ocr_document = self.ocr_engine.ocr_document(
+            self.document, self.page_start, self.page_end  # type: ignore : page_end is set by _set_page_range()
+        )
+        if not any(
+            block.text.strip()
+            for block in ocr_document.blocks
+            if not block.is_header_footer
+        ):
+            raise TextNotFoundException(
+                "No text content found in document, even though OCR was used."
+            )
+        self.ocr_pages = ocr_document.pages
+        self.ocr_images = ocr_document.images
+        self.main_title = self._pop_ocr_main_title(ocr_document.blocks)
+        self.ocr_blocks = PdfParser._normalize_ocr_headers(ocr_document.blocks)
+
+    def _pop_ocr_main_title(self, blocks: list[OCRBlock]) -> str:
+        """Finds the main title among the blocks found by OCR and removes its block.
+        The main title is the first title of the first page holding content.
+
+        Args:
+            blocks (list[OCRBlock]): the blocks found by OCR. Modified in place.
+
+        Returns:
+            str: the main title, or an empty string if none was found.
+        """
+        content_blocks = [block for block in blocks if not block.is_header_footer]
+        if not content_blocks:
+            return ""
+        first_page = content_blocks[0].page
+        title_block = next(
+            (
+                block
+                for block in content_blocks
+                if block.page == first_page and block.type == "title"
+            ),
+            None,
+        )
+        if title_block is None:
+            return ""
+        blocks.remove(title_block)
+        main_title = " ".join(
+            line.strip().lstrip("#").strip()
+            for line in title_block.text.splitlines()
+            if line.strip()
+        )
+
+        return main_title[:100] + "[...]" if len(main_title) > 100 else main_title
+
+    @staticmethod
+    def _normalize_ocr_headers(blocks: list[OCRBlock]) -> list[OCRBlock]:
+        """Shifts the levels of the headers found by OCR so that the highest one is h2,
+        h1 being kept for the main title. OCR engines tend to return arbitrary levels,
+        such as h1 for all headers or h3 for the highest one.
+
+        Args:
+            blocks (list[OCRBlock]): the blocks found by OCR.
+
+        Returns:
+            list[OCRBlock]: the blocks, with headers modified in place.
+        """
+        levels = [
+            len(match.group(1))
+            for block in blocks
+            for line in block.text.splitlines()
+            if (match := PdfParser._RE_MD_HEADER.match(line))
+        ]
+        if not levels:
+            return blocks
+        shift = PdfParser._OCR_TOP_HEADER_LEVEL - min(levels)
+
+        def shift_header(match: re.Match[str]) -> str:
+            level = min(max(len(match.group(1)) + shift, 1), 6)
+            return f"{'#' * level} {match.group(2)}"
+
+        for block in blocks:
+            block.text = "\n".join(
+                PdfParser._RE_MD_HEADER.sub(shift_header, line)
+                for line in block.text.splitlines()
+            )
+
+        return blocks
 
     def _is_scanned_document(self) -> bool:
         """Whether every parsed page is a scanned image holding no real text.
@@ -328,19 +490,7 @@ class PdfParser(
 
     def check_ocr_config_is_valid(self) -> None:
         """Check that the OCR configuration is valid."""
-        tessdata_location = os.environ.get("TESSDATA_PREFIX")
-        if not tessdata_location:
-            raise PdfParserException(
-                'To use OCR, the "TESSDATA_PREFIX" must be set as environment variable in order to locate traineddata files. For more info see https://pymupdf.readthedocs.io/en/latest/installation.html#enabling-integrated-ocr-support\nYou may otherwise want to deactivate OCR : PdfParser(use_ocr="never").',
-            )
-        language_list = self.ocr_language.split("+")
-        for lang in language_list:
-            if not os.path.exists(
-                os.path.join(tessdata_location, f"{lang}.traineddata")
-            ):
-                raise PdfParserException(
-                    f"Tesseract's {lang}.traineddata file not found at {tessdata_location}. You might need to download the corresponding file from https://github.com/tesseract-ocr/tessdata and place it in {tessdata_location}",
-                )
+        self.ocr_engine.validate()
 
     @mem_debug("_create_spans")
     def _create_spans(self) -> list[TextSpan]:
@@ -361,12 +511,16 @@ class PdfParser(
         """Get the spans of the pages."""
 
         spans: list[TextSpan] = []
+        # Document OCR engines run on the whole document, not page per page
+        page_ocr_engine = (
+            self.ocr_engine if isinstance(self.ocr_engine, PageOCREngine) else None
+        )
+        use_ocr = self.use_ocr if page_ocr_engine else "never"
         for page in self.document.pages(start=self.page_start, stop=self.page_end):  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
-            match self.use_ocr:
+            match use_ocr:
                 case "always":
-                    textpage: pymupdf.TextPage = page.get_textpage_ocr(  # type: ignore : missing typing in pymupdf
-                        language=self.ocr_language, dpi=72, full=False
-                    )
+                    textpage: pymupdf.TextPage = page_ocr_engine.get_textpage(page)  # type: ignore : page_ocr_engine is set when use_ocr != "never"
+                    self.ocr_pages.append(page.number)  # type: ignore : missing typing in pymupdf -> page.number: int
                 case "auto":
                     textpage: pymupdf.TextPage = page.get_textpage()  # type: ignore : missing typing in pymupdf
                     page_spans = PdfParser._extract_spans_from_textpage(
@@ -376,12 +530,18 @@ class PdfParser(
                         spans.extend(page_spans)
                         continue
                     else:
-                        textpage: pymupdf.TextPage = page.get_textpage_ocr(  # type: ignore : missing typing in pymupdf
-                            language=self.ocr_language, dpi=72, full=False
-                        )
+                        textpage: pymupdf.TextPage = page_ocr_engine.get_textpage(page)  # type: ignore : page_ocr_engine is set when use_ocr != "never"
+                        self.ocr_pages.append(page.number)  # type: ignore : missing typing in pymupdf -> page.number: int
                 case "never":
                     textpage: pymupdf.TextPage = page.get_textpage()  # type: ignore : missing typing in pymupdf
             spans.extend(PdfParser._extract_spans_from_textpage(textpage, page.number))  # type: ignore : missing typing in pymupdf -> page.number: int
+        if self.ocr_pages:
+            LOGGER.info(
+                "OCR used with %r on %i page(s): %s",
+                self.ocr_engine,
+                len(self.ocr_pages),
+                self.ocr_pages,
+            )
 
         return spans
 
@@ -658,6 +818,9 @@ class PdfParser(
         self.lines = []
         self.blocks = []
         self.tables = []
+        self.ocr_blocks = []
+        self.ocr_images = {}
+        self.ocr_pages = []
         self.toc = []
         self.main_title = ""
         self.document_fontsizes = []

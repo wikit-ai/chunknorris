@@ -6,7 +6,7 @@ import pymupdf  # type: ignore : no stubs
 from ....decorators.decorators import mem_debug, timeit
 from .components import TextSpan
 from .components_tables import Cell, PdfTable
-from .utils import PdfParserState
+from .utils import PdfParserState, native_parsing_only
 
 
 class PdfTableExtraction(PdfParserState):
@@ -15,6 +15,7 @@ class PdfTableExtraction(PdfParserState):
     the attributes of PdfParser, such as self.spans and self.document
     """
 
+    @native_parsing_only
     @timeit
     def get_tables(self) -> list[PdfTable]:
         """Parses the table of the document. For this to work, tables
