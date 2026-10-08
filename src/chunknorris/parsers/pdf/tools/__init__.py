@@ -7,4 +7,4 @@ from .extract_tables import PdfTableExtraction
 from .extract_toc import PdfTocExtraction
 from .page_classification import PdfPageClassification
 from .plot import PdfPlotter
-from .utils import DocSpecsExtraction, PdfParserState
+from .utils import DocSpecsExtraction, PdfParserState, native_parsing_only

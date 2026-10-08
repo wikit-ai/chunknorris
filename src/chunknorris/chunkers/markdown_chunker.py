@@ -67,6 +67,13 @@ class MarkdownChunker(AbstractChunker):
         """
         toc_tree = self.get_toc_tree(content.content)
         chunks = self.get_chunks(toc_tree)
+        if content.images:
+            for chunk in chunks:
+                chunk.images = {
+                    image_id: content.images[image_id]
+                    for image_id in chunk.get_image_ids()
+                    if image_id in content.images
+                }
 
         return chunks
 

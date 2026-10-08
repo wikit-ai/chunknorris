@@ -1,9 +1,11 @@
 from collections import Counter
-from typing import TYPE_CHECKING, Literal
+from functools import wraps
+from typing import TYPE_CHECKING, Any, Callable, Literal, TypeVar
 
 import pymupdf  # type: ignore : no stubs
 
 from ....exceptions.exceptions import PdfParserException
+from ....ml.ocr.types import OCRBlock, OCRImage
 from .components import TextBlock, TextLine, TextSpan
 from .components_tables import PdfTable, TableFinder
 
@@ -31,6 +33,12 @@ class PdfParserState:
         self.lines: list[TextLine] = []
         self.blocks: list[TextBlock] = []
         self.tables: list[PdfTable] = []
+        # Filled instead of spans, lines, blocks and tables when the document
+        # is parsed with a DocumentOCREngine
+        self.ocr_blocks: list[OCRBlock] = []
+        self.ocr_images: dict[str, OCRImage] = {}
+        # The pages that went through OCR, whatever the engine
+        self.ocr_pages: list[int] = []
         self.main_body_fontsizes: list[float] = []
         self.document_fontsizes: list[float] = []
         # Page image cache — populated lazily by get_pages_as_images().
@@ -50,6 +58,30 @@ class PdfParserState:
     @document.setter
     def document(self, doc: pymupdf.Document) -> None:
         self._document = doc
+
+    @property
+    def parsed_using_ocr(self) -> bool:
+        """Whether or not OCR was used to get the content of the parsed document."""
+        return bool(self.ocr_pages)
+
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def native_parsing_only(method: _F) -> _F:
+    """Decorator for the methods of the PdfParser that rely on the spans,
+    lines and blocks of the document, which are not available when the
+    document has been parsed with a DocumentOCREngine."""
+
+    @wraps(method)
+    def wrapper(self: PdfParserState, *args: Any, **kwargs: Any) -> Any:
+        if self.ocr_blocks:
+            raise PdfParserException(
+                f"{method.__name__}() is not available on documents parsed with a DocumentOCREngine, as they have no spans, lines and blocks."
+            )
+        return method(self, *args, **kwargs)
+
+    return wrapper  # type: ignore : wraps preserves the signature
 
 
 class DocSpecsExtraction(PdfParserState):

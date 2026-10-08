@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 
 from .chunkers import MarkdownChunker
 from .core.logger import LOGGER
+from .ml.ocr import MistralOCR, TesseractOCR
 from .parsers import DocxParser, HTMLParser, MarkdownParser, PdfParser, WikitJsonParser
 from .pipelines import BasePipeline, WikitJsonPipeline
 
@@ -56,10 +57,17 @@ def parse_arguments():
         help="For PDF only : whether or not OCR should be used.",
     )
     parser.add_argument(
+        "--ocr_engine",
+        type=str,
+        choices=["tesseract", "mistral"],
+        default="tesseract",
+        help='For PDF only : the OCR engine to use. "mistral" requires the MISTRAL_API_KEY environment variable.',
+    )
+    parser.add_argument(
         "--ocr_language",
         type=str,
         default="fra+eng",
-        help='For PDF only : the languages to consider for OCR. Must be a string of 3 letter codes languages separated by "+", such as "eng+fra"',
+        help='For PDF only, with the tesseract OCR engine : the languages to consider for OCR. Must be a string of 3 letter codes languages separated by "+", such as "eng+fra"',
     )
     parser.add_argument(
         "--extract_tables",
@@ -94,7 +102,11 @@ def main():
         case ".pdf":
             parser = PdfParser(
                 extract_tables=args.extract_tables,
-                ocr_language=args.ocr_language,
+                ocr_engine=(
+                    MistralOCR()
+                    if args.ocr_engine == "mistral"
+                    else TesseractOCR(language=args.ocr_language)
+                ),
                 use_ocr=args.use_ocr,
             )
             pipeline = BasePipeline(parser, chunker)
