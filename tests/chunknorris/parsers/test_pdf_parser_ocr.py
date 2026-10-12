@@ -214,6 +214,19 @@ def test_mistral_ocr_retries_on_rate_limit(monkeypatch: pytest.MonkeyPatch):
     assert len(calls) == 2
 
 
+def test_mistral_ocr_uses_custom_api_url(monkeypatch: pytest.MonkeyPatch):
+    urls: list[str] = []
+
+    def urlopen(request: Any, timeout: float) -> io.BytesIO:
+        urls.append(request.full_url)
+        return io.BytesIO(b'{"pages": []}')
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+
+    MistralOCR(api_key="k", api_url="https://proxy.example.com/v1/ocr")._post({})  # type: ignore -> private method
+    assert urls == ["https://proxy.example.com/v1/ocr"]
+
+
 def test_mistral_ocr_raises_on_client_error(monkeypatch: pytest.MonkeyPatch):
     def urlopen(request: Any, timeout: float) -> io.BytesIO:
         raise urllib.error.HTTPError("url", 401, "Unauthorized", {}, io.BytesIO(b"bad key"))  # type: ignore -> hdrs typing
