@@ -75,6 +75,7 @@ nav:
           - DocxParser: reference/parsers/parser_docx.md
           - ExcelParser: reference/parsers/parser_excel.md
           - HTMLParser: reference/parsers/parser_html.md
+          - ImageParser: reference/parsers/parser_image.md
           - JupyterNotebookParser: reference/parsers/parser_jupyter_notebook.md
           - MarkdownParser: reference/parsers/parser_markdown.md
           - PdfParser: reference/parsers/parser_pdf.md

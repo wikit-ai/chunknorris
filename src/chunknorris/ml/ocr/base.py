@@ -30,7 +30,7 @@ class OCREngine(ABC):
         """Checks that the engine is properly configured.
 
         Raises:
-            PdfParserException: if the engine can't be used.
+            OCRException: if the engine can't be used.
         """
 
 

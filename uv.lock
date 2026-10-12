@@ -640,7 +640,7 @@ requires-dist = [
     { name = "tiktoken", marker = "extra == 'dev'", specifier = "==0.9.0" },
     { name = "twine", marker = "extra == 'dev'" },
 ]
-provides-extras = ["dev", "ml-onnx", "ml-openvino"]
+provides-extras = ["ml-onnx", "ml-openvino", "dev"]
 
 [[package]]
 name = "click"
