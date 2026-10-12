@@ -80,6 +80,31 @@ Here are code examples for chunking documents according to their file type:
         print(chunk.to_string())
     ```
 
+=== "images"
+
+    ```py
+    from chunknorris.ml.ocr import MistralOCR
+    from chunknorris.parsers import ImageParser
+    from chunknorris.chunkers import MarkdownChunker
+    from chunknorris.pipelines import BasePipeline
+
+    # Instanciate components
+    pipeline = BasePipeline(
+        parser=ImageParser(ocr_engine=MistralOCR()), # see the OCR page for the available engines
+        chunker=MarkdownChunker()
+        )
+
+    # Get some chunks !
+    chunks = pipeline.chunk_file(filepath="myfile.png") #  .jpg, .jpeg, .tiff, .bmp and .gif are also compatible.
+
+    # Save chunks
+    pipeline.save_chunks(chunks)
+
+    # Print chunks:
+    for chunk in chunks:
+        print(chunk.to_string())
+    ```
+
 === ".docx"
 
     ```py

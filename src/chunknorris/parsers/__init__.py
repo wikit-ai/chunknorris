@@ -1,6 +1,7 @@
 from .abstract_parser import AbstractParser, AnyParser
 from .docx.docx_parser import DocxParser
 from .html.html_parser import HTMLParser
+from .image.image_parser import ImageParser
 from .json.wikit_parser import WikitJsonParser
 from .markdown.markdown_parser import MarkdownParser
 from .notebook.jupyter_notebook_parser import JupyterNotebookParser

@@ -9,7 +9,7 @@ from typing import Any, Literal, get_args
 
 import pymupdf  # type: ignore : no stubs
 
-from ...exceptions.exceptions import PdfParserException
+from ...exceptions.exceptions import OCRException
 from .base import DocumentOCREngine
 from .types import OCRBlock, OCRDocument, OCRImage
 
@@ -195,7 +195,7 @@ class MistralOCR(DocumentOCREngine):
 
     def validate(self) -> None:
         if not self.api_key:
-            raise PdfParserException(
+            raise OCRException(
                 'To use Mistral OCR, an API key must be provided: either MistralOCR(api_key="...") or the "MISTRAL_API_KEY" environment variable.'
             )
 
@@ -260,7 +260,7 @@ class MistralOCR(DocumentOCREngine):
         """Sends the payload to the API, retrying on transient errors.
 
         Raises:
-            PdfParserException: if the API returns an error.
+            OCRException: if the API returns an error.
         """
         request = urllib.request.Request(
             self.api_url,
@@ -279,12 +279,12 @@ class MistralOCR(DocumentOCREngine):
                     e.code not in self._RETRY_STATUS_CODES
                     or attempt == self.max_retries
                 ):
-                    raise PdfParserException(
+                    raise OCRException(
                         f"Mistral OCR request failed with status {e.code}: {e.read().decode(errors='replace')}"
                     ) from e
             except (urllib.error.URLError, TimeoutError) as e:
                 if attempt == self.max_retries:
-                    raise PdfParserException(f"Mistral OCR request failed: {e}") from e
+                    raise OCRException(f"Mistral OCR request failed: {e}") from e
             time.sleep(2**attempt)
         raise AssertionError("unreachable")
 

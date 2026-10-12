@@ -81,6 +81,30 @@ How OCR runs is controlled by the ``ocr_engine`` argument. Here are code example
     !!! note
         Documents parsed with Mistral OCR bypass the regular parsing pipeline of ``PdfParser``. Methods relying on it, such as ``get_toc()`` or ``get_tables()``, are not available on them.
 
+## Parsing images
+
+Images (``.png``, ``.jpg``, ``.jpeg``, ``.tif``, ``.tiff``, ``.bmp``, ``.gif``) are parsed by ``ImageParser``. It converts the image to a PDF, one page per frame, and parses it like ``PdfParser`` does with ``use_ocr="always"``. It takes the same ``ocr_engine`` argument:
+
+```py
+from chunknorris.ml.ocr import MistralOCR
+from chunknorris.parsers import ImageParser
+
+parser = ImageParser(ocr_engine=MistralOCR())
+md_doc = parser.parse_file("my_photo.jpg")
+```
+
+A ``PIL.Image.Image`` can be parsed directly with ``parse_image()``:
+
+```py
+from PIL import Image
+
+md_doc = parser.parse_image(Image.open("my_photo.jpg"))
+```
+
+## Errors
+
+If an OCR engine is misconfigured or its API fails, an ``OCRException`` is raised. It subclasses ``PdfParserException``, so code already catching the latter keeps working.
+
 ## Knowing whether OCR was used
 
 After parsing, ``parser.parsed_using_ocr`` tells whether OCR was used. The parsed ``MarkdownDoc`` also holds the details in its metadata:

@@ -2,7 +2,7 @@ import os
 
 import pymupdf  # type: ignore : no stubs
 
-from ...exceptions.exceptions import PdfParserException
+from ...exceptions.exceptions import OCRException
 from .base import PageOCREngine
 
 
@@ -35,14 +35,14 @@ class TesseractOCR(PageOCREngine):
     def validate(self) -> None:
         tessdata_location = os.environ.get("TESSDATA_PREFIX")
         if not tessdata_location:
-            raise PdfParserException(
+            raise OCRException(
                 'To use OCR, the "TESSDATA_PREFIX" must be set as environment variable in order to locate traineddata files. For more info see https://pymupdf.readthedocs.io/en/latest/installation.html#enabling-integrated-ocr-support\nYou may otherwise want to deactivate OCR : PdfParser(use_ocr="never").',
             )
         for lang in self.language.split("+"):
             if not os.path.exists(
                 os.path.join(tessdata_location, f"{lang}.traineddata")
             ):
-                raise PdfParserException(
+                raise OCRException(
                     f"Tesseract's {lang}.traineddata file not found at {tessdata_location}. You might need to download the corresponding file from https://github.com/tesseract-ocr/tessdata and place it in {tessdata_location}",
                 )
 
