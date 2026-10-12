@@ -192,12 +192,10 @@ def test_orientation_classifier_turns_pages_upright(
     monkeypatch: pytest.MonkeyPatch, mistral_response: dict[str, Any]
 ):
     payloads = _mock_post(monkeypatch, mistral_response)
-    classifier = _StubOrientationClassifier(
+    parser = PdfParser(ocr_engine=MistralOCR(api_key="test-key"))
+    # as loaded by detect_orientation=True
+    parser.orientation_classifier = _StubOrientationClassifier(  # type: ignore -> stub
         [(0, 0.9), (90, 0.9), (180, 0.5), (270, 0.9)]
-    )
-    parser = PdfParser(
-        ocr_engine=MistralOCR(api_key="test-key"),
-        orientation_classifier=classifier,  # type: ignore -> stub
     )
     md_doc = parser.parse_string(_scanned_document(4))
 
@@ -211,7 +209,7 @@ def test_orientation_classifier_turns_pages_upright(
     assert not parser.ocr_rotations
 
 
-def test_no_rotations_metadata_without_orientation_classifier(
+def test_no_rotations_metadata_without_detect_orientation(
     mistral_parser: PdfParser,
 ):
     md_doc = mistral_parser.parse_string(_scanned_document(4))

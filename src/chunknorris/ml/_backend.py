@@ -51,7 +51,7 @@ def set_ml_backend(backend: str) -> None:
 
     Validates that the requested backend is installed before storing the
     preference.  Subsequent calls to ``load_classifier()`` (and
-    ``PdfParser(enable_ml_features=True)``) will use this backend.
+    ``PdfParser(detect_pages_to_embed=True)``, ``PdfParser(detect_orientation=True)``) will use this backend.
 
     Args:
         backend: ``"auto"`` (tries OpenVINO first, falls back to ONNX),
