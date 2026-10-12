@@ -29,7 +29,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 === ".html"
@@ -53,7 +53,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 === ".pdf"
@@ -77,7 +77,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 === ".docx"
@@ -101,7 +101,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 === ".csv"
@@ -125,7 +125,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 === ".xlsx"
@@ -149,7 +149,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 === ".ipynb"
@@ -173,7 +173,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 Once you have your ``chunks``, you can easily print them of save them:

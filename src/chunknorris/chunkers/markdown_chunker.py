@@ -314,7 +314,7 @@ class MarkdownChunker(AbstractChunker):
         chunk: Chunk, tokenizer: SupportsEncode, hard_max_chunk_token_count: int
     ) -> list[Chunk]:
         """Split a chunk using the provided tokenizer and the hard_max_chunk_token_count."""
-        chunk_tokens_count = len(tokenizer.encode(chunk.get_text()))
+        chunk_tokens_count = len(tokenizer.encode(chunk.to_string()))
         if chunk_tokens_count < hard_max_chunk_token_count:
             return [chunk]
         else:

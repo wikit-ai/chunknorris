@@ -120,7 +120,7 @@ def test_mistral_ocr_images_survive_chunking(mistral_parser: PdfParser):
         image_id: chunk for chunk in chunks for image_id in chunk.images
     }
     assert set(chunks_with_images) == {"signature-0", "img-0.jpeg"}
-    assert "img-0.jpeg" in chunks_with_images["img-0.jpeg"].get_text()
+    assert "img-0.jpeg" in chunks_with_images["img-0.jpeg"].to_string()
 
 
 def test_mistral_ocr_skip_image_types(

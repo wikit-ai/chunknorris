@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import warnings
 from copy import deepcopy
 from typing import Any, Iterator, Literal, overload
 from unicodedata import normalize
@@ -49,6 +50,52 @@ def _join_lines(lines: list[MarkdownLine], isolate_headers: bool = True) -> str:
         parts.append(text)
         prev = line
     return "\n".join(parts)
+
+
+def _cleanup_text(text: str) -> str:
+    """Cleans up the text"""
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = text.strip()
+
+    return text
+
+
+def _remove_links(text: str) -> str:
+    """Removes the markdown format of the links in the text (text of the link is kept)."""
+    pattern = r"\[?!?\[(.*?)\](\(.*\)\])?\((.*\..+?)(\s.*)?\)"
+    return re.sub(pattern, r"\1", text)
+
+
+def _render(
+    lines: list[MarkdownLine],
+    images: dict[str, DocImage],
+    include_images: bool = False,
+    remove_links: bool = False,
+) -> str:
+    """Builds the markdown string of the lines. Images are isolated by blank lines,
+    and embedded as base64 definitions if required."""
+    used: dict[str, str] = {}
+
+    def _isolate(match: re.Match[str]) -> str:
+        alt, image_id = match.groups()
+        image = images.get(image_id)
+        ref = match.group(0)
+        if include_images and image is not None and image.base64:
+            used[image_id] = image.base64
+            ref = f"![{alt}][{image_id}]"
+        # keep the caption (blockquote) attached to its image
+        after = "" if match.string.startswith("\n>", match.end()) else "\n\n"
+        return f"\n\n{ref}{after}"
+
+    text = _RE_IMAGE_FULL.sub(_isolate, _join_lines(lines))
+    if remove_links:
+        # embedded images are reference-style (![alt][id]), so they are kept
+        text = _remove_links(text)
+    text = _cleanup_text(text)
+    if not used:
+        return text
+    definitions = "\n".join(f"[{id_}]: {data}" for id_, data in used.items())
+    return f"{text}\n\n{definitions}"
 
 
 class DocImage(BaseModel):
@@ -121,35 +168,11 @@ class MarkdownDoc(BaseModel):
             for line in self.content:
                 lines_per_page.setdefault(line.page, []).append(line)
             return {
-                page: self._render(lines, include_images)
+                page: _render(lines, self.images, include_images)
                 for page, lines in lines_per_page.items()
             }
 
-        return self._render(self.content, include_images)
-
-    def _render(self, lines: list[MarkdownLine], include_images: bool) -> str:
-        """Builds the markdown string of the lines. Images are isolated by blank lines,
-        and embedded as base64 definitions if required."""
-        used: dict[str, str] = {}
-
-        def _isolate(match: re.Match[str]) -> str:
-            alt, image_id = match.groups()
-            image = self.images.get(image_id)
-            ref = match.group(0)
-            if include_images and image is not None and image.base64:
-                used[image_id] = image.base64
-                ref = f"![{alt}][{image_id}]"
-            # keep the caption (blockquote) attached to its image
-            after = "" if match.string.startswith("\n>", match.end()) else "\n\n"
-            return f"\n\n{ref}{after}"
-
-        text = self._cleanup_text(
-            _RE_IMAGE_FULL.sub(_isolate, _join_lines(lines))
-        )
-        if not used:
-            return text
-        definitions = "\n".join(f"[{id_}]: {data}" for id_, data in used.items())
-        return f"{text}\n\n{definitions}"
+        return _render(self.content, self.images, include_images)
 
     @staticmethod
     def from_string(md_string: str) -> MarkdownDoc:
@@ -177,14 +200,6 @@ class MarkdownDoc(BaseModel):
             )
 
         return MarkdownDoc(content=md_lines)
-
-    @staticmethod
-    def _cleanup_text(text: str) -> str:
-        """Cleans up the text"""
-        text = re.sub(r"\n{3,}", "\n\n", text)
-        text = text.strip()
-
-        return text
 
     def save(self, output_filepath: str = "./output.md") -> None:
         """Saves the markdown export of the document in a file.
@@ -275,7 +290,7 @@ class Chunk(BaseModel):
         if self._word_count_cache is None:
             text_content = "\n".join(line.text for line in self.content)
             self._word_count_cache = len(
-                re.findall(r"\w+", Chunk._cleanup_text(text_content))
+                re.findall(r"\w+", _cleanup_text(text_content))
             )
         return self._word_count_cache
 
@@ -294,7 +309,7 @@ class Chunk(BaseModel):
         )
 
     def __str__(self) -> str:
-        return self.get_text()
+        return self.to_string()
 
     def get_image_ids(self) -> list[str]:
         """Gets the ids of the images referenced in the chunk,
@@ -311,24 +326,40 @@ class Chunk(BaseModel):
             )
         )
 
-    def get_text(self, remove_links: bool = False, prepend_headers: bool = True) -> str:
-        """Gets the text of the chunk.
+    def to_string(
+        self,
+        remove_links: bool = False,
+        prepend_headers: bool = True,
+        include_images: bool = False,
+    ) -> str:
+        """Gets the markdown string of the chunk.
 
         Args:
             remove_links (bool, optional): If True, the markdown links will be removed (text of the link is kept).
+                Defaults to False.
+            prepend_headers (bool, optional): If True, the headers of the parent sections
+                are prepended to the chunk's content. Defaults to True.
+            include_images (bool, optional): if True, the images that have base64 data are embedded.
+                To keep the text readable, references are rewritten as ![alt][id] and
+                the data URIs are appended as definitions ([id]: data:...) at the end of the string.
                 Defaults to False.
 
         Returns:
             str: the text
         """
-        text = ""
-        if prepend_headers and self.headers:
-            text += "\n\n".join(header.text for header in self.headers) + "\n\n"
-        text += _join_lines(self.content, isolate_headers=False)
-        if remove_links:
-            text = Chunk.remove_links(text)
+        lines = self.headers + self.content if prepend_headers else self.content
+        return _render(lines, self.images, include_images, remove_links)
 
-        return Chunk._cleanup_text(text)
+    def get_text(self, remove_links: bool = False, prepend_headers: bool = True) -> str:
+        """Deprecated: use Chunk.to_string() instead."""
+        warnings.warn(
+            "Chunk.get_text() is deprecated, use Chunk.to_string() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.to_string(
+            remove_links=remove_links, prepend_headers=prepend_headers
+        )
 
     @staticmethod
     def remove_links(text: str) -> str:
@@ -340,16 +371,7 @@ class Chunk(BaseModel):
         Returns:
             str: the formated text
         """
-        pattern = r"\[?!?\[(.*?)\](\(.*\)\])?\((.*\..+?)(\s.*)?\)"
-        return re.sub(pattern, r"\1", text)
-
-    @staticmethod
-    def _cleanup_text(text: str) -> str:
-        """Cleans up the text"""
-        text = re.sub(r"\n{3,}", "\n\n", text)
-        text = text.strip()
-
-        return text
+        return _remove_links(text)
 
 
 class TocTree:
