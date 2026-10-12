@@ -16,6 +16,7 @@ The downloaded model files are stored in the standard HuggingFace cache
 
 from __future__ import annotations
 
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -56,7 +57,8 @@ def load_orientation_classifier(
             Ignored for the ONNX backend.
 
     Returns:
-        A classifier instance exposing ``predict(images)``.
+        A classifier instance exposing ``predict(images)``. It is loaded once and
+        shared by all the calls made with the same arguments.
     """
     if backend is None:
         backend = get_ml_backend()
@@ -68,6 +70,13 @@ def load_orientation_classifier(
 
     check_dependencies(backend)
 
+    return _load(repo_or_path, min_confidence, backend, device)
+
+
+@cache
+def _load(
+    repo_or_path: str, min_confidence: float, backend: str, device: str
+) -> OrientationClassifier:
     if Path(repo_or_path).is_file():
         model_path = repo_or_path
     else:

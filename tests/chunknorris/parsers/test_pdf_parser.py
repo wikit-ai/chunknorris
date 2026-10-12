@@ -7,6 +7,7 @@ from PIL.Image import Image as PILImage
 from chunknorris import set_ml_backend
 from chunknorris.core.components import MarkdownDoc
 from chunknorris.exceptions.exceptions import TextNotFoundException
+from chunknorris.ml.ocr import MistralOCR
 from chunknorris.parsers import PdfParser
 
 try:
@@ -198,5 +199,27 @@ def test_classify_pages_requires_detect_pages_to_embed(pdf_filepath: str):
 @requires_ml_backends
 def test_detect_orientation_loads_classifier():
     assert PdfParser(use_ocr="never").orientation_classifier is None
-    parser = PdfParser(detect_orientation=True, use_ocr="never")
+    parser = PdfParser(detect_orientation=True, ocr_engine=MistralOCR(api_key="key"))
     assert parser.orientation_classifier is not None
+
+
+def test_detect_orientation_is_ignored_without_ocr():
+    with pytest.warns(UserWarning, match="detect_orientation is ignored"):
+        parser = PdfParser(detect_orientation=True, use_ocr="never")
+    assert parser.orientation_classifier is None
+
+
+@requires_ml_backends
+def test_ml_models_are_shared_across_parsers():
+    first = PdfParser(
+        detect_orientation=True,
+        detect_pages_to_embed=True,
+        ocr_engine=MistralOCR(api_key="key"),
+    )
+    second = PdfParser(
+        detect_orientation=True,
+        detect_pages_to_embed=True,
+        ocr_engine=MistralOCR(api_key="key"),
+    )
+    assert first.orientation_classifier is second.orientation_classifier
+    assert first._page_classifier is second._page_classifier  # type: ignore -> private attribute

@@ -164,7 +164,13 @@ class PdfParser(
             detect_pages_to_embed = detect_pages_to_embed or enable_ml_features
         if detect_pages_to_embed:
             self._load_page_classifier()
-        if detect_orientation:
+        if detect_orientation and use_ocr == "never":
+            warnings.warn(
+                'detect_orientation is ignored with use_ocr="never": orientation is only detected on the pages going through OCR.',
+                UserWarning,
+                stacklevel=2,
+            )
+        elif detect_orientation:
             self._load_orientation_classifier()
 
         if self.use_ocr != "never":
