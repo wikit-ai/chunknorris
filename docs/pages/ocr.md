@@ -103,17 +103,13 @@ md_doc = parser.parse_image(Image.open("my_photo.jpg"))
 
 ## Rotated pages
 
-OCR engines may return nothing for a scan that is sideways or upside down. Pass an ``orientation_classifier`` to ``PdfParser`` or ``ImageParser`` to turn the pages upright before OCR. It is off by default and requires the ``ml-onnx`` or ``ml-openvino`` extra:
+OCR engines may return nothing for a scan that is sideways or upside down. Set ``detect_orientation=True`` on ``PdfParser`` or ``ImageParser`` to turn the pages upright before OCR. It is off by default and requires the ``ml-onnx`` or ``ml-openvino`` extra:
 
 ```py
 from chunknorris.ml.ocr import MistralOCR
-from chunknorris.ml.orientation_classifiers import load_orientation_classifier
 from chunknorris.parsers import PdfParser
 
-parser = PdfParser(
-    ocr_engine=MistralOCR(),
-    orientation_classifier=load_orientation_classifier(),
-)
+parser = PdfParser(ocr_engine=MistralOCR(), detect_orientation=True)
 md_doc = parser.parse_file("my_scanned_file.pdf")
 print(md_doc.metadata["ocr"]["rotations"])  # {0: 90} : page 0 was rotated by 90° clockwise
 ```
@@ -123,6 +119,8 @@ Only the pages going through OCR are classified. The classifier is PaddlePaddle'
 The classifier can also be used on its own:
 
 ```py
+from chunknorris.ml.orientation_classifiers import load_orientation_classifier
+
 clf = load_orientation_classifier(min_confidence=0.8, backend="onnx")
 prediction = clf.predict("page.png")  # or a PIL image, or a list of them
 print(prediction.angle, prediction.confidence, prediction.is_confident)

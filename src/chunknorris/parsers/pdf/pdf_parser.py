@@ -79,6 +79,7 @@ class PdfParser(
     use_ocr: Literal["always", "auto", "never"] = "auto"
     ocr_engine: OCREngine
     body_line_spacing: float | None = None
+    # Loaded when detect_orientation=True
     orientation_classifier: "OrientationClassifier | None" = None
 
     def __init__(
@@ -91,8 +92,9 @@ class PdfParser(
         ocr_engine: OCREngine | None = None,
         ocr_language: str | None = None,
         body_line_spacing: float | None = None,
-        enable_ml_features: bool = False,
-        orientation_classifier: "OrientationClassifier | None" = None,
+        detect_orientation: bool = False,
+        detect_pages_to_embed: bool = False,
+        enable_ml_features: bool | None = None,
     ) -> None:
         """Initializes a PDF parser.
 
@@ -121,16 +123,17 @@ class PdfParser(
                 Tweak this parameter for better merging of lines into blocks.
             table_finder (TableFinder | None, optional): the table finder to use for parsing the tables.
                 If None, defauts to a TableFinder with default parameters.
-            enable_ml_features (bool, optional): if True, loads the ML page classifier on startup
-                so that :meth:`classify_pages` and :meth:`get_pages_to_embed` are available.
+            detect_orientation (bool, optional): if True, the pages going through OCR are turned
+                upright beforehand, according to an ML orientation classifier loaded on startup.
                 Requires ``onnxruntime`` or ``openvino`` and ``huggingface-hub``.
                 Use :func:`chunknorris.ml.set_ml_backend` to select the inference backend.
                 Defaults to False.
-            orientation_classifier (OrientationClassifier | None, optional): if provided, the pages
-                going through OCR are turned upright beforehand, according to its predictions.
-                Predictions that are not confident are ignored.
-                Load it with :func:`chunknorris.ml.orientation_classifiers.load_orientation_classifier`.
-                Defaults to None.
+            detect_pages_to_embed (bool, optional): if True, loads the ML page classifier on startup
+                so that :meth:`classify_pages` and :meth:`get_images_of_pages_to_embed` are available.
+                Requires ``onnxruntime`` or ``openvino`` and ``huggingface-hub``.
+                Use :func:`chunknorris.ml.set_ml_backend` to select the inference backend.
+                Defaults to False.
+            enable_ml_features (bool, optional): DEPRECATED, use detect_pages_to_embed instead.
         """
         super().__init__()
         self.add_headers = add_headers
@@ -152,10 +155,17 @@ class PdfParser(
             body_line_spacing  # preserved for cleanup reset
         )
         self.table_finder = table_finder
-        self.orientation_classifier = orientation_classifier
-        self._ml_enabled = enable_ml_features
-        if enable_ml_features:
+        if enable_ml_features is not None:
+            warnings.warn(
+                "enable_ml_features is deprecated and will be removed in a future version. Use detect_pages_to_embed instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            detect_pages_to_embed = detect_pages_to_embed or enable_ml_features
+        if detect_pages_to_embed:
             self._load_page_classifier()
+        if detect_orientation:
+            self._load_orientation_classifier()
 
         if self.use_ocr != "never":
             self.check_ocr_config_is_valid()
@@ -566,6 +576,15 @@ class PdfParser(
             )
 
         return spans
+
+    def _load_orientation_classifier(self) -> None:
+        """Loads the orientation classifier using the global backend preference.
+        Raises ImportError immediately if the required inference backend is not installed.
+        """
+        # pylint: disable=import-outside-toplevel
+        from ...ml.orientation_classifiers import load_orientation_classifier
+
+        self.orientation_classifier = load_orientation_classifier()
 
     def _turn_pages_upright(self, pages: list[pymupdf.Page]) -> None:
         """Rotates the pages that the orientation classifier confidently finds

@@ -5,7 +5,7 @@ same pattern as PdfTableExtraction, PdfLinkExtraction, etc.
 
 Intended usage::
 
-    parser = PdfParser(enable_ml_features=True)
+    parser = PdfParser(detect_pages_to_embed=True)
     parser.parse_file("report.pdf")
 
     snapshots = list(parser.classify_pages())          # all parsed pages
@@ -34,20 +34,19 @@ class PdfPageClassification(PdfParserState):
     :meth:`_render_page` provided by ``PdfPlotter`` being present in
     the final MRO (guaranteed when composed into ``PdfParser``).
 
-    The classifier is loaded lazily when ``enable_ml_features=True`` is passed
+    The classifier is loaded lazily when ``detect_pages_to_embed=True`` is passed
     to :class:`PdfParser`.  If ML features are disabled, calling
     :meth:`classify_pages` raises a clear :exc:`RuntimeError` with install
     instructions rather than silently returning empty results.
     """
 
     _page_classifier: PDFPageClassifierOV | PDFPageClassifierONNX | None = None
-    _ml_enabled: bool = False
 
     def _load_page_classifier(self) -> None:
         """Load the classifier using the global backend preference.
 
         Called once during ``PdfParser.__init__`` when
-        ``enable_ml_features=True``.  Raises :exc:`ImportError` immediately if
+        ``detect_pages_to_embed=True``.  Raises :exc:`ImportError` immediately if
         the required inference backend is not installed.
         """
         # pylint: disable=import-outside-toplevel
@@ -84,10 +83,10 @@ class PdfPageClassification(PdfParserState):
         Raises:
             RuntimeError: If ML features were not enabled at initialisation.
         """
-        if not self._ml_enabled or self._page_classifier is None:
+        if self._page_classifier is None:
             raise RuntimeError(
                 "ML features are disabled.\n"
-                "Initialise the parser with: PdfParser(enable_ml_features=True)\n"
+                "Initialise the parser with: PdfParser(detect_pages_to_embed=True)\n"
                 "Required packages: pip install chunknorris[ml-onnx]  "
                 "or  pip install chunknorris[ml-openvino]"
             )

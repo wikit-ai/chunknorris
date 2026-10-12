@@ -15,8 +15,6 @@ from ..pdf.tools import TableFinder
 if TYPE_CHECKING:
     from PIL.Image import Image as PILImage
 
-    from ...ml.orientation_classifiers import OrientationClassifier
-
 
 class ImageParser(PdfParser):
     """Parses images (png, jpg, tiff...) by running OCR on them.
@@ -36,7 +34,7 @@ class ImageParser(PdfParser):
         table_finder: TableFinder = TableFinder(),
         add_headers: bool = True,
         body_line_spacing: float | None = None,
-        orientation_classifier: OrientationClassifier | None = None,
+        detect_orientation: bool = False,
     ) -> None:
         """Initializes an image parser.
 
@@ -52,10 +50,9 @@ class ImageParser(PdfParser):
                 Only used with a PageOCREngine such as TesseractOCR. Defaults to True.
             body_line_spacing (float, optional): the size of the space between 2 lines of the body.
                 Only used with a PageOCREngine such as TesseractOCR. If None, found automatically.
-            orientation_classifier (OrientationClassifier | None, optional): if provided, the frames
-                are turned upright before OCR, according to its predictions.
-                Load it with :func:`chunknorris.ml.orientation_classifiers.load_orientation_classifier`.
-                Defaults to None.
+            detect_orientation (bool, optional): if True, the frames are turned upright before OCR,
+                according to an ML orientation classifier loaded on startup.
+                Requires ``onnxruntime`` or ``openvino`` and ``huggingface-hub``. Defaults to False.
         """
         super().__init__(
             extract_tables=extract_tables,
@@ -64,7 +61,7 @@ class ImageParser(PdfParser):
             use_ocr="always",
             ocr_engine=ocr_engine,
             body_line_spacing=body_line_spacing,
-            orientation_classifier=orientation_classifier,
+            detect_orientation=detect_orientation,
         )
 
     def parse_image(
