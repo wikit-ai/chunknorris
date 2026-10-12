@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import logging
@@ -11,6 +12,7 @@ import pytest
 from chunknorris.chunkers import MarkdownChunker
 from chunknorris.exceptions.exceptions import PdfParserException
 from chunknorris.ml.ocr import MistralOCR, TesseractOCR
+from chunknorris.ml.orientation_classifiers import OrientationPrediction
 from chunknorris.parsers import PdfParser
 
 # Trimmed response of Mistral OCR: 2 pages of company statutes (titles, signature),
@@ -165,6 +167,55 @@ def test_mistral_ocr_state_is_reset_between_documents(mistral_parser: PdfParser)
 
     assert not mistral_parser.parsed_using_ocr
     assert not mistral_parser.ocr_blocks and not mistral_parser.ocr_images
+
+
+class _StubOrientationClassifier:
+    """Predicts the provided (angle, confidence) for each page, in order."""
+
+    def __init__(self, predictions: list[tuple[int, float]]) -> None:
+        self.predictions = predictions
+
+    def predict(self, images: list[Any]) -> list[OrientationPrediction]:
+        assert len(images) == len(self.predictions)
+        return [
+            OrientationPrediction(
+                angle=angle,
+                confidence=confidence,
+                is_confident=confidence >= 0.7,
+                probabilities={angle: confidence},
+            )
+            for angle, confidence in self.predictions
+        ]
+
+
+def test_orientation_classifier_turns_pages_upright(
+    monkeypatch: pytest.MonkeyPatch, mistral_response: dict[str, Any]
+):
+    payloads = _mock_post(monkeypatch, mistral_response)
+    classifier = _StubOrientationClassifier(
+        [(0, 0.9), (90, 0.9), (180, 0.5), (270, 0.9)]
+    )
+    parser = PdfParser(
+        ocr_engine=MistralOCR(api_key="test-key"),
+        orientation_classifier=classifier,  # type: ignore -> stub
+    )
+    md_doc = parser.parse_string(_scanned_document(4))
+
+    data_uri: str = payloads[0]["document"]["document_url"]
+    sent = pymupdf.open("pdf", base64.b64decode(data_uri.split(",", 1)[1]))
+    # not confident about page 2: left as is
+    assert [page.rotation for page in sent] == [0, 270, 0, 90]  # type: ignore -> missing typing
+    assert md_doc.metadata["ocr"]["rotations"] == {1: 90, 3: 270}
+
+    parser.cleanup_memory()
+    assert not parser.ocr_rotations
+
+
+def test_no_rotations_metadata_without_orientation_classifier(
+    mistral_parser: PdfParser,
+):
+    md_doc = mistral_parser.parse_string(_scanned_document(4))
+    assert "rotations" not in md_doc.metadata["ocr"]
 
 
 def test_mistral_ocr_splits_heavy_documents(
