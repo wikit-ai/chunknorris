@@ -4,13 +4,51 @@ import json
 import os
 import re
 from copy import deepcopy
-from typing import Any, Iterator
+from typing import Any, Iterator, Literal, overload
 from unicodedata import normalize
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
 # Markdown image reference, such as ![alt](target)
 _RE_IMAGE_REF = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")
+# Same, but also capturing the alt text: (alt, target)
+_RE_IMAGE_FULL = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)")
+
+
+def _get_block_kind(line: MarkdownLine, edge: Literal["start", "end"]) -> str | None:
+    """Gets the kind of markdown block (table or blockquote) that requires to be
+    isolated by blank lines, at the start or at the end of the line, if any.
+    A line may span several rows, such as an image followed by its caption
+    as a blockquote: it starts as an image but ends as a blockquote."""
+    if line.isin_code_block:
+        return None
+    rows = line.text.split("\n")
+    row = rows[0] if edge == "start" else rows[-1]
+    if row.startswith("|"):
+        return "table"
+    if row.startswith(">"):
+        return "blockquote"
+    return None
+
+
+def _join_lines(lines: list[MarkdownLine], isolate_headers: bool = True) -> str:
+    """Joins the lines in a markdown string. Tables and blockquotes (and headers,
+    if isolate_headers) are separated from the surrounding content by a blank line,
+    otherwise markdown viewers would merge the following paragraph into them."""
+    parts: list[str] = []
+    prev: MarkdownLine | None = None
+    for line in lines:
+        text = f"\n{line.text}\n" if isolate_headers and line.is_header else line.text
+        if (
+            prev is not None
+            and prev.text
+            and line.text
+            and _get_block_kind(prev, "end") != _get_block_kind(line, "start")
+        ):
+            text = f"\n{text}"
+        parts.append(text)
+        prev = line
+    return "\n".join(parts)
 
 
 class DocImage(BaseModel):
@@ -51,33 +89,67 @@ class MarkdownDoc(BaseModel):
     metadata: dict[str, Any] = {}
     images: dict[str, DocImage] = {}
 
-    def to_string(self, keep_track_of_page: bool = False) -> str | dict[int, str]:
+    @overload
+    def to_string(
+        self,
+        keep_track_of_page: Literal[False] = False,
+        include_images: bool = False,
+    ) -> str: ...
+
+    @overload
+    def to_string(
+        self, keep_track_of_page: Literal[True], include_images: bool = False
+    ) -> dict[int | None, str]: ...
+
+    def to_string(
+        self, keep_track_of_page: bool = False, include_images: bool = False
+    ) -> str | dict[int | None, str]:
         """Get the markdown string corresponding to the document's content
 
         Args:
             keep_track_of_page (bool): if True, returns a dict as {page_number : string}.
                 Page number is 0-based. For non paginated documents, returns {None: entire document string}
                 If False returns a string for the whole document.
+                Defaults to False.
+            include_images (bool): if True, the images that have base64 data are embedded.
+                To keep the text readable, references are rewritten as ![alt][id] and
+                the data URIs are appended as definitions ([id]: data:...) at the end
+                of the string (of each page if keep_track_of_page).
                 Defaults to False."""
         if keep_track_of_page:
-            page_dict: dict[int, str] = {}
+            lines_per_page: dict[int | None, list[MarkdownLine]] = {}
             for line in self.content:
-                if line.page not in page_dict:
-                    page_dict[line.page] = ""
-                text = (
-                    f"\n{line.text}\n\n"
-                    if line.text.startswith("#")
-                    else f"{line.text}\n"
-                )
-                page_dict[line.page] += text
-            return {k: self._cleanup_text(v) for k, v in page_dict.items()}
+                lines_per_page.setdefault(line.page, []).append(line)
+            return {
+                page: self._render(lines, include_images)
+                for page, lines in lines_per_page.items()
+            }
 
-        return self._cleanup_text(
-            "\n".join(
-                f"\n{line.text}\n" if line.text.startswith("#") else line.text
-                for line in self.content
-            )
+        return self._render(self.content, include_images)
+
+    def _render(self, lines: list[MarkdownLine], include_images: bool) -> str:
+        """Builds the markdown string of the lines. Images are isolated by blank lines,
+        and embedded as base64 definitions if required."""
+        used: dict[str, str] = {}
+
+        def _isolate(match: re.Match[str]) -> str:
+            alt, image_id = match.groups()
+            image = self.images.get(image_id)
+            ref = match.group(0)
+            if include_images and image is not None and image.base64:
+                used[image_id] = image.base64
+                ref = f"![{alt}][{image_id}]"
+            # keep the caption (blockquote) attached to its image
+            after = "" if match.string.startswith("\n>", match.end()) else "\n\n"
+            return f"\n\n{ref}{after}"
+
+        text = self._cleanup_text(
+            _RE_IMAGE_FULL.sub(_isolate, _join_lines(lines))
         )
+        if not used:
+            return text
+        definitions = "\n".join(f"[{id_}]: {data}" for id_, data in used.items())
+        return f"{text}\n\n{definitions}"
 
     @staticmethod
     def from_string(md_string: str) -> MarkdownDoc:
@@ -252,7 +324,7 @@ class Chunk(BaseModel):
         text = ""
         if prepend_headers and self.headers:
             text += "\n\n".join(header.text for header in self.headers) + "\n\n"
-        text += "\n".join(line.text for line in self.content)
+        text += _join_lines(self.content, isolate_headers=False)
         if remove_links:
             text = Chunk.remove_links(text)
 

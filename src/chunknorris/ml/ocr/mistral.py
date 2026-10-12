@@ -5,7 +5,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, Literal, get_args
 
 import pymupdf  # type: ignore : no stubs
 
@@ -13,7 +13,7 @@ from ...exceptions.exceptions import PdfParserException
 from .base import DocumentOCREngine
 from .types import OCRBlock, OCRDocument, OCRImage
 
-IMAGE_TYPES = [
+ImageType = Literal[
     "chart",
     "table",
     "flowchart",
@@ -33,6 +33,7 @@ IMAGE_TYPES = [
     "decorative",
     "other",
 ]
+IMAGE_TYPES: tuple[ImageType, ...] = get_args(ImageType)
 
 IMAGE_ANNOTATION_FORMAT: dict[str, Any] = {
     "type": "json_schema",
@@ -46,7 +47,7 @@ IMAGE_ANNOTATION_FORMAT: dict[str, Any] = {
             "properties": {
                 "image_type": {
                     "type": "string",
-                    "enum": IMAGE_TYPES,
+                    "enum": list(IMAGE_TYPES),
                     "description": (
                         "Category of the image. Pick the single most specific one. "
                         "chart: quantitative plot (bar, line, pie, scatter, area, gauge). "
@@ -120,7 +121,7 @@ class MistralOCR(DocumentOCREngine):
 
     API_URL = "https://api.mistral.ai/v1/ocr"
     # Image types rendered as a mere reference, without caption
-    _CAPTIONLESS_IMAGE_TYPES = frozenset({"signature"})
+    _CAPTIONLESS_IMAGE_TYPES: frozenset[ImageType] = frozenset({"signature"})
     # HTTP status codes worth retrying
     _RETRY_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
 
@@ -128,10 +129,11 @@ class MistralOCR(DocumentOCREngine):
         self,
         *,
         api_key: str | None = None,
+        api_url: str = API_URL,
         model: str = "mistral-ocr-4-1",
         image_captioning: bool = True,
         store_images: bool = False,
-        skip_image_types: Iterable[str] = ("decorative", "icon"),
+        skip_image_types: Iterable[ImageType] = ("decorative", "icon"),
         max_request_mb: float = 40.0,
         timeout: float = 300.0,
         max_retries: int = 3,
@@ -141,6 +143,8 @@ class MistralOCR(DocumentOCREngine):
         Args:
             api_key (str | None, optional): the Mistral API key.
                 If None, read from the "MISTRAL_API_KEY" environment variable.
+            api_url (str, optional): the URL of the OCR endpoint. Allows to route the requests
+                through a proxy (e.g. LiteLLM). Defaults to "https://api.mistral.ai/v1/ocr".
             model (str, optional): the OCR model to use. Must support block extraction
                 (OCR 4 or newer). Defaults to "mistral-ocr-4-1".
             image_captioning (bool, optional): if True, images are categorized and captioned
@@ -148,7 +152,7 @@ class MistralOCR(DocumentOCREngine):
                 Defaults to True.
             store_images (bool, optional): if True, the images are returned as base64 data URIs
                 in MarkdownDoc.images. Defaults to False.
-            skip_image_types (Iterable[str], optional): the image types to remove from the markdown.
+            skip_image_types (Iterable[ImageType], optional): the image types to remove from the markdown.
                 Only used if image_captioning is True. Defaults to ("decorative", "icon").
             max_request_mb (float, optional): the maximum size of the document sent in a single request.
                 Bigger documents are split by pages over several requests. Defaults to 40.0.
@@ -159,13 +163,14 @@ class MistralOCR(DocumentOCREngine):
         unknown_types = set(skip_image_types) - set(IMAGE_TYPES)
         if unknown_types:
             raise ValueError(
-                f"Unknown image types in skip_image_types: {sorted(unknown_types)}. Must be among {IMAGE_TYPES}."
+                f"Unknown image types in skip_image_types: {sorted(unknown_types)}. Must be among {list(IMAGE_TYPES)}."
             )
         self._api_key = api_key
+        self.api_url = api_url
         self._model = model
         self.image_captioning = image_captioning
         self.store_images = store_images
-        self.skip_image_types = frozenset(skip_image_types)
+        self.skip_image_types: frozenset[ImageType] = frozenset(skip_image_types)
         self.max_request_mb = max_request_mb
         self.timeout = timeout
         self.max_retries = max_retries
@@ -258,7 +263,7 @@ class MistralOCR(DocumentOCREngine):
             PdfParserException: if the API returns an error.
         """
         request = urllib.request.Request(
-            self.API_URL,
+            self.api_url,
             data=json.dumps(payload).encode(),
             headers={
                 "Content-Type": "application/json",

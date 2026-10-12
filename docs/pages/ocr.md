@@ -39,7 +39,7 @@ How OCR runs is controlled by the ``ocr_engine`` argument. Here are code example
 
     Runs on [Mistral's OCR API](https://docs.mistral.ai/), on the whole document. In ``"auto"`` mode, the document goes through OCR only if no text is found in it.
 
-    Requires a Mistral API key, either passed as ``MistralOCR(api_key="...")`` or set as the ``MISTRAL_API_KEY`` environment variable. No extra dependency is needed.
+    Requires a Mistral API key, either passed as ``MistralOCR(api_key="...")`` or set as the ``MISTRAL_API_KEY`` environment variable. No extra dependency is needed. To route the requests through a proxy (e.g. LiteLLM), pass its OCR endpoint as ``MistralOCR(api_url="https://my-proxy/v1/ocr")``.
 
     ```py
     from chunknorris.ml.ocr import MistralOCR
