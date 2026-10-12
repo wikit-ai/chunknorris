@@ -39,6 +39,9 @@ class PdfParserState:
         self.ocr_images: dict[str, OCRImage] = {}
         # The pages that went through OCR, whatever the engine
         self.ocr_pages: list[int] = []
+        # The rotation (clockwise) found by the orientation classifier on the
+        # pages that were turned upright before OCR
+        self.ocr_rotations: dict[int, int] = {}
         self.main_body_fontsizes: list[float] = []
         self.document_fontsizes: list[float] = []
         # Page image cache — populated lazily by get_pages_as_images().

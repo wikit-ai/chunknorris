@@ -101,7 +101,35 @@ from PIL import Image
 md_doc = parser.parse_image(Image.open("my_photo.jpg"))
 ```
 
-## Errors
+## Rotated pages
+
+OCR engines may return nothing for a scan that is sideways or upside down. Pass an ``orientation_classifier`` to ``PdfParser`` or ``ImageParser`` to turn the pages upright before OCR. It is off by default and requires the ``ml-onnx`` or ``ml-openvino`` extra:
+
+```py
+from chunknorris.ml.ocr import MistralOCR
+from chunknorris.ml.orientation_classifiers import load_orientation_classifier
+from chunknorris.parsers import PdfParser
+
+parser = PdfParser(
+    ocr_engine=MistralOCR(),
+    orientation_classifier=load_orientation_classifier(),
+)
+md_doc = parser.parse_file("my_scanned_file.pdf")
+print(md_doc.metadata["ocr"]["rotations"])  # {0: 90} : page 0 was rotated by 90° clockwise
+```
+
+Only the pages going through OCR are classified. The classifier is PaddlePaddle's [PP-LCNet_x1_0_doc_ori](https://huggingface.co/PaddlePaddle/PP-LCNet_x1_0_doc_ori_onnx), downloaded from HuggingFace on first use. Predictions under ``min_confidence`` (0.7 by default) are ignored. It decides for the whole page: a scan holding several documents with different orientations can't be fixed.
+
+The classifier can also be used on its own:
+
+```py
+clf = load_orientation_classifier(min_confidence=0.8, backend="onnx")
+prediction = clf.predict("page.png")  # or a PIL image, or a list of them
+print(prediction.angle, prediction.confidence, prediction.is_confident)
+```
+
+``prediction.angle`` is the clockwise rotation of the content: rotate the image counterclockwise by this angle to make it upright.
+
 
 If an OCR engine is misconfigured or its API fails, an ``OCRException`` is raised. It subclasses ``PdfParserException``, so code already catching the latter keeps working.
 

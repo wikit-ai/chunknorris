@@ -3,7 +3,7 @@ import warnings
 from collections import Counter, defaultdict
 from itertools import groupby
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import pymupdf  # type: ignore : no stubs
 
@@ -37,6 +37,9 @@ from .tools import (
     TextSpan,
 )
 
+if TYPE_CHECKING:
+    from ...ml.orientation_classifiers import OrientationClassifier
+
 
 class PdfParser(
     PdfPageClassification,
@@ -65,6 +68,10 @@ class PdfParser(
     _RE_MD_HEADER: re.Pattern[str] = re.compile(r"^(#{1,6})\s+(.*)$")
     # Highest header level given to the headers found by OCR, h1 being kept for the main title
     _OCR_TOP_HEADER_LEVEL: int = 2
+    # Resolution (dpi) of the page images given to the orientation classifier
+    _ORIENTATION_RESOLUTION: int = 72
+    # Pages rendered at once for the orientation classifier
+    _ORIENTATION_BATCH_SIZE: int = 32
 
     table_finder: TableFinder
     extract_tables: bool = True
@@ -72,6 +79,7 @@ class PdfParser(
     use_ocr: Literal["always", "auto", "never"] = "auto"
     ocr_engine: OCREngine
     body_line_spacing: float | None = None
+    orientation_classifier: "OrientationClassifier | None" = None
 
     def __init__(
         self,
@@ -84,6 +92,7 @@ class PdfParser(
         ocr_language: str | None = None,
         body_line_spacing: float | None = None,
         enable_ml_features: bool = False,
+        orientation_classifier: "OrientationClassifier | None" = None,
     ) -> None:
         """Initializes a PDF parser.
 
@@ -117,6 +126,11 @@ class PdfParser(
                 Requires ``onnxruntime`` or ``openvino`` and ``huggingface-hub``.
                 Use :func:`chunknorris.ml.set_ml_backend` to select the inference backend.
                 Defaults to False.
+            orientation_classifier (OrientationClassifier | None, optional): if provided, the pages
+                going through OCR are turned upright beforehand, according to its predictions.
+                Predictions that are not confident are ignored.
+                Load it with :func:`chunknorris.ml.orientation_classifiers.load_orientation_classifier`.
+                Defaults to None.
         """
         super().__init__()
         self.add_headers = add_headers
@@ -138,6 +152,7 @@ class PdfParser(
             body_line_spacing  # preserved for cleanup reset
         )
         self.table_finder = table_finder
+        self.orientation_classifier = orientation_classifier
         self._ml_enabled = enable_ml_features
         if enable_ml_features:
             self._load_page_classifier()
@@ -230,6 +245,8 @@ class PdfParser(
                     "model": self.ocr_engine.model,
                     "pages": self.ocr_pages,
                 }
+                if self.orientation_classifier is not None:
+                    md_doc.metadata["ocr"]["rotations"] = self.ocr_rotations
             md_doc.images = {
                 image.id: DocImage(
                     id=image.id,
@@ -309,6 +326,9 @@ class PdfParser(
         """
         assert isinstance(self.ocr_engine, DocumentOCREngine)
         self.spans = []
+        self._turn_pages_upright(
+            list(self.document.pages(start=self.page_start, stop=self.page_end))  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
+        )
         ocr_document = self.ocr_engine.ocr_document(
             self.document, self.page_start, self.page_end  # type: ignore : page_end is set by _set_page_range()
         )
@@ -519,6 +539,7 @@ class PdfParser(
         for page in self.document.pages(start=self.page_start, stop=self.page_end):  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
             match use_ocr:
                 case "always":
+                    self._turn_pages_upright([page])
                     textpage: pymupdf.TextPage = page_ocr_engine.get_textpage(page)  # type: ignore : page_ocr_engine is set when use_ocr != "never"
                     self.ocr_pages.append(page.number)  # type: ignore : missing typing in pymupdf -> page.number: int
                 case "auto":
@@ -530,6 +551,7 @@ class PdfParser(
                         spans.extend(page_spans)
                         continue
                     else:
+                        self._turn_pages_upright([page])
                         textpage: pymupdf.TextPage = page_ocr_engine.get_textpage(page)  # type: ignore : page_ocr_engine is set when use_ocr != "never"
                         self.ocr_pages.append(page.number)  # type: ignore : missing typing in pymupdf -> page.number: int
                 case "never":
@@ -544,6 +566,35 @@ class PdfParser(
             )
 
         return spans
+
+    def _turn_pages_upright(self, pages: list[pymupdf.Page]) -> None:
+        """Rotates the pages that the orientation classifier confidently finds
+        rotated, so that the OCR engine gets them upright.
+        Does nothing if no orientation classifier is set.
+
+        Args:
+            pages (list[pymupdf.Page]): the pages to turn upright. Modified in place.
+        """
+        if self.orientation_classifier is None:
+            return
+        for batch_start in range(0, len(pages), self._ORIENTATION_BATCH_SIZE):
+            batch = pages[batch_start : batch_start + self._ORIENTATION_BATCH_SIZE]
+            images = [
+                self._render_pymupdf_page(page, self._ORIENTATION_RESOLUTION)
+                for page in batch
+            ]
+            predictions = self.orientation_classifier.predict(images)
+            for page, prediction in zip(batch, predictions):  # type: ignore : predict() returns a list when given a list
+                if prediction.angle == 0 or not prediction.is_confident:
+                    continue
+                page.set_rotation((page.rotation - prediction.angle) % 360)  # type: ignore : missing typing in pymupdf
+                self.ocr_rotations[page.number] = prediction.angle  # type: ignore : missing typing in pymupdf -> page.number: int
+                LOGGER.info(
+                    "Page %i found rotated by %i°, turned upright before OCR (confidence: %.2f).",
+                    page.number,  # type: ignore : missing typing in pymupdf -> page.number: int
+                    prediction.angle,
+                    prediction.confidence,
+                )
 
     @staticmethod
     def _extract_spans_from_textpage(
@@ -821,6 +872,7 @@ class PdfParser(
         self.ocr_blocks = []
         self.ocr_images = {}
         self.ocr_pages = []
+        self.ocr_rotations = {}
         self.toc = []
         self.main_title = ""
         self.document_fontsizes = []

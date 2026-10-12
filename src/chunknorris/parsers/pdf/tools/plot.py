@@ -345,5 +345,10 @@ class PdfPlotter(PdfParserState):
 
     def _render_page(self, page_number: int, resolution: int) -> Image.Image:
         """Render a single PDF page to a PIL image."""
-        pix = self.document.load_page(page_number).get_pixmap(dpi=resolution, alpha=False)  # type: ignore
+        return self._render_pymupdf_page(self.document.load_page(page_number), resolution)  # type: ignore
+
+    @staticmethod
+    def _render_pymupdf_page(page: pymupdf.Page, resolution: int) -> Image.Image:
+        """Render a pymupdf page to a PIL image."""
+        pix = page.get_pixmap(dpi=resolution, alpha=False)  # type: ignore
         return Image.frombuffer("RGB", (pix.width, pix.height), pix.samples, "raw", "RGB", 0, 1)  # type: ignore
