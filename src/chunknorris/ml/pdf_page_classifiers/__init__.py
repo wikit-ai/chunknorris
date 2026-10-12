@@ -21,6 +21,7 @@ The downloaded model files are stored in the standard HuggingFace cache
 from __future__ import annotations
 
 import os
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -65,7 +66,8 @@ def load_classifier(
             Ignored for the ONNX backend.
 
     Returns:
-        A classifier instance exposing ``predict(images)``.
+        A classifier instance exposing ``predict(images)``. It is loaded once and
+        shared by all the calls made with the same arguments.
 
     Example::
 
@@ -83,6 +85,11 @@ def load_classifier(
 
     check_dependencies(backend)
 
+    return _load(repo_or_dir, backend, device)
+
+
+@cache
+def _load(repo_or_dir: str, backend: str, device: str) -> Any:
     is_hf = _is_hf_repo_id(repo_or_dir)
 
     if backend in ("auto", "openvino"):
