@@ -55,4 +55,7 @@ class OrientationClassifierOV(_BaseOrientationClassifier):
     def _run_batch(
         self, batch_input: npt.NDArray[np.float32]
     ) -> npt.NDArray[np.float32]:
-        return self._session({self._input_name: batch_input})[self._output]  # type: ignore
+        # One request per call: calling the compiled model directly reuses a single
+        # request, that fails when the model is shared between threads
+        request = self._session.create_infer_request()  # type: ignore
+        return request.infer({self._input_name: batch_input})[self._output]  # type: ignore
