@@ -16,6 +16,8 @@ How OCR runs is controlled by the ``ocr_engine`` argument. Here are code example
 
     Requires [Tesseract](https://pymupdf.readthedocs.io/en/latest/installation.html#enabling-integrated-ocr-support) to be installed, and the ``TESSDATA_PREFIX`` environment variable to point to the folder holding the ``<language>.traineddata`` files.
 
+    Pages are rendered at 72 dpi by default. Use ``TesseractOCR(dpi=300)`` for a fixed resolution, or ``TesseractOCR(dpi=None)`` to read the images of the pages at their native resolution (between 72 and 300 dpi): slower, but better suited to scans.
+
     ```py
     from chunknorris.ml.ocr import TesseractOCR
     from chunknorris.parsers import PdfParser
@@ -37,7 +39,7 @@ How OCR runs is controlled by the ``ocr_engine`` argument. Here are code example
 
 === "Mistral OCR"
 
-    Runs on [Mistral's OCR API](https://docs.mistral.ai/), on the whole document. In ``"auto"`` mode, the document goes through OCR only if no text is found in it.
+    Runs on [Mistral's OCR API](https://docs.mistral.ai/), on the whole document. In ``"auto"`` mode, the document goes through OCR only if no text is found in it. If only some of its pages are scanned, they are not OCRed and a warning lists them: use ``"always"`` to OCR them.
 
     Requires a Mistral API key, either passed as ``MistralOCR(api_key="...")`` or set as the ``MISTRAL_API_KEY`` environment variable. No extra dependency is needed. To route the requests through a proxy (e.g. LiteLLM), pass its OCR endpoint as ``MistralOCR(api_url="https://my-proxy/v1/ocr")``.
 
@@ -85,7 +87,7 @@ How OCR runs is controlled by the ``ocr_engine`` argument. Here are code example
 
 ## Parsing images
 
-Images (``.png``, ``.jpg``, ``.jpeg``, ``.tif``, ``.tiff``, ``.bmp``, ``.gif``) are parsed by ``ImageParser``. It converts the image to a PDF, one page per frame, and parses it like ``PdfParser`` does with ``use_ocr="always"``. With ``MistralOCR``, each frame is sent as an image, in its own request, at its native resolution (resized so that its long side is between 1024 and 4096 px). It takes the same ``ocr_engine`` argument:
+Images (``.png``, ``.jpg``, ``.jpeg``, ``.tif``, ``.tiff``, ``.bmp``, ``.gif``) are parsed by ``ImageParser``. It converts the image to a PDF, one page per frame, and parses it like ``PdfParser`` does with ``use_ocr="always"``. With ``MistralOCR``, each frame is sent as an image, in its own request, at its native resolution (resized so that its long side is between 1024 and 4096 px). It takes the same ``ocr_engine`` argument, and defaults to ``TesseractOCR(dpi=None)`` so that the image is read at its native resolution:
 
 ```py
 from chunknorris.ml.ocr import MistralOCR

@@ -1,4 +1,5 @@
 import base64
+import http.client
 import io
 import json
 import logging
@@ -10,7 +11,7 @@ import pymupdf  # type: ignore -> no stubs
 import pytest
 
 from chunknorris.chunkers import MarkdownChunker
-from chunknorris.exceptions.exceptions import PdfParserException
+from chunknorris.exceptions.exceptions import OCRException, PdfParserException
 from chunknorris.ml.ocr import MistralOCR, TesseractOCR
 from chunknorris.ml.orientation_classifiers import OrientationPrediction
 from chunknorris.parsers import PdfParser
@@ -286,6 +287,74 @@ def test_mistral_ocr_retries_on_rate_limit(monkeypatch: pytest.MonkeyPatch):
 
     assert MistralOCR(api_key="k")._post({}) == {"pages": []}  # type: ignore -> private method
     assert len(calls) == 2
+
+
+def test_mistral_ocr_honors_retry_after(monkeypatch: pytest.MonkeyPatch):
+    sleeps: list[float] = []
+    responses: list[Any] = [
+        urllib.error.HTTPError("url", 429, "Too Many Requests", {"Retry-After": "12"}, io.BytesIO(b"")),  # type: ignore -> hdrs typing
+        urllib.error.HTTPError("url", 503, "Unavailable", {"Retry-After": "3600"}, io.BytesIO(b"")),  # type: ignore -> hdrs typing
+        io.BytesIO(b'{"pages": []}'),
+    ]
+
+    def urlopen(request: Any, timeout: float) -> io.BytesIO:
+        response = responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    monkeypatch.setattr("time.sleep", sleeps.append)
+
+    assert MistralOCR(api_key="k")._post({}) == {"pages": []}  # type: ignore -> private method
+    assert sleeps == [12.0, 60.0]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ConnectionResetError("reset by peer"),
+        http.client.IncompleteRead(b"{"),
+        TimeoutError("timed out"),
+    ],
+)
+def test_mistral_ocr_retries_on_network_errors(
+    monkeypatch: pytest.MonkeyPatch, error: Exception
+):
+    calls: list[int] = []
+
+    def urlopen(request: Any, timeout: float) -> io.BytesIO:
+        calls.append(1)
+        if len(calls) == 1:
+            raise error
+        return io.BytesIO(b'{"pages": []}')
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    monkeypatch.setattr("time.sleep", lambda _: None)
+
+    assert MistralOCR(api_key="k")._post({}) == {"pages": []}  # type: ignore -> private method
+    assert len(calls) == 2
+
+
+def test_mistral_ocr_raises_after_max_retries(monkeypatch: pytest.MonkeyPatch):
+    def urlopen(request: Any, timeout: float) -> io.BytesIO:
+        raise ConnectionResetError("reset by peer")
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    monkeypatch.setattr("time.sleep", lambda _: None)
+
+    with pytest.raises(OCRException, match="reset by peer"):
+        MistralOCR(api_key="k", max_retries=2)._post({})  # type: ignore -> private method
+
+
+def test_mistral_ocr_raises_on_invalid_response(monkeypatch: pytest.MonkeyPatch):
+    def urlopen(request: Any, timeout: float) -> io.BytesIO:
+        return io.BytesIO(b"<html>Bad Gateway</html>")
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+
+    with pytest.raises(OCRException, match="invalid response"):
+        MistralOCR(api_key="k")._post({})  # type: ignore -> private method
 
 
 def test_mistral_ocr_uses_custom_api_url(monkeypatch: pytest.MonkeyPatch):

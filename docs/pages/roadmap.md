@@ -7,6 +7,7 @@ Each feature is developed with **``chunknorris``' main motivation in mind: findi
 | Feature | Status |
 |---------|--------|
 | [PDF] Mistral OCR backend, with image captioning | 🟢 |
+| [Images] Support for image handling through OCR | 🟢 |
 | [PDF] Ultrafast model detecting the pages to embed as images rather than text | 🟢 |
 | [PDF] Parsing of tables delimited by lines in .pdf documents | 🟢 |
 | [PDF] Fast parsing of tables without borders in .pdf documents | 🟡 |

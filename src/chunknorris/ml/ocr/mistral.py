@@ -1,10 +1,11 @@
 import base64
+import http.client
 import json
 import os
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any, Literal, get_args
 
 import pymupdf  # type: ignore : no stubs
@@ -124,6 +125,8 @@ class MistralOCR(DocumentOCREngine):
     _CAPTIONLESS_IMAGE_TYPES: frozenset[ImageType] = frozenset({"signature"})
     # HTTP status codes worth retrying
     _RETRY_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
+    # Maximum delay (s) waited before a retry when the API asks for one (Retry-After)
+    _MAX_RETRY_AFTER = 60.0
     # Minimum size (px) of the long side of the images sent to the API.
     # Smaller images are upscaled: the model reads them poorly at native size
     _MIN_IMAGE_LONG_SIDE = 1024
@@ -317,10 +320,11 @@ class MistralOCR(DocumentOCREngine):
         return payload
 
     def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Sends the payload to the API, retrying on transient errors.
+        """Sends the payload to the API, retrying on transient errors:
+        network errors, timeouts, rate limits and server errors.
 
         Raises:
-            OCRException: if the API returns an error.
+            OCRException: if the API returns an error, or an invalid response.
         """
         request = urllib.request.Request(
             self.api_url,
@@ -331,9 +335,10 @@ class MistralOCR(DocumentOCREngine):
             },
         )
         for attempt in range(self.max_retries + 1):
+            retry_after: float | None = None
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                    return json.loads(response.read())
+                    body: bytes = response.read()
             except urllib.error.HTTPError as e:
                 if (
                     e.code not in self._RETRY_STATUS_CODES
@@ -342,11 +347,32 @@ class MistralOCR(DocumentOCREngine):
                     raise OCRException(
                         f"Mistral OCR request failed with status {e.code}: {e.read().decode(errors='replace')}"
                     ) from e
-            except (urllib.error.URLError, TimeoutError) as e:
+                retry_after = MistralOCR._parse_retry_after(e.headers)
+            # OSError covers connection errors and timeouts, HTTPException
+            # a connection closed while the response is read
+            except (OSError, http.client.HTTPException) as e:
                 if attempt == self.max_retries:
-                    raise OCRException(f"Mistral OCR request failed: {e}") from e
-            time.sleep(2**attempt)
+                    raise OCRException(f"Mistral OCR request failed: {e!r}") from e
+            else:
+                try:
+                    return json.loads(body)
+                except json.JSONDecodeError as e:
+                    raise OCRException(
+                        f"Mistral OCR returned an invalid response: {body[:500].decode(errors='replace')}"
+                    ) from e
+            time.sleep(retry_after if retry_after is not None else 2**attempt)
         raise AssertionError("unreachable")
+
+    @staticmethod
+    def _parse_retry_after(headers: Mapping[str, str] | None) -> float | None:
+        """Gets the delay (in seconds) to wait before retrying from the "Retry-After"
+        header of a response, capped to _MAX_RETRY_AFTER. None if not provided as seconds.
+        """
+        try:
+            delay = float((headers or {}).get("Retry-After"))  # type: ignore : None raises a TypeError
+        except (TypeError, ValueError):
+            return None
+        return min(max(delay, 0.0), MistralOCR._MAX_RETRY_AFTER)
 
     def _add_page(
         self,

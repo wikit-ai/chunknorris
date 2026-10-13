@@ -317,10 +317,14 @@ class PdfParser(
             return
 
         self.spans = self._create_spans()
+        scanned_pages = self._get_scanned_pages() if self.spans else []
+        # The decision is deliberately taken for the document as a whole. A single
+        # page bearing only a section title must not make the parser give up on the
+        # pages around it that do hold text.
         if (
             not self.spans
             or all(span.is_header_footer for span in self.spans)
-            or self._is_scanned_document()
+            or len(scanned_pages) == self.page_end - self.page_start  # type: ignore : page_end is set by _set_page_range()
         ):
             if uses_document_ocr and self.use_ocr == "auto":
                 LOGGER.info(
@@ -334,6 +338,7 @@ class PdfParser(
                 if self.use_ocr == "always"
                 else 'No text content found in document. You may want to set use_ocr="always".'
             )
+        self._warn_scanned_pages_without_ocr(scanned_pages)
         self.tables = self.get_tables() if self.extract_tables else []
         self.spans = self._flag_table_spans(self.spans)
         self.lines = PdfParser._create_lines(self.spans)
@@ -457,43 +462,49 @@ class PdfParser(
 
         return blocks
 
-    def _is_scanned_document(self) -> bool:
-        """Whether every parsed page is a scanned image holding no real text.
+    def _get_scanned_pages(self) -> list[int]:
+        """Gets the parsed pages that are scanned images holding no real text.
 
         Scanners routinely stamp a date, a time or a page number onto the image
-        they produce, so such documents do yield a few spans and cannot be spotted
+        they produce, so such pages do yield a few spans and cannot be spotted
         by span count alone. Text volume alone is not enough either: a filled-in
         form or a section divider page legitimately carries a single line. What
         separates them is that a scan is a page-sized raster image while a digital
         page is not.
 
-        The decision is deliberately taken for the document as a whole. A single
-        page bearing only a section title must not make the parser give up on the
-        pages around it that do hold text.
-
         Returns:
-            bool: True if every page in the parsed range is image-covered and
-                nearly textless, meaning the content is only reachable through OCR.
+            list[int]: the numbers of the pages that are image-covered and nearly
+                textless, meaning their content is only reachable through OCR.
         """
         spans_per_page: defaultdict[int, list[TextSpan]] = defaultdict(list)
         for span in self.spans:
             spans_per_page[span.page].append(span)
 
-        for page in self.document.pages(start=self.page_start, stop=self.page_end):  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
-            # Cheap check first: a page with real text rules the document out
+        return [
+            page.number  # type: ignore : missing typing in pymupdf -> page.number : int
+            for page in self.document.pages(start=self.page_start, stop=self.page_end)  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
+            # Cheap check first: a page with real text is ruled out
             # without ever inspecting its images.
-            if (
-                PdfParser._count_body_chars(spans_per_page[page.number], page.rect)  # type: ignore : missing typing in pymupdf -> page.number : int, page.rect : Rect
-                > self._SCANNED_PAGE_MAX_CHARS
-            ):
-                return False
-            if (
-                PdfParser._get_page_image_coverage(page)
-                < self._SCANNED_PAGE_IMAGE_COVERAGE
-            ):
-                return False
+            if PdfParser._count_body_chars(spans_per_page[page.number], page.rect)  # type: ignore : missing typing in pymupdf -> page.number : int, page.rect : Rect
+            <= self._SCANNED_PAGE_MAX_CHARS
+            and PdfParser._get_page_image_coverage(page)
+            >= self._SCANNED_PAGE_IMAGE_COVERAGE
+        ]
 
-        return True
+    def _warn_scanned_pages_without_ocr(self, scanned_pages: list[int]) -> None:
+        """Warns about the pages of a partially scanned document that did not
+        go through OCR, as their content is missing from the parsed document.
+
+        Args:
+            scanned_pages (list[int]): the pages that are scanned images holding no real text.
+        """
+        missed_pages = [page for page in scanned_pages if page not in self.ocr_pages]
+        if missed_pages:
+            LOGGER.warning(
+                'Document seems partially scanned: %i page(s) holding no text did not go through OCR, their content is missing: %s. Set use_ocr="always" to run the OCR on the whole document.',
+                len(missed_pages),
+                missed_pages,
+            )
 
     @staticmethod
     def _count_body_chars(spans: list[TextSpan], page_rect: pymupdf.Rect) -> int:
