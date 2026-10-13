@@ -88,6 +88,31 @@ def test_mistral_ocr_headers_are_shifted_below_main_title(mistral_parser: PdfPar
     assert header_levels.count(1) == 1
 
 
+def test_mistral_ocr_checkboxes_are_normalized(
+    monkeypatch: pytest.MonkeyPatch, mistral_response: dict[str, Any]
+):
+    page = mistral_response["pages"][0]
+    page["blocks"].append(
+        {
+            **page["blocks"][-1],
+            "type": "text",
+            "content": "☑ initial ☐ prolongation □ sans emploi ▢ autre ☒ salarie\n"
+            "\\(\\boxed{\\checkmark}\\) Que ce vehicule\n■ bullet",
+        }
+    )
+    _mock_post(monkeypatch, mistral_response)
+    parser = PdfParser(ocr_engine=MistralOCR(api_key="test-key"))
+    md_string = parser.parse_string(_scanned_document(4)).to_string()
+
+    assert (
+        "[x] initial [ ] prolongation [ ] sans emploi [ ] autre [x] salarie"
+        in md_string
+    )
+    assert "[x] Que ce vehicule" in md_string
+    # not a checkbox
+    assert "■ bullet" in md_string
+
+
 def test_mistral_ocr_headers_footers_are_removed(mistral_parser: PdfParser):
     md_string = mistral_parser.parse_string(_scanned_document(4)).to_string()
 

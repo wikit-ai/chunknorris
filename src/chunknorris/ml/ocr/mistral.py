@@ -124,6 +124,12 @@ class MistralOCR(DocumentOCREngine):
     _CAPTIONLESS_IMAGE_TYPES: frozenset[ImageType] = frozenset({"signature"})
     # HTTP status codes worth retrying
     _RETRY_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
+    # Minimum size (px) of the long side of the images sent to the API.
+    # Smaller images are upscaled: the model reads them poorly at native size
+    _MIN_IMAGE_LONG_SIDE = 1024
+    # Maximum size (px) of the long side of the images sent to the API.
+    # Bigger images are downscaled to bound the size of the request, without loss of quality
+    _MAX_IMAGE_LONG_SIDE = 4096
 
     def __init__(
         self,
@@ -200,15 +206,27 @@ class MistralOCR(DocumentOCREngine):
             )
 
     def ocr_document(
-        self, document: pymupdf.Document, page_start: int, page_end: int
+        self,
+        document: pymupdf.Document,
+        page_start: int,
+        page_end: int,
+        pages_are_images: bool = False,
     ) -> OCRDocument:
         self.validate()
         ocr_document = OCRDocument(
             engine=self.name, model=self.model, pages=list(range(page_start, page_end))
         )
-        for batch_start, response in self._request_pages(
-            document, page_start, page_end
-        ):
+        # Images are sent one by one: wrapped in a pdf, they are read at a resolution
+        # that depends on the size of the page instead of their own
+        responses = (
+            [
+                (page_number, self._post(self._build_image_payload(document[page_number])))  # type: ignore : missing typing in pymupdf -> document[int] : Page
+                for page_number in range(page_start, page_end)
+            ]
+            if pages_are_images
+            else self._request_pages(document, page_start, page_end)
+        )
+        for batch_start, response in responses:
             for page_response in response["pages"]:
                 page_number = batch_start + page_response["index"]
                 self._add_page(ocr_document, page_response, document[page_number])
@@ -241,13 +259,55 @@ class MistralOCR(DocumentOCREngine):
         return [(page_start, self._post(self._build_payload(pdf_bytes)))]
 
     def _build_payload(self, pdf_bytes: bytes) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "document": {
+        return self._build_document_payload(
+            {
                 "type": "document_url",
                 "document_url": "data:application/pdf;base64,"
                 + base64.b64encode(pdf_bytes).decode(),
-            },
+            }
+        )
+
+    def _build_image_payload(self, page: pymupdf.Page) -> dict[str, Any]:
+        mime_type, image_bytes = MistralOCR._render_image_page(page)
+        return self._build_document_payload(
+            {
+                "type": "image_url",
+                "image_url": f"data:{mime_type};base64,"
+                + base64.b64encode(image_bytes).decode(),
+            }
+        )
+
+    @staticmethod
+    def _render_image_page(page: pymupdf.Page) -> tuple[str, bytes]:
+        """Renders a page holding a single image at the native resolution of the image,
+        resized if needed so that its long side is between _MIN_IMAGE_LONG_SIDE
+        and _MAX_IMAGE_LONG_SIDE.
+        Rendering the page, rather than sending the original image, applies
+        the rotation of the page and the EXIF orientation of the image.
+
+        Returns:
+            tuple[str, bytes]: the mime type and the content of the image,
+                jpeg if the original image is a jpeg, png otherwise.
+        """
+        # (xref, smask, width, height, bpc, colorspace, alt colorspace, name, filter, referencer)
+        images = page.get_images()  # type: ignore : missing typing in pymupdf
+        image_long_side: int = max(images[0][2], images[0][3]) if images else 0
+        page_long_side: float = max(page.rect.width, page.rect.height)  # type: ignore : missing typing in pymupdf -> page.rect : Rect
+        long_side = min(
+            max(image_long_side, MistralOCR._MIN_IMAGE_LONG_SIDE),
+            MistralOCR._MAX_IMAGE_LONG_SIDE,
+        )
+        zoom = long_side / page_long_side
+        pixmap = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False)  # type: ignore : missing typing in pymupdf
+        if images and images[0][8] == "DCTDecode":
+            return "image/jpeg", pixmap.tobytes("jpg", jpg_quality=95)  # type: ignore : missing typing in pymupdf
+
+        return "image/png", pixmap.tobytes("png")  # type: ignore : missing typing in pymupdf
+
+    def _build_document_payload(self, document: dict[str, str]) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "document": document,
             "include_blocks": True,
             "include_image_base64": self.store_images,
         }

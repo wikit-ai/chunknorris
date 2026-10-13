@@ -19,12 +19,14 @@ if TYPE_CHECKING:
 class ImageParser(PdfParser):
     """Parses images (png, jpg, tiff...) by running OCR on them.
     The image is converted to a pdf, one page per frame, that goes
-    through the PdfParser with OCR always on.
+    through the PdfParser with OCR always on. A DocumentOCREngine
+    such as MistralOCR receives the frames as images, one request per frame.
     """
 
     SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(
         {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif"}
     )
+    _PAGES_ARE_IMAGES: bool = True
 
     def __init__(
         self,

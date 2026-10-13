@@ -44,3 +44,12 @@ def test_to_json(md_chunker: MarkdownChunker, md_standard_in: str):
     md_lines = MarkdownDoc.from_string(md_standard_in).content
     toc_tree = md_chunker.get_toc_tree(md_lines)
     toc_tree.to_json()
+
+
+# tests : MarkdownLine
+def test_markdown_line_normalizes_unicode():
+    # compatibility characters (non-breaking space, ligature) are folded
+    # while accented letters stay composed
+    line = MarkdownLine("Arrêt de travail ﬁn", 0)
+    assert line.text == "Arrêt de travail fin"
+    assert "̂" not in line.text

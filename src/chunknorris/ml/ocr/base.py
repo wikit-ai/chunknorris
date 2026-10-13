@@ -54,7 +54,11 @@ class DocumentOCREngine(OCREngine):
 
     @abstractmethod
     def ocr_document(
-        self, document: pymupdf.Document, page_start: int, page_end: int
+        self,
+        document: pymupdf.Document,
+        page_start: int,
+        page_end: int,
+        pages_are_images: bool = False,
     ) -> OCRDocument:
         """Runs the OCR on a range of pages of a document.
 
@@ -62,6 +66,9 @@ class DocumentOCREngine(OCREngine):
             document (pymupdf.Document): the document to OCR.
             page_start (int): the first page to OCR (included).
             page_end (int): the last page to OCR (excluded).
+            pages_are_images (bool, optional): if True, each page holds a single image
+                (e.g. the frames of an image converted to a pdf), and the engine may send
+                the rendered pages as images rather than as a pdf. Defaults to False.
 
         Returns:
             OCRDocument: the blocks and images found, with page numbers
