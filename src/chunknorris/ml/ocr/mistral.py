@@ -2,6 +2,7 @@ import base64
 import http.client
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -123,6 +124,11 @@ class MistralOCR(DocumentOCREngine):
     API_URL = "https://api.mistral.ai/v1/ocr"
     # Image types rendered as a mere reference, without caption
     _CAPTIONLESS_IMAGE_TYPES: frozenset[ImageType] = frozenset({"signature"})
+    # Checkboxes, as returned by the model: unicode glyphs, or latex for checked ones
+    _RE_CHECKED_BOX: re.Pattern[str] = re.compile(
+        r"[☑☒]|\\\(\s*\\boxed\{\\{1,2}checkmark\}\s*\\\)"
+    )
+    _RE_UNCHECKED_BOX: re.Pattern[str] = re.compile(r"[☐□▢]")
     # HTTP status codes worth retrying
     _RETRY_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
     # Maximum delay (s) waited before a retry when the API asks for one (Retry-After)
@@ -436,6 +442,7 @@ class MistralOCR(DocumentOCREngine):
                 case _:
                     image = None
                     text = block["content"].strip()
+            text = MistralOCR._normalize_checkboxes(text)
             if not text:
                 continue
             ocr_document.blocks.append(
@@ -477,6 +484,13 @@ class MistralOCR(DocumentOCREngine):
             image_type=image_type,
             caption=caption,
             base64=image_response.get("image_base64"),
+        )
+
+    @staticmethod
+    def _normalize_checkboxes(text: str) -> str:
+        """Writes the checkboxes returned by the model as markdown checkboxes: "[x]" and "[ ]"."""
+        return MistralOCR._RE_UNCHECKED_BOX.sub(
+            "[ ]", MistralOCR._RE_CHECKED_BOX.sub("[x]", text)
         )
 
     @staticmethod

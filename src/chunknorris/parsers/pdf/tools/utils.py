@@ -3,6 +3,7 @@ from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Literal, TypeVar
 
 import pymupdf  # type: ignore : no stubs
+from PIL import Image
 
 from ....exceptions.exceptions import PdfParserException
 from ....ml.ocr.types import OCRBlock, OCRImage
@@ -11,6 +12,12 @@ from .components_tables import PdfTable, TableFinder
 
 if TYPE_CHECKING:
     from PIL.Image import Image as PILImage
+
+
+def render_page(page: pymupdf.Page, resolution: int) -> Image.Image:
+    """Render a pymupdf page to a PIL image."""
+    pix = page.get_pixmap(dpi=resolution, alpha=False)  # type: ignore
+    return Image.frombuffer("RGB", (pix.width, pix.height), pix.samples, "raw", "RGB", 0, 1)  # type: ignore
 
 
 class PdfParserState:
