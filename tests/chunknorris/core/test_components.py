@@ -39,6 +39,43 @@ def test_to_string_include_images():
     )
 
 
+@pytest.mark.parametrize(
+    "md_string",
+    [
+        # image within a link
+        "Intro [![build](https://x.io/b.svg)](https://ci.io) text.",
+        # image within a table cell
+        "| logo | name |\n|---|---|\n| ![logo](a.png) | foo |",
+        # image within a sentence
+        "Click the ![icon](i.png) button.",
+        # image opening a list item
+        "- ![a](a.png)\n- item",
+        # image within a code block
+        "```md\nsee ![x](y.png) here\n```",
+    ],
+)
+def test_to_string_keeps_non_standalone_images_in_place(md_string: str):
+    md_doc = MarkdownDoc.from_string(md_string)
+    assert md_doc.to_string() == md_string
+
+
+def test_to_string_isolates_standalone_images():
+    md_doc = MarkdownDoc.from_string(
+        "Text\n![a](a.png)\n> caption\nafter\n![b](b.png)\n![c](c.png)"
+    )
+    assert md_doc.to_string() == (
+        "Text\n\n![a](a.png)\n> caption\n\nafter\n\n![b](b.png)\n\n![c](c.png)"
+    )
+
+
+def test_to_string_include_images_skips_code_blocks():
+    md_doc = MarkdownDoc.from_string("```md\n![x](img-0.png)\n```")
+    md_doc.images = {
+        "img-0.png": DocImage(id="img-0.png", base64="data:image/png;base64,AAA")
+    }
+    assert md_doc.to_string(include_images=True) == "```md\n![x](img-0.png)\n```"
+
+
 # tests : TocTree
 def test_to_json(md_chunker: MarkdownChunker, md_standard_in: str):
     md_lines = MarkdownDoc.from_string(md_standard_in).content

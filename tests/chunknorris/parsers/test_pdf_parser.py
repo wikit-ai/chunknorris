@@ -1,3 +1,4 @@
+import logging
 import re
 
 import pymupdf  # type: ignore -> no stubs
@@ -136,6 +137,25 @@ def test_parse_scanned_document_is_decided_document_wide(pdf_parser: PdfParser):
     parser_output = pdf_parser.parse_string(doc.tobytes())  # type: ignore -> missing typing
 
     assert "Ligne 0 de contenu reel." in parser_output.to_string()
+
+
+def test_partially_scanned_document_warns(
+    pdf_parser: PdfParser, caplog: pytest.LogCaptureFixture
+):
+    """The scanned pages of a document holding text elsewhere are not OCRed
+    with use_ocr="auto" and a DocumentOCREngine, or with use_ocr="never": warn about them.
+    """
+    doc = pymupdf.open()
+    page = doc.new_page()  # type: ignore -> missing typing
+    for i in range(20):
+        page.insert_text((50, 80 + i * 18), f"Ligne {i} de contenu reel.", fontsize=11)  # type: ignore -> missing typing
+    _scanned_page(doc, "12/03/2024 09:41")
+
+    with caplog.at_level(logging.WARNING, logger="ChunkNorris"):
+        pdf_parser.parse_string(doc.tobytes())  # type: ignore -> missing typing
+
+    assert "partially scanned" in caplog.text
+    assert "[1]" in caplog.text
 
 
 def test_parse_section_title_page(pdf_parser: PdfParser):

@@ -5,7 +5,8 @@ import os
 import re
 import warnings
 from copy import deepcopy
-from typing import Any, Iterator, Literal, overload
+from operator import attrgetter
+from typing import Any, Callable, Iterator, Literal, overload
 from unicodedata import normalize
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
@@ -14,23 +15,25 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 _RE_IMAGE_REF = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")
 # Same, but also capturing the alt text: (alt, target)
 _RE_IMAGE_FULL = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)")
-# Bullet or numbered list marker, such as "- " or "1. "
-_RE_LIST_MARKER = re.compile(r"\s*(?:[-*+]|\d+[.)])\s+")
 
 
 def _get_block_kind(line: MarkdownLine, edge: Literal["start", "end"]) -> str | None:
-    """Gets the kind of markdown block (table or blockquote) that requires to be
+    """Gets the kind of markdown block (table, blockquote or image) that requires to be
     isolated by blank lines, at the start or at the end of the line, if any.
     A line may span several rows, such as an image followed by its caption
-    as a blockquote: it starts as an image but ends as a blockquote."""
+    as a blockquote: it starts as an image but ends as a blockquote.
+    Only an image standing alone on its row is a block: an image within a sentence,
+    a table cell, a link or a list item is left where it is."""
     if line.isin_code_block:
         return None
     rows = line.text.split("\n")
-    row = rows[0] if edge == "start" else rows[-1]
+    row = (rows[0] if edge == "start" else rows[-1]).strip()
     if row.startswith("|"):
         return "table"
     if row.startswith(">"):
         return "blockquote"
+    if _RE_IMAGE_REF.fullmatch(row):
+        return "image"
     return None
 
 
@@ -38,27 +41,40 @@ def _is_caption_of(line: MarkdownLine, prev: MarkdownLine) -> bool:
     """Whether the line is the caption (blockquote) of the image ending the previous line."""
     return (
         _get_block_kind(line, "start") == "blockquote"
-        and _RE_IMAGE_REF.fullmatch(prev.text.split("\n")[-1]) is not None
+        and _get_block_kind(prev, "end") == "image"
     )
 
 
-def _join_lines(lines: list[MarkdownLine], isolate_headers: bool = True) -> str:
-    """Joins the lines in a markdown string. Tables and blockquotes (and headers,
+def _join_lines(
+    lines: list[MarkdownLine],
+    isolate_headers: bool = True,
+    get_text: Callable[[MarkdownLine], str] = attrgetter("text"),
+) -> str:
+    """Joins the lines in a markdown string. Tables, blockquotes and images (and headers,
     if isolate_headers) are separated from the surrounding content by a blank line,
-    otherwise markdown viewers would merge the following paragraph into them.
-    The caption of an image is kept right under it."""
+    otherwise markdown viewers would merge them with the following paragraph.
+    The caption of an image is kept right under it.
+
+    Args:
+        lines (list[MarkdownLine]): the lines to join.
+        isolate_headers (bool, optional): whether to isolate the headers. Defaults to True.
+        get_text (Callable[[MarkdownLine], str], optional): gets the text to write for a line.
+            Blocks are found on the original text of the lines. Defaults to the text of the line.
+    """
     parts: list[str] = []
     prev: MarkdownLine | None = None
     for line in lines:
-        text = f"\n{line.text}\n" if isolate_headers and line.is_header else line.text
-        if (
-            prev is not None
-            and prev.text
-            and line.text
-            and _get_block_kind(prev, "end") != _get_block_kind(line, "start")
-            and not _is_caption_of(line, prev)
-        ):
-            text = f"\n{text}"
+        text = get_text(line)
+        if isolate_headers and line.is_header:
+            text = f"\n{text}\n"
+        if prev is not None and prev.text and line.text:
+            prev_kind = _get_block_kind(prev, "end")
+            kind = _get_block_kind(line, "start")
+            # consecutive images are isolated from each other too
+            if (prev_kind != kind or kind == "image") and not _is_caption_of(
+                line, prev
+            ):
+                text = f"\n{text}"
         parts.append(text)
         prev = line
     return "\n".join(parts)
@@ -88,22 +104,20 @@ def _render(
     and embedded as base64 definitions if required."""
     used: dict[str, str] = {}
 
-    def _isolate(match: re.Match[str]) -> str:
+    def embed(match: re.Match[str]) -> str:
         alt, image_id = match.groups()
         image = images.get(image_id)
-        ref = match.group(0)
-        if include_images and image is not None and image.base64:
-            used[image_id] = image.base64
-            ref = f"![{alt}][{image_id}]"
-        # isolating an image that opens a list item would break the list
-        line_start = match.string.rfind("\n", 0, match.start()) + 1
-        if _RE_LIST_MARKER.fullmatch(match.string, line_start, match.start()):
-            return ref
-        # keep the caption (blockquote) attached to its image
-        after = "" if match.string.startswith("\n>", match.end()) else "\n\n"
-        return f"\n\n{ref}{after}"
+        if image is None or not image.base64:
+            return match.group(0)
+        used[image_id] = image.base64
+        return f"![{alt}][{image_id}]"
 
-    text = _RE_IMAGE_FULL.sub(_isolate, _join_lines(lines))
+    def get_text(line: MarkdownLine) -> str:
+        if not include_images or line.isin_code_block:
+            return line.text
+        return _RE_IMAGE_FULL.sub(embed, line.text)
+
+    text = _join_lines(lines, get_text=get_text)
     if remove_links:
         # embedded images are reference-style (![alt][id]), so they are kept
         text = _remove_links(text)

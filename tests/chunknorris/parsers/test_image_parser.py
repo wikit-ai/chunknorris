@@ -15,7 +15,7 @@ from chunknorris.exceptions.exceptions import (
     PdfParserException,
     TextNotFoundException,
 )
-from chunknorris.ml.ocr import MistralOCR
+from chunknorris.ml.ocr import MistralOCR, TesseractOCR
 from chunknorris.ml.orientation_classifiers import OrientationPrediction
 from chunknorris.parsers import ImageParser
 
@@ -275,3 +275,15 @@ def test_ocr_errors_are_ocr_exceptions(monkeypatch: pytest.MonkeyPatch):
         ImageParser(ocr_engine=MistralOCR())
     # backward compatibility
     assert isinstance(exc_info.value, PdfParserException)
+
+
+@pytest.mark.parametrize("image_dpi, expected_dpi", [(72, 72), (300, 300), (600, 300)])
+def test_tesseract_native_dpi(image_dpi: int, expected_dpi: int):
+    # an A4 scan: its page size depends on the resolution of the image
+    buffer = io.BytesIO()
+    Image.new("RGB", (2480, 3508), "white").save(
+        buffer, format="PNG", dpi=(image_dpi, image_dpi)
+    )
+    image = pymupdf.open(stream=buffer.getvalue())
+    document = pymupdf.open("pdf", image.convert_to_pdf())  # type: ignore -> missing typing
+    assert TesseractOCR._get_native_dpi(document[0]) == expected_dpi  # type: ignore -> missing typing

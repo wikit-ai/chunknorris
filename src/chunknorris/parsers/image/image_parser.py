@@ -8,7 +8,7 @@ import pymupdf  # type: ignore : no stubs
 
 from ...core.components import MarkdownDoc
 from ...exceptions.exceptions import ImageParserException
-from ...ml.ocr import OCREngine
+from ...ml.ocr import OCREngine, TesseractOCR
 from ..pdf.pdf_parser import PdfParser
 from ..pdf.tools import TableFinder
 
@@ -43,7 +43,8 @@ class ImageParser(PdfParser):
         Args:
             ocr_engine (OCREngine | None, optional): the OCR engine to use.
                 MistralOCR(image_captioning=True) is recommended: it provides the layout
-                of the image and captions its pictures. If None, defaults to TesseractOCR().
+                of the image and captions its pictures. If None, defaults to TesseractOCR(dpi=None),
+                that reads the image at its native resolution.
             extract_tables (bool, optional): whether or not tables should be extracted.
                 Only used with a PageOCREngine such as TesseractOCR. Defaults to True.
             table_finder (TableFinder, optional): the table finder to use for parsing the tables.
@@ -61,7 +62,7 @@ class ImageParser(PdfParser):
             table_finder=table_finder,
             add_headers=add_headers,
             use_ocr="always",
-            ocr_engine=ocr_engine,
+            ocr_engine=ocr_engine or TesseractOCR(dpi=None),
             body_line_spacing=body_line_spacing,
             detect_orientation=detect_orientation,
         )

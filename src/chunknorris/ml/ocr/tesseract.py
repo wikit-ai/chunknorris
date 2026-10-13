@@ -12,15 +12,21 @@ class TesseractOCR(PageOCREngine):
     environment variable to point to the traineddata files.
     """
 
-    def __init__(self, language: str = "fra+eng", dpi: int = 72) -> None:
+    # Bounds (dpi) of the resolution used with dpi=None. Tesseract reads best
+    # around 300 dpi, higher resolutions only slow it down
+    _MIN_DPI: int = 72
+    _MAX_DPI: int = 300
+
+    def __init__(self, language: str = "fra+eng", dpi: int | None = 72) -> None:
         """Initializes the Tesseract OCR engine.
 
         Args:
             language (str, optional): the languages to consider for OCR.
                 Must be a string of 3 letter codes languages separated by "+".
                 Example : "fra+eng+ita". Defaults to "fra+eng".
-            dpi (int, optional): the resolution used to render the pages before OCR.
-                Defaults to 72.
+            dpi (int | None, optional): the resolution used to render the pages before OCR.
+                If None, the pages are rendered at the native resolution of their images,
+                between 72 and 300 dpi: slower, but better suited to scans. Defaults to 72.
         """
         self.language = language
         self.dpi = dpi
@@ -47,6 +53,28 @@ class TesseractOCR(PageOCREngine):
                 )
 
     def get_textpage(self, page: pymupdf.Page) -> pymupdf.TextPage:
+        dpi = self.dpi if self.dpi is not None else TesseractOCR._get_native_dpi(page)
         return page.get_textpage_ocr(  # type: ignore : missing typing in pymupdf
-            language=self.language, dpi=self.dpi, full=False
+            language=self.language, dpi=dpi, full=False
         )
+
+    @staticmethod
+    def _get_native_dpi(page: pymupdf.Page) -> int:
+        """Gets the resolution at which the page must be rendered for its images
+        to keep their native resolution, between _MIN_DPI and _MAX_DPI.
+
+        Args:
+            page (pymupdf.Page): the page.
+
+        Returns:
+            int: the resolution, in dpi.
+        """
+        native_dpi = max(
+            (
+                72 * image["width"] / pymupdf.Rect(image["bbox"]).width
+                for image in page.get_image_info()  # type: ignore : missing typing in pymupdf
+                if pymupdf.Rect(image["bbox"]).width > 0
+            ),
+            default=TesseractOCR._MIN_DPI,
+        )
+        return round(min(max(native_dpi, TesseractOCR._MIN_DPI), TesseractOCR._MAX_DPI))

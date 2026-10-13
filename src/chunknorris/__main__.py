@@ -100,7 +100,11 @@ def main():
     ocr_engine = (
         MistralOCR()
         if args.ocr_engine == "mistral"
-        else TesseractOCR(language=args.ocr_language)
+        # images are read at their native resolution
+        else TesseractOCR(
+            language=args.ocr_language,
+            dpi=None if fileext.lower() in ImageParser.SUPPORTED_EXTENSIONS else 72,
+        )
     )
 
     LOGGER.info("Chunking...")
