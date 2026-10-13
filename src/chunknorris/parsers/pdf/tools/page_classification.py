@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Generator
 
 from .components_ml import PdfPageSnapshot
-from .utils import PdfParserState
+from .utils import PdfParserState, render_page
 
 if TYPE_CHECKING:
     from PIL.Image import Image as PILImage
@@ -30,9 +30,7 @@ class PdfPageClassification(PdfParserState):
     """Mixin that adds ML-based page classification to the PDF parser.
 
     Follows the same composition pattern as the other parser mixins: inherits
-    from :class:`PdfParserState` for shared document state, and relies on
-    :meth:`_render_page` provided by ``PdfPlotter`` being present in
-    the final MRO (guaranteed when composed into ``PdfParser``).
+    from :class:`PdfParserState` for shared document state.
 
     The classifier is loaded lazily when ``detect_pages_to_embed=True`` is passed
     to :class:`PdfParser`.  If ML features are disabled, calling
@@ -65,8 +63,7 @@ class PdfPageClassification(PdfParserState):
 
         Pages are processed in batches of *batch_size* so that peak memory stays
         proportional to the batch rather than the full document.  When *images*
-        is ``None``, pages are rendered on demand via :meth:`_render_page`
-        (provided by ``PdfPlotter`` in the final MRO); images that do not need
+        is ``None``, pages are rendered on demand; images that do not need
         embedding are released after each batch.
 
         Args:
@@ -110,7 +107,10 @@ class PdfPageClassification(PdfParserState):
             page_indices = range(self.page_start, end)
             for batch_start in range(0, len(page_indices), batch_size):
                 batch_range = page_indices[batch_start : batch_start + batch_size]
-                batch_imgs = [self._render_page(n, resolution) for n in batch_range]  # type: ignore[attr-defined]
+                batch_imgs = [
+                    render_page(self.document.load_page(n), resolution)  # type: ignore : missing typing in pymupdf
+                    for n in batch_range
+                ]
                 preds = self._page_classifier.predict(
                     batch_imgs, batch_size=len(batch_imgs)
                 )

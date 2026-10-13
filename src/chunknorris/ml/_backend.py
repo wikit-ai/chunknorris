@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-_preferred_backend: str = "auto"
+from typing import Literal
+
+_preferred_backend: Literal["auto", "onnx", "openvino"] = "auto"
 
 
 def _is_installed(package: str) -> bool:
@@ -14,7 +16,7 @@ def _is_installed(package: str) -> bool:
         return False
 
 
-def check_dependencies(backend: str = "auto") -> None:
+def check_dependencies(backend: Literal["auto", "onnx", "openvino"] = "auto") -> None:
     """Check that required ML packages are installed for *backend*.
 
     Args:
@@ -46,7 +48,7 @@ def check_dependencies(backend: str = "auto") -> None:
         raise ImportError("Missing ML dependencies:\n  - " + "\n  - ".join(missing))
 
 
-def set_ml_backend(backend: str) -> None:
+def set_ml_backend(backend: Literal["auto", "onnx", "openvino"]) -> None:
     """Set the preferred ML inference backend for the entire library.
 
     Validates that the requested backend is installed before storing the

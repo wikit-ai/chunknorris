@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 
 import pymupdf  # type: ignore : no stubs
 
+from ...core.components import DocImage
+
 # Block types that must not end up in the exported markdown
 HEADER_FOOTER_BLOCK_TYPES = frozenset({"header", "footer"})
 
@@ -30,6 +32,16 @@ class OCRImage:
     image_type: str | None = None
     caption: str | None = None
     base64: str | None = None
+
+    def to_doc_image(self) -> DocImage:
+        return DocImage(
+            id=self.id,
+            page=self.page,
+            bbox=tuple(self.bbox),  # type: ignore : missing typing in pymupdf -> Rect is an iterable of 4 floats
+            image_type=self.image_type,
+            caption=self.caption,
+            base64=self.base64,
+        )
 
 
 @dataclass
