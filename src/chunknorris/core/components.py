@@ -14,6 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 _RE_IMAGE_REF = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")
 # Same, but also capturing the alt text: (alt, target)
 _RE_IMAGE_FULL = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)")
+# Bullet or numbered list marker, such as "- " or "1. "
+_RE_LIST_MARKER = re.compile(r"\s*(?:[-*+]|\d+[.)])\s+")
 
 
 def _get_block_kind(line: MarkdownLine, edge: Literal["start", "end"]) -> str | None:
@@ -32,10 +34,19 @@ def _get_block_kind(line: MarkdownLine, edge: Literal["start", "end"]) -> str | 
     return None
 
 
+def _is_caption_of(line: MarkdownLine, prev: MarkdownLine) -> bool:
+    """Whether the line is the caption (blockquote) of the image ending the previous line."""
+    return (
+        _get_block_kind(line, "start") == "blockquote"
+        and _RE_IMAGE_REF.fullmatch(prev.text.split("\n")[-1]) is not None
+    )
+
+
 def _join_lines(lines: list[MarkdownLine], isolate_headers: bool = True) -> str:
     """Joins the lines in a markdown string. Tables and blockquotes (and headers,
     if isolate_headers) are separated from the surrounding content by a blank line,
-    otherwise markdown viewers would merge the following paragraph into them."""
+    otherwise markdown viewers would merge the following paragraph into them.
+    The caption of an image is kept right under it."""
     parts: list[str] = []
     prev: MarkdownLine | None = None
     for line in lines:
@@ -45,6 +56,7 @@ def _join_lines(lines: list[MarkdownLine], isolate_headers: bool = True) -> str:
             and prev.text
             and line.text
             and _get_block_kind(prev, "end") != _get_block_kind(line, "start")
+            and not _is_caption_of(line, prev)
         ):
             text = f"\n{text}"
         parts.append(text)
@@ -83,6 +95,10 @@ def _render(
         if include_images and image is not None and image.base64:
             used[image_id] = image.base64
             ref = f"![{alt}][{image_id}]"
+        # isolating an image that opens a list item would break the list
+        line_start = match.string.rfind("\n", 0, match.start()) + 1
+        if _RE_LIST_MARKER.fullmatch(match.string, line_start, match.start()):
+            return ref
         # keep the caption (blockquote) attached to its image
         after = "" if match.string.startswith("\n>", match.end()) else "\n\n"
         return f"\n\n{ref}{after}"

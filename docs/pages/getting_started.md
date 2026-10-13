@@ -203,6 +203,26 @@ Here are code examples for chunking documents according to their file type:
 
 Once you have your ``chunks``, you can easily print them of save them:
 
+## Images
+
+The images of markdown, HTML and .docx documents are kept in the markdown as ``![alt](id)`` references, and listed in ``md_doc.images`` and ``chunk.images``:
+
+- images embedded as base64 (all the images of a .docx) get an id such as ``img-0.png``, and their data URI is stored in ``image.base64``.
+- images pointing to a url get the url as id.
+- the ``<figcaption>`` of an HTML image, or a blockquote right under a markdown image, is stored in ``image.caption``.
+
+```py
+from chunknorris.parsers import DocxParser
+
+md_doc = DocxParser().parse_file("myfile.docx")
+for image_id, image in md_doc.images.items():
+    print(image_id, image.caption)
+
+print(md_doc.to_string(include_images=True))  # embeds the base64 images in the markdown
+```
+
+Images of PDF and image files are found by OCR, see the [OCR](ocr.md) page.
+
 ## Using the CLI 
 
 If you prefer, you may also run ``chunknorris`` in a terminal using:

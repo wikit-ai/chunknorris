@@ -40,7 +40,9 @@ HTML_STRING_OUT = """# This is a h1 header
 ### This is a h3 header
 
 This is some text with [markdown links](www.link.com) within it.
-Carte des infrastructures et de l'occupation des sols de la commune en 2018.
+
+![Carte en couleurs présentant l'occupation des sols.](//upload.wikimedia.org/wikipedia/commons/thumb/e/e9/79348-Villefollet-Sols.png/310px-79348-Villefollet-Sols.png)
+> Carte des infrastructures et de l'occupation des sols de la commune en 2018.
 
 | Items | Expenditure |
 |:--------|--------------:|
