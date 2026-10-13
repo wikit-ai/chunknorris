@@ -78,12 +78,14 @@ How OCR runs is controlled by the ``ocr_engine`` argument. Here are code example
 
     Use ``skip_image_types`` to remove some categories of images from the markdown. Defaults to ``("decorative", "icon")``.
 
+    Checkboxes found by the OCR are written as markdown checkboxes: ``[x]`` when checked, ``[ ]`` otherwise.
+
     !!! note
         Documents parsed with Mistral OCR bypass the regular parsing pipeline of ``PdfParser``. Methods relying on it, such as ``get_toc()`` or ``get_tables()``, are not available on them.
 
 ## Parsing images
 
-Images (``.png``, ``.jpg``, ``.jpeg``, ``.tif``, ``.tiff``, ``.bmp``, ``.gif``) are parsed by ``ImageParser``. It converts the image to a PDF, one page per frame, and parses it like ``PdfParser`` does with ``use_ocr="always"``. It takes the same ``ocr_engine`` argument:
+Images (``.png``, ``.jpg``, ``.jpeg``, ``.tif``, ``.tiff``, ``.bmp``, ``.gif``) are parsed by ``ImageParser``. It converts the image to a PDF, one page per frame, and parses it like ``PdfParser`` does with ``use_ocr="always"``. With ``MistralOCR``, each frame is sent as an image, in its own request, at its native resolution (resized so that its long side is between 1024 and 4096 px). It takes the same ``ocr_engine`` argument:
 
 ```py
 from chunknorris.ml.ocr import MistralOCR

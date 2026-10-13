@@ -68,10 +68,17 @@ class PdfParser(
     _RE_MD_HEADER: re.Pattern[str] = re.compile(r"^(#{1,6})\s+(.*)$")
     # Highest header level given to the headers found by OCR, h1 being kept for the main title
     _OCR_TOP_HEADER_LEVEL: int = 2
+    # Checkboxes, as returned by the document OCR engines: unicode glyphs, or latex for checked ones
+    _RE_OCR_CHECKED_BOX: re.Pattern[str] = re.compile(
+        r"[☑☒]|\\\(\s*\\boxed\{\\{1,2}checkmark\}\s*\\\)"
+    )
+    _RE_OCR_UNCHECKED_BOX: re.Pattern[str] = re.compile(r"[☐□▢]")
     # Resolution (dpi) of the page images given to the orientation classifier
     _ORIENTATION_RESOLUTION: int = 72
     # Pages rendered at once for the orientation classifier
     _ORIENTATION_BATCH_SIZE: int = 32
+    # Whether each page of the documents holds a single image, sent as such to the DocumentOCREngine
+    _PAGES_ARE_IMAGES: bool = False
 
     table_finder: TableFinder
     extract_tables: bool = True
@@ -346,7 +353,10 @@ class PdfParser(
             list(self.document.pages(start=self.page_start, stop=self.page_end))  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
         )
         ocr_document = self.ocr_engine.ocr_document(
-            self.document, self.page_start, self.page_end  # type: ignore : page_end is set by _set_page_range()
+            self.document,
+            self.page_start,
+            self.page_end,  # type: ignore : page_end is set by _set_page_range()
+            pages_are_images=self._PAGES_ARE_IMAGES,
         )
         if not any(
             block.text.strip()
@@ -359,7 +369,9 @@ class PdfParser(
         self.ocr_pages = ocr_document.pages
         self.ocr_images = ocr_document.images
         self.main_title = self._pop_ocr_main_title(ocr_document.blocks)
-        self.ocr_blocks = PdfParser._normalize_ocr_headers(ocr_document.blocks)
+        self.ocr_blocks = PdfParser._normalize_ocr_checkboxes(
+            PdfParser._normalize_ocr_headers(ocr_document.blocks)
+        )
 
     def _pop_ocr_main_title(self, blocks: list[OCRBlock]) -> str:
         """Finds the main title among the blocks found by OCR and removes its block.
@@ -424,6 +436,23 @@ class PdfParser(
             block.text = "\n".join(
                 PdfParser._RE_MD_HEADER.sub(shift_header, line)
                 for line in block.text.splitlines()
+            )
+
+        return blocks
+
+    @staticmethod
+    def _normalize_ocr_checkboxes(blocks: list[OCRBlock]) -> list[OCRBlock]:
+        """Writes the checkboxes found by OCR as markdown checkboxes: "[x]" and "[ ]".
+
+        Args:
+            blocks (list[OCRBlock]): the blocks found by OCR.
+
+        Returns:
+            list[OCRBlock]: the blocks, with checkboxes modified in place.
+        """
+        for block in blocks:
+            block.text = PdfParser._RE_OCR_UNCHECKED_BOX.sub(
+                "[ ]", PdfParser._RE_OCR_CHECKED_BOX.sub("[x]", block.text)
             )
 
         return blocks

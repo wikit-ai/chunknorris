@@ -233,7 +233,7 @@ class MarkdownLine(BaseModel):
         **kwargs: dict[str, Any],
     ) -> None:
         super().__init__(
-            text=normalize("NFKD", text.strip()),
+            text=normalize("NFKC", text.strip()),
             line_idx=line_idx,
             isin_code_block=isin_code_block,
             page=page,

@@ -16,6 +16,7 @@ from chunknorris.exceptions.exceptions import (
     TextNotFoundException,
 )
 from chunknorris.ml.ocr import MistralOCR
+from chunknorris.ml.orientation_classifiers import OrientationPrediction
 from chunknorris.parsers import ImageParser
 
 # Trimmed response of Mistral OCR, see test_pdf_parser_ocr.py
@@ -24,9 +25,9 @@ MISTRAL_RESPONSE_FILEPATH = (
 )
 
 
-def _image(image_format: str = "png") -> bytes:
+def _image(image_format: str = "png", width: int = 600, height: int = 800) -> bytes:
     """A blank image in the provided format ("png" or "jpg")."""
-    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 600, 800), 0)
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, width, height), 0)
     pixmap.clear_with(210)  # type: ignore -> missing typing
     return pixmap.tobytes(image_format)  # type: ignore -> missing typing
 
@@ -58,13 +59,13 @@ def _tiff(frame_count: int, width: int = 60, height: int = 80) -> bytes:
 
 
 def _mock_post(
-    monkeypatch: pytest.MonkeyPatch, page_count: int, empty: bool = False
+    monkeypatch: pytest.MonkeyPatch, empty: bool = False
 ) -> list[dict[str, Any]]:
-    """Replaces the API call by the first pages of the trimmed response.
-    Returns the list of sent payloads."""
+    """Replaces the API call by the first page of the trimmed response,
+    as each frame is sent in its own request. Returns the list of sent payloads."""
     with open(MISTRAL_RESPONSE_FILEPATH, encoding="utf-8") as f:
         response = json.load(f)
-    response["pages"] = response["pages"][:page_count]
+    response["pages"] = response["pages"][:1]
     if empty:
         for page in response["pages"]:
             page["blocks"], page["images"] = [], []
@@ -84,15 +85,37 @@ def parser() -> ImageParser:
     return ImageParser(ocr_engine=MistralOCR(api_key="test-key"))
 
 
-def _sent_document(payload: dict[str, Any]) -> pymupdf.Document:
-    data_uri: str = payload["document"]["document_url"]
-    prefix = "data:application/pdf;base64,"
-    assert data_uri.startswith(prefix)
-    return pymupdf.open("pdf", base64.b64decode(data_uri.removeprefix(prefix)))
+def _sent_image(payload: dict[str, Any]) -> tuple[str, pymupdf.Pixmap]:
+    """The mime type and the content of the image sent in the payload."""
+    assert payload["document"]["type"] == "image_url"
+    data_uri: str = payload["document"]["image_url"]
+    header, data = data_uri.split(";base64,")
+    return header.removeprefix("data:"), pymupdf.Pixmap(base64.b64decode(data))
+
+
+def _sent_size(payload: dict[str, Any]) -> tuple[int, int]:
+    pixmap = _sent_image(payload)[1]
+    return pixmap.width, pixmap.height  # type: ignore -> missing typing
+
+
+class _StubOrientationClassifier:
+    def __init__(self, angle: int) -> None:
+        self.angle = angle
+
+    def predict(self, images: list[Any]) -> list[OrientationPrediction]:
+        return [
+            OrientationPrediction(
+                angle=self.angle,
+                confidence=0.9,
+                is_confident=True,
+                probabilities={self.angle: 0.9},
+            )
+            for _ in images
+        ]
 
 
 def test_parse_string(monkeypatch: pytest.MonkeyPatch, parser: ImageParser):
-    payloads = _mock_post(monkeypatch, page_count=1)
+    payloads = _mock_post(monkeypatch)
     md_doc = parser.parse_string(_image())
 
     assert parser.parsed_using_ocr
@@ -102,25 +125,26 @@ def test_parse_string(monkeypatch: pytest.MonkeyPatch, parser: ImageParser):
         "pages": [0],
     }
     assert md_doc.to_string().startswith("# STATUTS\n")
-    # the image is sent as a single page pdf
-    assert _sent_document(payloads[0]).page_count == 1  # type: ignore -> missing typing
+    # the image is sent as an image, not wrapped in a pdf
+    assert len(payloads) == 1
+    assert _sent_image(payloads[0])[0] == "image/png"
 
 
 @pytest.mark.parametrize("mode", ["RGB", "RGBA", "L", "P", "CMYK"])
 def test_parse_image(monkeypatch: pytest.MonkeyPatch, parser: ImageParser, mode: str):
-    payloads = _mock_post(monkeypatch, page_count=1)
+    payloads = _mock_post(monkeypatch)
     md_doc = parser.parse_image(Image.new(mode, (600, 800)))
 
     assert md_doc.to_string().startswith("# STATUTS\n")
-    assert _sent_document(payloads[0]).page_count == 1  # type: ignore -> missing typing
+    assert len(payloads) == 1
 
 
 def test_parse_multi_frame_image(monkeypatch: pytest.MonkeyPatch, parser: ImageParser):
-    payloads = _mock_post(monkeypatch, page_count=2)
+    payloads = _mock_post(monkeypatch)
     image = Image.open(io.BytesIO(_tiff(frame_count=2)))
     md_doc = parser.parse_image(image)
 
-    assert _sent_document(payloads[0]).page_count == 2  # type: ignore -> missing typing
+    assert len(payloads) == 2
     assert md_doc.metadata["ocr"]["pages"] == [0, 1]
 
 
@@ -131,7 +155,7 @@ def test_parse_file(
     tmp_path: Path,
     extension: str,
 ):
-    _mock_post(monkeypatch, page_count=1)
+    _mock_post(monkeypatch)
     images = {".png": _image("png"), ".jpg": _image("jpg"), ".jpeg": _image("jpg")}
     filepath = tmp_path / f"image{extension}"
     filepath.write_bytes(images.get(extension.lower()) or _tiff(frame_count=1))
@@ -144,17 +168,84 @@ def test_parse_file(
 def test_multi_frame_image_is_parsed_as_multi_page(
     monkeypatch: pytest.MonkeyPatch, parser: ImageParser
 ):
-    payloads = _mock_post(monkeypatch, page_count=2)
+    payloads = _mock_post(monkeypatch)
     md_doc = parser.parse_string(_tiff(frame_count=2))
 
-    assert _sent_document(payloads[0]).page_count == 2  # type: ignore -> missing typing
+    # one request per frame
+    assert len(payloads) == 2
     assert md_doc.metadata["ocr"]["pages"] == [0, 1]
+    assert {block.page for block in parser.ocr_blocks} == {0, 1}
+
+
+@pytest.mark.parametrize(
+    ("image_format", "mime_type"), [("png", "image/png"), ("jpg", "image/jpeg")]
+)
+def test_image_format_is_kept(
+    monkeypatch: pytest.MonkeyPatch,
+    parser: ImageParser,
+    image_format: str,
+    mime_type: str,
+):
+    payloads = _mock_post(monkeypatch)
+    parser.parse_string(_image(image_format))
+
+    assert _sent_image(payloads[0])[0] == mime_type
+
+
+@pytest.mark.parametrize(
+    ("size", "sent_size"),
+    [
+        # small images are upscaled
+        ((600, 800), (768, 1024)),
+        ((60, 80), (768, 1024)),
+        # bigger images are sent at their native resolution
+        ((1500, 2000), (1500, 2000)),
+        ((4000, 1800), (4000, 1800)),
+        # huge images are downscaled
+        ((6000, 3000), (4096, 2048)),
+    ],
+)
+def test_image_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+    parser: ImageParser,
+    size: tuple[int, int],
+    sent_size: tuple[int, int],
+):
+    payloads = _mock_post(monkeypatch)
+    parser.parse_string(_image("png", *size))
+
+    assert _sent_size(payloads[0]) == sent_size
+
+
+def test_exif_orientation_is_applied(
+    monkeypatch: pytest.MonkeyPatch, parser: ImageParser
+):
+    payloads = _mock_post(monkeypatch)
+    image, buffer = Image.new("RGB", (1600, 1200)), io.BytesIO()
+    exif = image.getexif()
+    exif[0x0112] = 6  # orientation: rotate 90° clockwise to display
+    image.save(buffer, format="JPEG", exif=exif)
+    parser.parse_string(buffer.getvalue())
+
+    assert _sent_size(payloads[0]) == (1200, 1600)
+
+
+def test_orientation_classifier_turns_images_upright(
+    monkeypatch: pytest.MonkeyPatch, parser: ImageParser
+):
+    payloads = _mock_post(monkeypatch)
+    # as loaded by detect_orientation=True
+    parser.orientation_classifier = _StubOrientationClassifier(90)  # type: ignore -> stub
+    md_doc = parser.parse_string(_image("png", 1500, 2000))
+
+    assert _sent_size(payloads[0]) == (2000, 1500)
+    assert md_doc.metadata["ocr"]["rotations"] == {0: 90}
 
 
 def test_image_without_text_raises(
     monkeypatch: pytest.MonkeyPatch, parser: ImageParser
 ):
-    _mock_post(monkeypatch, page_count=1, empty=True)
+    _mock_post(monkeypatch, empty=True)
     with pytest.raises(TextNotFoundException):
         parser.parse_string(_image())
 
