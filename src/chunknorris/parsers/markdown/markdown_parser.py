@@ -5,6 +5,7 @@ from typing import Any
 import yaml
 
 from ...core.components import MarkdownDoc
+from ...core.encoding import read_text_file
 from ..abstract_parser import AbstractParser
 
 _RE_EXCESS_NEWLINES = re.compile(r"(?:\n\s*){3,}")
@@ -51,7 +52,7 @@ class MarkdownParser(AbstractParser[str]):
 
     @staticmethod
     def read_file(filepath: str) -> str:
-        """Reads a Markdown file
+        """Reads a Markdown file, detecting its encoding.
 
         Args:
             filepath (str): the path to the markdown file
@@ -62,10 +63,7 @@ class MarkdownParser(AbstractParser[str]):
         path = Path(filepath)
         if path.suffix != ".md":
             raise ValueError("Only .md files can be passed to MarkDownParser.")
-        with path.open("r", encoding="utf8") as file:
-            md_string = file.read()
-
-        return md_string
+        return read_text_file(path)
 
     @staticmethod
     def convert_setext_to_atx(md_string: str) -> str:

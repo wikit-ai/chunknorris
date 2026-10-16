@@ -6,6 +6,7 @@ from typing import Literal
 import requests
 import tiktoken
 from chunknorris.chunkers import MarkdownChunker
+from chunknorris.core.encoding import decode_bytes
 from chunknorris.parsers import (
     AbstractParser,
     CSVParser,
@@ -107,7 +108,11 @@ def parse_and_chunk(uploaded_file: UploadedFile | None):
                 chunker = get_md_chunker()
                 chunks = chunker.chunk(md_doc)
             case _:
-                md_doc = parser.parse_string(uploaded_file.getvalue().decode("utf-8"))
+                md_doc = parser.parse_string(
+                    decode_bytes(
+                        uploaded_file.getvalue(), is_html=fileext in {".html", ".htm"}
+                    )
+                )
                 chunker = get_md_chunker()
                 chunks = chunker.chunk(md_doc)
 

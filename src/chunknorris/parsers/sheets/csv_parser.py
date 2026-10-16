@@ -5,6 +5,7 @@ from typing import Literal
 import pandas as pd
 
 from ...core.components import MarkdownDoc
+from ...core.encoding import read_text_file
 from .abstract_sheet_parser import AbstractSheetParser
 
 _VALID_OUTPUT_FORMATS = ("markdown_table", "json_lines")
@@ -42,7 +43,7 @@ class CSVParser(AbstractSheetParser[str]):
         self.n_sample_lines = n_sample_lines
 
     def parse_file(self, filepath: str) -> MarkdownDoc:
-        """Parses a CSV file to a MarkdownDoc.
+        """Parses a CSV file to a MarkdownDoc, detecting its encoding.
 
         Args:
             filepath (str): path to the .csv file.
@@ -52,11 +53,7 @@ class CSVParser(AbstractSheetParser[str]):
         """
         if not filepath.lower().endswith(".csv"):
             raise ValueError("Only .csv files can be passed to CSVParser.")
-        delimiter = self.csv_delimiter or self._detect_delimiter_from_file(
-            filepath, self.n_sample_lines
-        )
-        df = pd.read_csv(filepath, delimiter=delimiter)  # type: ignore | missing typing in pandas
-        return self._df_to_markdown_doc(df, self.output_format)
+        return self.parse_string(read_text_file(filepath))
 
     def parse_string(self, string: str) -> MarkdownDoc:
         """Parses a CSV-formatted string to a MarkdownDoc.
@@ -72,24 +69,6 @@ class CSVParser(AbstractSheetParser[str]):
         )
         df = pd.read_csv(StringIO(string), delimiter=delimiter)  # type: ignore | missing typing in pandas
         return self._df_to_markdown_doc(df, self.output_format)
-
-    @staticmethod
-    def _detect_delimiter_from_file(filepath: str, n_sample_lines: int = 5) -> str:
-        """Detect the CSV delimiter by reading the first few lines of a file.
-
-        Args:
-            filepath (str): path to the CSV file.
-            n_sample_lines (int): number of lines to sample.
-
-        Returns:
-            str: the detected delimiter.
-
-        Raises:
-            ValueError: if the delimiter cannot be detected.
-        """
-        with open(filepath, "r", encoding="utf-8") as f:
-            sample = "".join(f.readline() for _ in range(n_sample_lines))
-        return CSVParser._sniff_delimiter(sample)
 
     @staticmethod
     def _detect_delimiter_from_string(csv_string: str, n_sample_lines: int = 5) -> str:

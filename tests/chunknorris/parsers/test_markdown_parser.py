@@ -38,3 +38,9 @@ def test_parse_string(
 def test_parse_file(md_parser: MarkdownParser, md_filepath: str):
     parser_output = md_parser.parse_file(md_filepath)
     assert isinstance(parser_output, MarkdownDoc)
+
+
+def test_read_file_cp1252(tmp_path):
+    filepath = tmp_path / "file.md"
+    filepath.write_bytes("# Titre\r\n\r\nAjouté à la liste\r\n".encode("cp1252"))
+    assert MarkdownParser.read_file(str(filepath)) == "# Titre\n\nAjouté à la liste\n"

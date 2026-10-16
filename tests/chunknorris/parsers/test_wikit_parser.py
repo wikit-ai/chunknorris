@@ -1,3 +1,6 @@
+import codecs
+from pathlib import Path
+
 from chunknorris.core.components import MarkdownDoc
 from chunknorris.parsers.json.wikit_parser import WikitJsonParser
 
@@ -16,3 +19,13 @@ def test_parse_file(
     assert isinstance(md_string, MarkdownDoc)
     md_string = wikit_parser.parse_file(wikitjson_html_filepath)
     assert isinstance(md_string, MarkdownDoc)
+
+
+def test_read_file_utf8_bom(
+    wikit_parser: WikitJsonParser, wikitjson_md_filepath: str, tmp_path
+):
+    filepath = tmp_path / "file.json"
+    filepath.write_bytes(codecs.BOM_UTF8 + Path(wikitjson_md_filepath).read_bytes())
+    assert wikit_parser.read_file(str(filepath)) == wikit_parser.read_file(
+        wikitjson_md_filepath
+    )

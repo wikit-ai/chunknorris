@@ -4,6 +4,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from ...core.components import MarkdownDoc
+from ...core.encoding import read_text_file
 from ...parsers.html.html_parser import HTMLParser
 from ...parsers.markdown.markdown_parser import MarkdownParser
 from ...schemas.schemas import WikitJSONDocument
@@ -85,8 +86,7 @@ class WikitJsonParser(AbstractParser):
         path = Path(filepath)
         if path.suffix != ".json":
             raise ValueError("Only .json files can be passed to WikitJsonParser.")
-        with path.open("r", encoding="utf8") as file:
-            content = json.load(file)
+        content = json.loads(read_text_file(path))
         try:
             content = WikitJSONDocument(**content)
         except ValidationError as e:
