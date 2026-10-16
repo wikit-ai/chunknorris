@@ -19,7 +19,9 @@ class PdfExport(PdfParserState):
         Returns:
             MarkdownDoc: the formatted markdown doc
         """
-        items_to_export = sorted(self.blocks + self.tables, key=attrgetter("order"))
+        items_to_export = sorted(
+            self.blocks + self.tables + self.ocr_blocks, key=attrgetter("order")
+        )
         md_lines: list[MarkdownLine] = []
         line_idx_counter = 0
 

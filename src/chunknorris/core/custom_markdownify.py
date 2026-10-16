@@ -1,4 +1,5 @@
 import copy
+import re
 from io import StringIO
 from typing import Any
 
@@ -7,9 +8,11 @@ from bs4.element import Tag  # type: ignore : no stubs
 from markdownify import MarkdownConverter  # type: ignore : no stubs
 
 from .logger import LOGGER
+from .markdown_images import quote_image_target, sanitize_image_alt
 
 _STRUCTURAL_ATTRS = {"rowspan", "colspan"}
 _CONTENT_ATTRS = {"a": {"href", "title"}}
+_RE_IMAGE_ONLY = re.compile(r"(?:\s*!\[[^\]\n]*\]\([^)\s]+\))+\s*")
 
 
 def _has_merged_cells(el: Tag) -> bool:
@@ -32,7 +35,7 @@ def _strip_attrs(el: Tag) -> Tag:
 
 
 class CustomMarkdownConverter(MarkdownConverter):
-    """A custom MarkdownConverter that handles HTML tables.
+    """A custom MarkdownConverter that handles HTML tables and images.
 
     - Tables with merged cells (rowspan/colspan) are kept as raw HTML,
       since flattening merged cells can spread long cell values across many columns.
@@ -43,7 +46,47 @@ class CustomMarkdownConverter(MarkdownConverter):
     In both cases, convert_table uses str(el) to access the original BS4 element
     directly — markdownify never mutates elements in place, so no No-Op overrides
     on td/tr/th are needed.
+
+    Images are written as ![alt](src), without title, so that their src can be used
+    as image id. Links wrapping only images are dropped, and the <figcaption> of
+    a <figure> holding images is written as a blockquote right under them,
+    which is how image captions are written in a MarkdownDoc.
     """
+
+    def convert_img(self, el: Tag, text: str, parent_tags: Any) -> str:
+        src = quote_image_target(str(el.get("src") or ""))
+        alt = sanitize_image_alt(str(el.get("alt") or ""))
+        if not src:
+            return alt
+        if (
+            "_inline" in parent_tags
+            and el.parent is not None
+            and el.parent.name not in self.options["keep_inline_images_in"]
+        ):
+            return alt
+        return f"![{alt}]({src})"
+
+    def convert_a(self, el: Tag, text: str, parent_tags: Any) -> str:
+        if text.strip() and _RE_IMAGE_ONLY.fullmatch(text):
+            return text
+        return super().convert_a(el, text, parent_tags)  # type: ignore : no stubs
+
+    def convert_figure(self, el: Tag, text: str, parent_tags: Any) -> str:
+        figcaption = el.find("figcaption")
+        if figcaption is None or el.find("img") is None or "_inline" in parent_tags:
+            return text
+        # a detached copy has no parent figure, so convert_figcaption returns its text
+        caption = " ".join(
+            self.process_tag(copy.copy(figcaption), parent_tags=set(parent_tags)).split()  # type: ignore : no stubs
+        )
+        quote = f"\n> {caption}" if caption else ""
+        return f"\n\n{text.strip()}{quote}\n\n"
+
+    def convert_figcaption(self, el: Tag, text: str, parent_tags: Any) -> str:
+        figure = el.find_parent("figure")
+        if figure is not None and figure.find("img") is not None:
+            return ""  # written by convert_figure, under the images
+        return f"\n\n{text.strip()}\n\n"
 
     def convert_table(self, el: Tag, text: str, parent_tags: Any) -> str:
         if _has_merged_cells(el):

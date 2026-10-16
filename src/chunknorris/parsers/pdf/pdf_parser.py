@@ -1,4 +1,4 @@
-import os
+import warnings
 from collections import Counter, defaultdict
 from itertools import groupby
 from pathlib import Path
@@ -7,16 +7,19 @@ from typing import Any, Literal
 import pymupdf  # type: ignore : no stubs
 
 from ...core.components import MarkdownDoc
+from ...core.logger import LOGGER
 from ...decorators.decorators import mem_debug, timeit, validate_args
 from ...exceptions.exceptions import (
     PageNotFoundException,
     PdfParserException,
     TextNotFoundException,
 )
+from ...ml.ocr import DocumentOCREngine, OCREngine, PageOCREngine, TesseractOCR
 from .tools import (
     DocSpecsExtraction,
     PdfExport,
     PdfLinkExtraction,
+    PdfOCR,
     PdfPageClassification,
     PdfParserState,
     PdfPlotter,
@@ -34,6 +37,7 @@ class PdfParser(
     PdfLinkExtraction,
     PdfTableExtraction,
     PdfTocExtraction,
+    PdfOCR,
     PdfPlotter,
     PdfExport,
     DocSpecsExtraction,
@@ -45,19 +49,10 @@ class PdfParser(
     _LINE_Y_TOLERANCE: int = 3
     # Extra gap (pts) added on top of body_line_spacing to detect block boundaries
     _BLOCK_SPACING_TOLERANCE: int = 2
-    # Fraction of a page that raster images must cover for it to look scanned
-    _SCANNED_PAGE_IMAGE_COVERAGE: float = 0.8
-    # Characters a scanned page may carry outside of its margins before it is
-    # considered to hold real text
-    _SCANNED_PAGE_MAX_CHARS: int = 50
-    # Top/bottom band of a page where scanner stamps land, as a fraction of its height
-    _PAGE_MARGIN_RATIO: float = 0.08
 
     table_finder: TableFinder
     extract_tables: bool = True
     add_headers: bool = True
-    use_ocr: Literal["always", "auto", "never"] = "auto"
-    ocr_language: str = "fra+eng"
     body_line_spacing: float | None = None
 
     def __init__(
@@ -67,9 +62,12 @@ class PdfParser(
         table_finder: TableFinder = TableFinder(),
         add_headers: bool = True,
         use_ocr: Literal["always", "auto", "never"] = "auto",
-        ocr_language: str = "fra+eng",
+        ocr_engine: OCREngine | None = None,
+        ocr_language: str | None = None,
         body_line_spacing: float | None = None,
-        enable_ml_features: bool = False,
+        detect_orientation: bool = False,
+        detect_pages_to_embed: bool = False,
+        enable_ml_features: bool | None = None,
     ) -> None:
         """Initializes a PDF parser.
 
@@ -83,7 +81,14 @@ class PdfParser(
                 Allows to detect text on images but keep in mind that
                 this might include text you actually do not want, such as screenshots.
                 Must be one of ["always", "auto", "never"]. Default to "auto".
-            ocr_language (str, optional) : the languages to consider for OCR.
+                With a PageOCREngine (such as TesseractOCR), "auto" runs the OCR on the pages that have no text.
+                With a DocumentOCREngine (such as MistralOCR), "auto" runs the OCR on the whole document
+                if no text is found in it.
+            ocr_engine (OCREngine | None, optional): the OCR engine to use, such as
+                TesseractOCR(language="fra+eng") or MistralOCR(image_captioning=True).
+                If None, defaults to TesseractOCR().
+            ocr_language (str, optional) : DEPRECATED, use ocr_engine=TesseractOCR(language=...) instead.
+                The languages to consider for OCR with the default Tesseract engine.
                 Must be a string of 3 letter codes languages separated by "+".
                 Example : "fra+eng+ita"
             body_line_spacing (float, optional) : the size of the space between 2 lines of the body
@@ -91,25 +96,55 @@ class PdfParser(
                 Tweak this parameter for better merging of lines into blocks.
             table_finder (TableFinder | None, optional): the table finder to use for parsing the tables.
                 If None, defauts to a TableFinder with default parameters.
-            enable_ml_features (bool, optional): if True, loads the ML page classifier on startup
-                so that :meth:`classify_pages` and :meth:`get_pages_to_embed` are available.
+            detect_orientation (bool, optional): if True, the pages going through OCR are turned
+                upright beforehand, according to an ML orientation classifier loaded on startup.
                 Requires ``onnxruntime`` or ``openvino`` and ``huggingface-hub``.
                 Use :func:`chunknorris.ml.set_ml_backend` to select the inference backend.
                 Defaults to False.
+            detect_pages_to_embed (bool, optional): if True, loads the ML page classifier on startup
+                so that :meth:`classify_pages` and :meth:`get_images_of_pages_to_embed` are available.
+                Requires ``onnxruntime`` or ``openvino`` and ``huggingface-hub``.
+                Use :func:`chunknorris.ml.set_ml_backend` to select the inference backend.
+                Defaults to False.
+            enable_ml_features (bool, optional): DEPRECATED, use detect_pages_to_embed instead.
         """
         super().__init__()
         self.add_headers = add_headers
         self.extract_tables = extract_tables
         self.use_ocr = use_ocr
-        self.ocr_language = ocr_language
+        if ocr_language is not None:
+            if ocr_engine is not None:
+                raise ValueError(
+                    "ocr_language can't be used along with ocr_engine. Use ocr_engine=TesseractOCR(language=...) instead."
+                )
+            warnings.warn(
+                "ocr_language is deprecated and will be removed in a future version. Use ocr_engine=TesseractOCR(language=...) instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self.ocr_engine = ocr_engine or TesseractOCR(language=ocr_language or "fra+eng")
         self.body_line_spacing = body_line_spacing
         self._configured_body_line_spacing = (
             body_line_spacing  # preserved for cleanup reset
         )
         self.table_finder = table_finder
-        self._ml_enabled = enable_ml_features
-        if enable_ml_features:
+        if enable_ml_features is not None:
+            warnings.warn(
+                "enable_ml_features is deprecated and will be removed in a future version. Use detect_pages_to_embed instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            detect_pages_to_embed = detect_pages_to_embed or enable_ml_features
+        if detect_pages_to_embed:
             self._load_page_classifier()
+        if detect_orientation and use_ocr == "never":
+            warnings.warn(
+                'detect_orientation is ignored with use_ocr="never": orientation is only detected on the pages going through OCR.',
+                UserWarning,
+                stacklevel=2,
+            )
+        elif detect_orientation:
+            self._load_orientation_classifier()
 
         if self.use_ocr != "never":
             self.check_ocr_config_is_valid()
@@ -183,7 +218,9 @@ class PdfParser(
         try:
             self._set_page_range(page_start, page_end)
             self._parse_document()
-            return self.to_markdown_doc()
+            md_doc = self.to_markdown_doc()
+            self._export_ocr_results(md_doc)
+            return md_doc
         except Exception:
             if isinstance(self._document, pymupdf.Document):
                 self._document.close()
@@ -209,18 +246,38 @@ class PdfParser(
 
     def _parse_document(self) -> None:
         """Parses a pdf document."""
+        uses_document_ocr = isinstance(self.ocr_engine, DocumentOCREngine)
+        if uses_document_ocr and self.use_ocr == "always":
+            LOGGER.info(
+                'Running OCR on the document with %r (use_ocr="always").',
+                self.ocr_engine,
+            )
+            self._parse_document_with_ocr()
+            return
 
         self.spans = self._create_spans()
+        scanned_pages = self._get_scanned_pages() if self.spans else []
+        # The decision is deliberately taken for the document as a whole. A single
+        # page bearing only a section title must not make the parser give up on the
+        # pages around it that do hold text.
         if (
             not self.spans
             or all(span.is_header_footer for span in self.spans)
-            or self._is_scanned_document()
+            or len(scanned_pages) == self.page_end - self.page_start  # type: ignore : page_end is set by _set_page_range()
         ):
+            if uses_document_ocr and self.use_ocr == "auto":
+                LOGGER.info(
+                    "No text found in document. Running OCR on the document with %r.",
+                    self.ocr_engine,
+                )
+                self._parse_document_with_ocr()
+                return
             raise TextNotFoundException(
                 "No text content found in document, even though OCR was used."
                 if self.use_ocr == "always"
                 else 'No text content found in document. You may want to set use_ocr="always".'
             )
+        self._warn_scanned_pages_without_ocr(scanned_pages)
         self.tables = self.get_tables() if self.extract_tables else []
         self.spans = self._flag_table_spans(self.spans)
         self.lines = PdfParser._create_lines(self.spans)
@@ -229,118 +286,6 @@ class PdfParser(
         self._flag_footnotes(self.spans)
         self.main_title = self._get_document_main_title()
         self.toc = self.get_toc() if self.add_headers else []
-
-    def _is_scanned_document(self) -> bool:
-        """Whether every parsed page is a scanned image holding no real text.
-
-        Scanners routinely stamp a date, a time or a page number onto the image
-        they produce, so such documents do yield a few spans and cannot be spotted
-        by span count alone. Text volume alone is not enough either: a filled-in
-        form or a section divider page legitimately carries a single line. What
-        separates them is that a scan is a page-sized raster image while a digital
-        page is not.
-
-        The decision is deliberately taken for the document as a whole. A single
-        page bearing only a section title must not make the parser give up on the
-        pages around it that do hold text.
-
-        Returns:
-            bool: True if every page in the parsed range is image-covered and
-                nearly textless, meaning the content is only reachable through OCR.
-        """
-        spans_per_page: defaultdict[int, list[TextSpan]] = defaultdict(list)
-        for span in self.spans:
-            spans_per_page[span.page].append(span)
-
-        for page in self.document.pages(start=self.page_start, stop=self.page_end):  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
-            # Cheap check first: a page with real text rules the document out
-            # without ever inspecting its images.
-            if (
-                PdfParser._count_body_chars(spans_per_page[page.number], page.rect)  # type: ignore : missing typing in pymupdf -> page.number : int, page.rect : Rect
-                > self._SCANNED_PAGE_MAX_CHARS
-            ):
-                return False
-            if (
-                PdfParser._get_page_image_coverage(page)
-                < self._SCANNED_PAGE_IMAGE_COVERAGE
-            ):
-                return False
-
-        return True
-
-    @staticmethod
-    def _count_body_chars(spans: list[TextSpan], page_rect: pymupdf.Rect) -> int:
-        """Counts the characters a page holds, ignoring stamps.
-
-        A stamp burnt into a margin by a scanner or a printer (a date, a time, a
-        page number) is not text the document actually carries. Counting it would
-        hide the fact that the page's real content is only reachable through OCR,
-        so spans lying entirely in the top or bottom margin band are discarded,
-        as are spans already flagged as repeated headers/footers.
-
-        Args:
-            spans (list[TextSpan]): the spans found on the page.
-            page_rect (pymupdf.Rect): the rectangle of the page.
-
-        Returns:
-            int: the number of characters outside of the page margins.
-        """
-        margin = page_rect.height * PdfParser._PAGE_MARGIN_RATIO  # type: ignore : missing typing in pymupdf -> Rect.height : float
-        top_limit: float = page_rect.y0 + margin  # type: ignore : missing typing in pymupdf -> Rect.y0 : float
-        bottom_limit: float = page_rect.y1 - margin  # type: ignore : missing typing in pymupdf -> Rect.y1 : float
-
-        return sum(
-            len(span.text.strip())
-            for span in spans
-            if not span.is_header_footer
-            and span.bbox.y1 > top_limit  # type: ignore : missing typing in pymupdf -> Rect.y1 : float
-            and span.bbox.y0 < bottom_limit  # type: ignore : missing typing in pymupdf -> Rect.y0 : float
-        )
-
-    @staticmethod
-    def _get_page_image_coverage(page: pymupdf.Page) -> float:
-        """Computes the fraction of a page covered by raster images.
-
-        Overlapping images are counted once per image rather than once per
-        covered area, so the result is capped at 1.0. Overestimating is harmless
-        here: the value is only compared against a coverage threshold, and the
-        text check has already ruled out pages that carry content.
-
-        Args:
-            page (pymupdf.Page): the page to measure.
-
-        Returns:
-            float: the covered fraction, between 0.0 and 1.0.
-        """
-        page_rect: pymupdf.Rect = page.rect  # type: ignore : missing typing in pymupdf -> page.rect : Rect
-        page_area: float = page_rect.get_area()  # type: ignore : missing typing in pymupdf -> Rect.get_area() : float
-        if not page_area:
-            return 0.0
-
-        covered_area = 0.0
-        for image_info in page.get_image_info():  # type: ignore : missing typing in pymupdf -> page.get_image_info() : list[dict]
-            # Clip to the page: images can bleed outside of it.
-            image_rect = pymupdf.Rect(image_info["bbox"]) & page_rect
-            if not image_rect.is_empty:  # type: ignore : missing typing in pymupdf -> Rect.is_empty : bool
-                covered_area += image_rect.get_area()  # type: ignore : missing typing in pymupdf -> Rect.get_area() : float
-
-        return min(covered_area / page_area, 1.0)
-
-    def check_ocr_config_is_valid(self) -> None:
-        """Check that the OCR configuration is valid."""
-        tessdata_location = os.environ.get("TESSDATA_PREFIX")
-        if not tessdata_location:
-            raise PdfParserException(
-                'To use OCR, the "TESSDATA_PREFIX" must be set as environment variable in order to locate traineddata files. For more info see https://pymupdf.readthedocs.io/en/latest/installation.html#enabling-integrated-ocr-support\nYou may otherwise want to deactivate OCR : PdfParser(use_ocr="never").',
-            )
-        language_list = self.ocr_language.split("+")
-        for lang in language_list:
-            if not os.path.exists(
-                os.path.join(tessdata_location, f"{lang}.traineddata")
-            ):
-                raise PdfParserException(
-                    f"Tesseract's {lang}.traineddata file not found at {tessdata_location}. You might need to download the corresponding file from https://github.com/tesseract-ocr/tessdata and place it in {tessdata_location}",
-                )
 
     @mem_debug("_create_spans")
     def _create_spans(self) -> list[TextSpan]:
@@ -361,12 +306,14 @@ class PdfParser(
         """Get the spans of the pages."""
 
         spans: list[TextSpan] = []
+        # Document OCR engines run on the whole document, not page per page
+        use_ocr = (
+            self.use_ocr if isinstance(self.ocr_engine, PageOCREngine) else "never"
+        )
         for page in self.document.pages(start=self.page_start, stop=self.page_end):  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
-            match self.use_ocr:
+            match use_ocr:
                 case "always":
-                    textpage: pymupdf.TextPage = page.get_textpage_ocr(  # type: ignore : missing typing in pymupdf
-                        language=self.ocr_language, dpi=72, full=False
-                    )
+                    textpage = self._get_ocr_textpage(page)
                 case "auto":
                     textpage: pymupdf.TextPage = page.get_textpage()  # type: ignore : missing typing in pymupdf
                     page_spans = PdfParser._extract_spans_from_textpage(
@@ -375,13 +322,17 @@ class PdfParser(
                     if page_spans:
                         spans.extend(page_spans)
                         continue
-                    else:
-                        textpage: pymupdf.TextPage = page.get_textpage_ocr(  # type: ignore : missing typing in pymupdf
-                            language=self.ocr_language, dpi=72, full=False
-                        )
+                    textpage = self._get_ocr_textpage(page)
                 case "never":
                     textpage: pymupdf.TextPage = page.get_textpage()  # type: ignore : missing typing in pymupdf
             spans.extend(PdfParser._extract_spans_from_textpage(textpage, page.number))  # type: ignore : missing typing in pymupdf -> page.number: int
+        if self.ocr_pages:
+            LOGGER.info(
+                "OCR used with %r on %i page(s): %s",
+                self.ocr_engine,
+                len(self.ocr_pages),
+                self.ocr_pages,
+            )
 
         return spans
 
@@ -658,6 +609,10 @@ class PdfParser(
         self.lines = []
         self.blocks = []
         self.tables = []
+        self.ocr_blocks = []
+        self.ocr_images = {}
+        self.ocr_pages = []
+        self.ocr_rotations = {}
         self.toc = []
         self.main_title = ""
         self.document_fontsizes = []

@@ -5,6 +5,7 @@ from .export import PdfExport
 from .extract_links import PdfLinkExtraction
 from .extract_tables import PdfTableExtraction
 from .extract_toc import PdfTocExtraction
+from .ocr import PdfOCR
 from .page_classification import PdfPageClassification
 from .plot import PdfPlotter
-from .utils import DocSpecsExtraction, PdfParserState
+from .utils import DocSpecsExtraction, PdfParserState, native_parsing_only

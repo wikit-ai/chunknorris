@@ -11,7 +11,7 @@ def test_chunk_string_md_to_md(
 ):
     md_to_md_pipeline = BasePipeline(md_parser, md_chunker)
     chunks = md_to_md_pipeline.chunk_string(md_standard_setext_in)
-    assert [chunk.get_text() for chunk in chunks] == md_standard_out
+    assert [chunk.to_string() for chunk in chunks] == md_standard_out
 
 
 def test_chunk_string_html_to_md(
@@ -22,7 +22,7 @@ def test_chunk_string_html_to_md(
 ):
     html_to_md_pipeline = BasePipeline(html_parser, md_chunker)
     chunks = html_to_md_pipeline.chunk_string(html_string_in)
-    assert [chunk.get_text() for chunk in chunks] == [html_string_out]
+    assert [chunk.to_string() for chunk in chunks] == [html_string_out]
 
 
 def test_chunk_file_pdf_to_md(
