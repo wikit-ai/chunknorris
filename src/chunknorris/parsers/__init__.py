@@ -7,3 +7,4 @@ from .notebook.jupyter_notebook_parser import JupyterNotebookParser
 from .pdf.pdf_parser import PdfParser
 from .sheets.csv_parser import CSVParser
 from .sheets.excel_parser import ExcelParser
+from .sheets.sheet_profile import SheetProfile
