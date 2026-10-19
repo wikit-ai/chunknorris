@@ -81,3 +81,25 @@ def test_decode_bytes_unusable_declaration_falls_back(label: str):
 def test_decode_bytes_non_text_codec_declaration_falls_back():
     html = '<meta charset="base64">Ajouté'
     assert decode_bytes(html.encode("cp1252"), is_html=True) == html
+
+
+def test_decode_bytes_mostly_utf8_with_stray_byte():
+    data = TEXT.encode("utf-8") + b" caf\xe9"
+    assert decode_bytes(data) == TEXT + " caf\ufffd"
+
+
+def test_decode_bytes_utf8_truncated_mid_character():
+    data = TEXT.encode("utf-8")[:-2]
+    assert decode_bytes(data) == TEXT[:-1] + "\ufffd"
+
+
+def test_decode_bytes_mostly_cp1252_with_valid_utf8_sequence():
+    # Starts with a valid UTF-8 sequence ("é"), but most of it is cp1252.
+    data = "é".encode("utf-8") + TEXT.encode("cp1252")
+    assert decode_bytes(data) == "Ã©" + TEXT
+
+
+def test_decode_bytes_mostly_utf8_wins_over_declaration():
+    html = '<meta charset="iso-8859-2">' + TEXT
+    data = html.encode("utf-8") + b"\xe9"
+    assert decode_bytes(data, is_html=True) == html + "\ufffd"

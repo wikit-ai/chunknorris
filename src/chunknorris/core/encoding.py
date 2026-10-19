@@ -5,14 +5,21 @@ Decoding order:
     2. Strict UTF-8. Non-ASCII text in another encoding is almost never
        valid UTF-8, so a successful decode is reliable, even when the
        document declares another charset (a common authoring mistake).
-    3. (HTML only) the charset declared in <meta> or in the XML prolog.
-    4. Windows-1252, the most common legacy encoding for Western European
+    3. Lenient UTF-8, if the document is mostly valid UTF-8 (more valid
+       non-ASCII characters than invalid bytes). This covers files mixing
+       encodings or truncated in the middle of a character: invalid bytes
+       are replaced with U+FFFD instead of decoding the whole document
+       as Windows-1252.
+    4. (HTML only) the charset declared in <meta> or in the XML prolog.
+    5. Windows-1252, the most common legacy encoding for Western European
        languages (superset of ISO-8859-1 for printable characters).
-    5. ISO-8859-1, which maps every byte, so decoding never fails.
+    6. ISO-8859-1, which maps every byte, so decoding never fails.
 
-Only strict decodes are attempted, so the cost is one pass over the data
-for UTF-8 files (same as open().read()) and at most four passes otherwise. No statistical charset
-detection is used: it is slow on large files and unreliable on short ones.
+The cost is one pass over the data for UTF-8 files (same as open().read()).
+For legacy-encoded files, the first non-ASCII byte is usually invalid UTF-8,
+which rules out step 3 without scanning the whole document. No statistical
+charset detection is used: it is slow on large files and unreliable on short
+ones.
 """
 
 import codecs
@@ -42,6 +49,8 @@ _RE_DECLARED_CHARSET = re.compile(
 # As browsers do (WHATWG Encoding Standard), these labels are decoded
 # as Windows-1252, which they are in practice.
 _WINDOWS_1252_ALIASES = {"iso8859-1", "ascii", "cp1252"}
+# Invalid bytes, as decoded by the "surrogateescape" error handler.
+_RE_ESCAPED_BYTE = re.compile("[\udc80-\udcff]")
 
 
 def read_text_file(filepath: str | Path, is_html: bool = False) -> str:
@@ -78,6 +87,15 @@ def decode_bytes(data: bytes, is_html: bool = False) -> str:
     except UnicodeDecodeError:
         pass
 
+    n_invalid_bytes = _count_invalid_bytes_if_mostly_utf8(data)
+    if n_invalid_bytes is not None:
+        LOGGER.warning(
+            "Document is mostly UTF-8 but has %d invalid byte(s). "
+            "They were replaced with U+FFFD.",
+            n_invalid_bytes,
+        )
+        return _decode(data, "utf-8", errors="replace")
+
     if is_html:
         declared_encoding = _find_declared_encoding(data)
         if declared_encoding is not None:
@@ -105,6 +123,24 @@ def _decode(data: bytes, encoding: str, errors: str = "strict") -> str:
     # than bytes.decode() followed by str.replace().
     with io.TextIOWrapper(io.BytesIO(data), encoding=encoding, errors=errors) as f:
         return f.read()
+
+
+def _count_invalid_bytes_if_mostly_utf8(data: bytes) -> int | None:
+    """Returns the number of invalid UTF-8 bytes if there are fewer of them
+    than valid non-ASCII characters, None otherwise. Assumes data is not
+    valid UTF-8.
+    """
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError as e:
+        # Usual case for legacy encodings: the first non-ASCII byte is invalid.
+        if data[: e.start].isascii():
+            return None
+    text = data.decode("utf-8", errors="surrogateescape")
+    n_invalid = len(_RE_ESCAPED_BYTE.findall(text))
+    # Encoding to ASCII drops non-ASCII characters, escaped bytes included.
+    n_valid_non_ascii = len(text) - len(text.encode("ascii", "ignore")) - n_invalid
+    return n_invalid if n_valid_non_ascii > n_invalid else None
 
 
 def _find_declared_encoding(data: bytes) -> str | None:
