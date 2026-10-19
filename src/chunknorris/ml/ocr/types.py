@@ -58,6 +58,11 @@ class OCRBlock:
         page: the page the block belongs to (0-based).
         order: the position of the block in the reading order of the document.
         image_id: the id of the related OCRImage, if the block is an image.
+        content_confidence: the average confidence (0 to 1) of the engine in the text
+            of the block, if provided. None for blocks without text, such as images.
+        min_content_confidence: the confidence (0 to 1) of the engine in the least
+            certain part of the text of the block, if provided.
+        type_confidence: the confidence (0 to 1) of the engine in the type of the block, if provided.
     """
 
     type: str
@@ -66,6 +71,18 @@ class OCRBlock:
     page: int
     order: int = 0
     image_id: str | None = None
+    content_confidence: float | None = None
+    min_content_confidence: float | None = None
+    type_confidence: float | None = None
+
+    @property
+    def confidence(self) -> float | None:
+        """The overall confidence (0 to 1) of the engine in the block: the confidence
+        in its type, weighted by the confidence in the least certain part of its text if any.
+        None if the engine provided no confidence."""
+        if self.type_confidence is None or self.min_content_confidence is None:
+            return self.type_confidence
+        return self.type_confidence * self.min_content_confidence
 
     @property
     def is_header_footer(self) -> bool:

@@ -56,6 +56,7 @@ How OCR runs is controlled by the ``ocr_engine`` argument. Here are code example
             ocr_engine=MistralOCR(
                 image_captioning=True,  # describe the images in the markdown
                 store_images=False,  # keep the images as base64 in the parsed document
+                return_confidence=False,  # store the confidence scores of the model in the OCR blocks
                 ),
             ),
         chunker=MarkdownChunker()

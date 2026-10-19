@@ -148,6 +148,7 @@ class MistralOCR(DocumentOCREngine):
         model: str = "mistral-ocr-4-1",
         image_captioning: bool = True,
         store_images: bool = False,
+        return_confidence: bool = False,
         skip_image_types: Iterable[ImageType] = ("decorative", "icon"),
         max_request_mb: float = 40.0,
         timeout: float = 300.0,
@@ -167,6 +168,8 @@ class MistralOCR(DocumentOCREngine):
                 Defaults to True.
             store_images (bool, optional): if True, the images are returned as base64 data URIs
                 in MarkdownDoc.images. Defaults to False.
+            return_confidence (bool, optional): if True, the confidence scores of the model
+                are stored in the OCRBlocks. Not supported by all providers. Defaults to False.
             skip_image_types (Iterable[ImageType], optional): the image types to remove from the markdown.
                 Only used if image_captioning is True. Defaults to ("decorative", "icon").
             max_request_mb (float, optional): the maximum size of the document sent in a single request.
@@ -185,6 +188,7 @@ class MistralOCR(DocumentOCREngine):
         self._model = model
         self.image_captioning = image_captioning
         self.store_images = store_images
+        self.return_confidence = return_confidence
         self.skip_image_types: frozenset[ImageType] = frozenset(skip_image_types)
         self.max_request_mb = max_request_mb
         self.timeout = timeout
@@ -322,6 +326,8 @@ class MistralOCR(DocumentOCREngine):
         }
         if self.image_captioning:
             payload["bbox_annotation_format"] = IMAGE_ANNOTATION_FORMAT
+        if self.return_confidence:
+            payload["confidence_scores_granularity"] = "block"
 
         return payload
 
@@ -445,6 +451,7 @@ class MistralOCR(DocumentOCREngine):
             text = MistralOCR._normalize_checkboxes(text)
             if not text:
                 continue
+            confidence: dict[str, float | None] = block.get("confidence_scores") or {}
             ocr_document.blocks.append(
                 OCRBlock(
                     type=block["type"],
@@ -453,6 +460,13 @@ class MistralOCR(DocumentOCREngine):
                     page=page_number,
                     order=len(ocr_document.blocks),
                     image_id=image.id if image else None,
+                    content_confidence=confidence.get(
+                        "average_content_confidence_score"
+                    ),
+                    min_content_confidence=confidence.get(
+                        "minimum_content_confidence_score"
+                    ),
+                    type_confidence=confidence.get("block_type_confidence_score"),
                 )
             )
 
