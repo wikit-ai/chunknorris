@@ -12,7 +12,7 @@ import pytest
 
 from chunknorris.chunkers import MarkdownChunker
 from chunknorris.exceptions.exceptions import OCRException, PdfParserException
-from chunknorris.ml.ocr import MistralOCR, TesseractOCR
+from chunknorris.ml.ocr import MistralOCR, OCRBlock, TesseractOCR
 from chunknorris.ml.orientation_classifiers import OrientationPrediction
 from chunknorris.parsers import PdfParser
 
@@ -270,7 +270,37 @@ def test_mistral_ocr_payload():
     assert payload["include_blocks"] is True
     assert payload["include_image_base64"] is True
     assert "bbox_annotation_format" not in payload
+    assert "confidence_scores_granularity" not in payload
     assert MistralOCR(api_key="k")._build_payload(b"%PDF")["bbox_annotation_format"]  # type: ignore -> private method
+
+
+def test_mistral_ocr_confidence(
+    monkeypatch: pytest.MonkeyPatch, mistral_response: dict[str, Any]
+):
+    for page in mistral_response["pages"]:
+        for block in page["blocks"]:
+            block["confidence_scores"] = {
+                "average_content_confidence_score": (
+                    None if block["type"] in ("image", "signature") else 0.9
+                ),
+                "minimum_content_confidence_score": (
+                    None if block["type"] in ("image", "signature") else 0.5
+                ),
+                "block_type_confidence_score": 0.8,
+            }
+    payloads = _mock_post(monkeypatch, mistral_response)
+    engine = MistralOCR(api_key="test-key", return_confidence=True)
+    ocr_document = engine.ocr_document(pymupdf.open(stream=_scanned_document(4)), 0, 4)
+
+    assert payloads[0]["confidence_scores_granularity"] == "block"
+    assert all(block.type_confidence == 0.8 for block in ocr_document.blocks)
+    signature = next(b for b in ocr_document.blocks if b.type == "signature")
+    assert signature.content_confidence is None
+    assert signature.confidence == 0.8
+    title = next(b for b in ocr_document.blocks if b.type == "title")
+    assert (title.content_confidence, title.min_content_confidence) == (0.9, 0.5)
+    assert title.confidence == pytest.approx(0.4)
+    assert OCRBlock("text", "text", pymupdf.Rect(), 0).confidence is None
 
 
 def test_mistral_ocr_retries_on_rate_limit(monkeypatch: pytest.MonkeyPatch):
