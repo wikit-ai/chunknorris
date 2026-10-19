@@ -6,6 +6,7 @@ from ...core.components import MarkdownDoc
 from ...core.custom_markdownify import (  # type: ignore : no stub file
     CustomMarkdownConverter,
 )
+from ...core.encoding import read_text_file
 from ..abstract_parser import AbstractParser
 
 _RE_BLANK_LINES = re.compile(r"(?:\n\s*){3,}")
@@ -58,7 +59,7 @@ class HTMLParser(AbstractParser[str]):
 
     @staticmethod
     def read_file(filepath: str) -> str:
-        """Reads an HTML file.
+        """Reads an HTML file, detecting its encoding.
 
         Args:
             filepath (str): the path to the HTML file.
@@ -71,8 +72,7 @@ class HTMLParser(AbstractParser[str]):
             raise ValueError("Only .html / .htm files can be passed to HTMLParser.")
         if not path.is_file():
             raise FileNotFoundError(f"File not found: {filepath}")
-        with path.open("r", encoding="utf8") as file:
-            return file.read()
+        return read_text_file(path, is_html=True)
 
     @staticmethod
     def apply_markdownify(html_string: str) -> str:
@@ -85,8 +85,14 @@ class HTMLParser(AbstractParser[str]):
         Returns:
             str: the markdownified string.
         """
+        # On the first pass, newlines of the HTML source are collapsed into spaces,
+        # as browsers do (<br> and <pre> are kept). Later passes run on Markdown,
+        # whose newlines must be preserved.
+        first_pass_converter = CustomMarkdownConverter(
+            **_MARKDOWNIFY_OPTIONS, wrap=True, wrap_width=None
+        )
+        md_string = first_pass_converter.convert(html_string)  # type: ignore MarkdownConverter.convert()->str
         converter = CustomMarkdownConverter(**_MARKDOWNIFY_OPTIONS)
-        md_string = html_string
         while True:
             converted = converter.convert(md_string)  # type: ignore MarkdownConverter.convert()->str
             if converted == md_string:
