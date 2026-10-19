@@ -1,4 +1,4 @@
-from itertools import groupby
+from collections import defaultdict
 
 import numpy as np
 import numpy.typing as npt
@@ -26,10 +26,9 @@ class PdfLinkExtraction(PdfParserState):
         Returns:
             list[TextSpan]: the list of spans, with the "link" and "has_link" attributes updated
         """
-        spans_per_page_map = {
-            page_n: list(spans_on_page)
-            for page_n, spans_on_page in groupby(spans, key=lambda span: span.page)
-        }
+        spans_per_page_map: defaultdict[int, list[TextSpan]] = defaultdict(list)
+        for span in spans:
+            spans_per_page_map[span.page].append(span)
         links_per_page_map: dict[int, list[Link]] = {
             page.number: [  # type: ignore | missing typing in pymupdf: Page.number : int
                 Link(uri=link["uri"], bbox=link["from"])

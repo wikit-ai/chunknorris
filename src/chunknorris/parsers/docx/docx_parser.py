@@ -9,22 +9,6 @@ from ..html.html_parser import HTMLParser
 
 class DocxParser(HTMLParser):
 
-    def parse_string(self, string: str) -> MarkdownDoc:
-        """Parses a HTML-formatted string.
-        Ensures that the formatting is suited to be passed
-        to the MarkdownChunker.
-
-        Args:
-            string (str): the markdown formatted string
-
-        Returns:
-            MarkdownDoc: the parsed document. Can be fed to chunker.
-        """
-        formatted_string = DocxParser.apply_markdownify(string)
-        formatted_string = DocxParser.cleanup_string(formatted_string)
-
-        return MarkdownDoc.from_string(formatted_string)
-
     def parse_file(self, filepath: str) -> MarkdownDoc:
         """Reads and parses a markdown-formatted string.
         Ensures that the formatting is suited to be passed

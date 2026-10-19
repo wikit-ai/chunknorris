@@ -112,7 +112,7 @@ class WikitJsonPipeline:
             dict: the formatted file content
         """
         has_part = [
-            WikitJSONDocumentChunk(type="DocumentChunk", text=chunk.get_text(), position=i)  # type: ignore : known problem where pydantic looks for @type instead of type. see https://github.com/pydantic/pydantic/issues/4936
+            WikitJSONDocumentChunk(type="DocumentChunk", text=chunk.to_string(), position=i)  # type: ignore : known problem where pydantic looks for @type instead of type. see https://github.com/pydantic/pydantic/issues/4936
             for i, chunk in enumerate(chunks)
         ]
 
