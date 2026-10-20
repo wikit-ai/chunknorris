@@ -243,3 +243,20 @@ def test_ml_models_are_shared_across_parsers():
     )
     assert first.orientation_classifier is second.orientation_classifier
     assert first._page_classifier is second._page_classifier  # type: ignore -> private attribute
+
+
+def test_parse_file_leaves_span_bboxes_untouched(
+    pdf_parser: PdfParser, pdf_filepath: str, monkeypatch: pytest.MonkeyPatch
+):
+    snapshot: list[tuple[str, tuple[float, ...]]] = []
+    create_spans = pdf_parser._create_spans
+
+    def create_spans_and_snapshot():
+        spans = create_spans()
+        snapshot.extend((span.text, tuple(span.bbox)) for span in spans)
+        return spans
+
+    monkeypatch.setattr(pdf_parser, "_create_spans", create_spans_and_snapshot)
+    _ = pdf_parser.parse_file(pdf_filepath)
+    assert snapshot
+    assert [(span.text, tuple(span.bbox)) for span in pdf_parser.spans] == snapshot
