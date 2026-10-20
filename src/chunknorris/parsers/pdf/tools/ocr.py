@@ -101,7 +101,7 @@ class PdfOCR(PdfParserState):
             pymupdf.TextPage: the textpage holding the text found on the page.
         """
         assert isinstance(self.ocr_engine, PageOCREngine)
-        self._turn_pages_upright([page])
+        self.turn_pages_upright([page])
         self.ocr_pages.append(page.number)  # type: ignore : missing typing in pymupdf -> page.number: int
 
         return self.ocr_engine.get_textpage(page)
@@ -112,7 +112,7 @@ class PdfOCR(PdfParserState):
         """
         assert isinstance(self.ocr_engine, DocumentOCREngine)
         self.spans = []
-        self._turn_pages_upright(
+        self.turn_pages_upright(
             list(self.document.pages(start=self.page_start, stop=self.page_end))  # type: ignore : missing typing in pymupdf -> document.pages() : generator[Page]
         )
         ocr_document = self.ocr_engine.ocr_document(
@@ -304,7 +304,7 @@ class PdfOCR(PdfParserState):
 
         return min(covered_area / page_area, 1.0)
 
-    def _turn_pages_upright(self, pages: list[pymupdf.Page]) -> None:
+    def turn_pages_upright(self, pages: list[pymupdf.Page]) -> None:
         """Rotates the pages that the orientation classifier confidently finds
         rotated, so that the OCR engine gets them upright.
         Does nothing if no orientation classifier is set.
