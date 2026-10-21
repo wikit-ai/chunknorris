@@ -38,7 +38,7 @@ keywords = [
   "RAG",
 ]
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
   "Natural Language :: English",
   "Programming Language :: Python :: 3.11",
@@ -54,7 +54,7 @@ dependencies = [
   "lxml==6.1.0",
   "html5lib==1.1",
   "termcolor==2.4",
-  "PyMuPDF==1.27.2.2",
+  "PyMuPDF==2.0",
   "matplotlib>=3.9.2",
   "pydantic>=2.0,<3.0.0",
   "pandas==2.2.3",
