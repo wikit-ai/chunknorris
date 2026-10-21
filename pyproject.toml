@@ -23,7 +23,7 @@ chunknorris = "chunknorris.__main__:main"
 
 [project]
 name = "chunknorris"
-version = "1.5.0"
+version = "1.6.0"
 authors = [{ name = "Wikit", email = "dev@wikit.ai" }]
 description = "A package for chunking documents from various formats"
 keywords = [
@@ -54,7 +54,7 @@ dependencies = [
   "lxml==6.1.0",
   "html5lib==1.1",
   "termcolor==2.4",
-  "PyMuPDF==1.27.2.2",
+  "PyMuPDF==2.0",
   "matplotlib>=3.9.2",
   "pydantic>=2.0,<3.0.0",
   "pandas==2.2.3",
