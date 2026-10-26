@@ -357,7 +357,7 @@ class MistralOCR(DocumentOCREngine):
                     or attempt == self.max_retries
                 ):
                     raise OCRException(
-                        f"Mistral OCR request failed with status {e.code}: {e.read().decode(errors='replace')}"
+                        f"Mistral OCR request failed with status {e.code}: {e.read().decode(errors="replace")}"
                     ) from e
                 retry_after = MistralOCR._parse_retry_after(e.headers)
             # OSError covers connection errors and timeouts, HTTPException
@@ -370,7 +370,7 @@ class MistralOCR(DocumentOCREngine):
                     return json.loads(body)
                 except json.JSONDecodeError as e:
                     raise OCRException(
-                        f"Mistral OCR returned an invalid response: {body[:500].decode(errors='replace')}"
+                        f"Mistral OCR returned an invalid response: {body[:500].decode(errors="replace")}"
                     ) from e
             time.sleep(retry_after if retry_after is not None else 2**attempt)
         raise AssertionError("unreachable")
@@ -510,7 +510,7 @@ class MistralOCR(DocumentOCREngine):
     @staticmethod
     def _image_to_markdown(image: OCRImage) -> str:
         """Renders an image as a markdown reference, followed by its caption as a quote."""
-        markdown = f"![{image.image_type or 'image'}]({image.id})"
+        markdown = f"![{image.image_type or "image"}]({image.id})"
         if (
             image.caption
             and image.image_type not in MistralOCR._CAPTIONLESS_IMAGE_TYPES

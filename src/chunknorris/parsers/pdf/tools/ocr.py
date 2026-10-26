@@ -192,7 +192,7 @@ class PdfOCR(PdfParserState):
 
         def shift_header(match: re.Match[str]) -> str:
             level = min(max(len(match.group(1)) + shift, 1), 6)
-            return f"{'#' * level} {match.group(2)}"
+            return f"{"#" * level} {match.group(2)}"
 
         for block in blocks:
             block.text = "\n".join(

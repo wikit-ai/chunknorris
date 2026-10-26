@@ -6,6 +6,7 @@ import yaml
 
 from ...core.components import MarkdownDoc
 from ...core.encoding import read_text_file
+from ...core.markdown_images import extract_images
 from ..abstract_parser import AbstractParser
 
 _RE_EXCESS_NEWLINES = re.compile(r"(?:\n\s*){3,}")

@@ -7,6 +7,7 @@ from ...core.custom_markdownify import (  # type: ignore : no stub file
     CustomMarkdownConverter,
 )
 from ...core.encoding import read_text_file
+from ...core.markdown_images import extract_images
 from ..abstract_parser import AbstractParser
 
 _RE_BLANK_LINES = re.compile(r"(?:\n\s*){3,}")
