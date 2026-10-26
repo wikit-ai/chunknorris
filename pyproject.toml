@@ -23,7 +23,7 @@ chunknorris = "chunknorris.__main__:main"
 
 [project]
 name = "chunknorris"
-version = "1.4.0"
+version = "1.5.0"
 authors = [{ name = "Wikit", email = "dev@wikit.ai" }]
 description = "A package for chunking documents from various formats"
 keywords = [
@@ -38,10 +38,10 @@ keywords = [
   "RAG",
 ]
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 classifiers = [
   "Natural Language :: English",
-  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.13",
   "Framework :: Pytest",
   "License :: OSI Approved :: GNU Affero General Public License v3",
   "Topic :: Text Processing :: Markup :: Markdown",
