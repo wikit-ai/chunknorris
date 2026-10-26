@@ -143,7 +143,7 @@ def save_chunks():
                 for k, v in chunk.model_dump().items()
                 if k not in ["headers", "content"]
             }
-            | {"text": chunk.get_text(prepend_headers=ss.prepend_headers_to_chunks)}
+            | {"text": chunk.to_string(prepend_headers=ss.prepend_headers_to_chunks)}
             for chunk in ss.chunks
         ],
         indent=4,
@@ -359,5 +359,5 @@ with col2:
                 with st.expander(f"Chunk {i+1}", expanded=False):
                     with st.container(height=300, border=False):
                         st.markdown(
-                            chunk.get_text(prepend_headers=ss.prepend_headers_to_chunks)  # type: ignore | Chunk.get_text()
+                            chunk.to_string(prepend_headers=ss.prepend_headers_to_chunks)  # type: ignore | Chunk.to_string()
                         )

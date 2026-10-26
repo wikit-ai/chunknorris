@@ -28,7 +28,7 @@ argparser.add_argument(
 argparser.add_argument(
     "--files_dir",
     type=str,
-    default=r"C:\Users\mathi\Wikit\Data\Miscelaneous",
+    default=r"/Users/mathieu.ciancone/Wikit/Data/Miscelaneous/raw_pdfs",
     help="The type of file format to run the test on.",
 )
 args = argparser.parse_args()

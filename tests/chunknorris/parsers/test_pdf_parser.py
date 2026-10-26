@@ -1,3 +1,4 @@
+import logging
 import re
 
 import pymupdf  # type: ignore -> no stubs
@@ -7,6 +8,7 @@ from PIL.Image import Image as PILImage
 from chunknorris import set_ml_backend
 from chunknorris.core.components import MarkdownDoc
 from chunknorris.exceptions.exceptions import TextNotFoundException
+from chunknorris.ml.ocr import MistralOCR
 from chunknorris.parsers import PdfParser
 
 try:
@@ -137,6 +139,25 @@ def test_parse_scanned_document_is_decided_document_wide(pdf_parser: PdfParser):
     assert "Ligne 0 de contenu reel." in parser_output.to_string()
 
 
+def test_partially_scanned_document_warns(
+    pdf_parser: PdfParser, caplog: pytest.LogCaptureFixture
+):
+    """The scanned pages of a document holding text elsewhere are not OCRed
+    with use_ocr="auto" and a DocumentOCREngine, or with use_ocr="never": warn about them.
+    """
+    doc = pymupdf.open()
+    page = doc.new_page()  # type: ignore -> missing typing
+    for i in range(20):
+        page.insert_text((50, 80 + i * 18), f"Ligne {i} de contenu reel.", fontsize=11)  # type: ignore -> missing typing
+    _scanned_page(doc, "12/03/2024 09:41")
+
+    with caplog.at_level(logging.WARNING, logger="ChunkNorris"):
+        pdf_parser.parse_string(doc.tobytes())  # type: ignore -> missing typing
+
+    assert "partially scanned" in caplog.text
+    assert "[1]" in caplog.text
+
+
 def test_parse_section_title_page(pdf_parser: PdfParser):
     """A section divider page holds a single title and needs no OCR."""
     doc = pymupdf.open()
@@ -166,16 +187,76 @@ def test_get_pages_as_images(pdf_parser: PdfParser, pdf_filepath: str):
 @requires_ml_backends
 def test_set_ml_backend():
     set_ml_backend("openvino")
-    parser = PdfParser(enable_ml_features=True, use_ocr="never")
+    parser = PdfParser(detect_pages_to_embed=True, use_ocr="never")
     isinstance(parser._page_classifier, PDFPageClassifierOV)
     set_ml_backend("onnx")
-    parser = PdfParser(enable_ml_features=True)
+    parser = PdfParser(detect_pages_to_embed=True, use_ocr="never")
     isinstance(parser._page_classifier, PDFPageClassifierONNX)
 
 
 @requires_ml_backends
 def test_classify_pages(pdf_filepath: str):
-    parser = PdfParser(enable_ml_features=True, use_ocr="never")
+    parser = PdfParser(detect_pages_to_embed=True, use_ocr="never")
     parser.read_file(pdf_filepath)
     preds = [pred for pred in parser.classify_pages()]
     assert len(preds) == parser.document.page_count  # type: ignore
+
+
+@requires_ml_backends
+def test_enable_ml_features_is_deprecated():
+    with pytest.warns(DeprecationWarning, match="detect_pages_to_embed"):
+        parser = PdfParser(enable_ml_features=True, use_ocr="never")
+    assert parser._page_classifier is not None  # type: ignore -> private attribute
+
+
+def test_classify_pages_requires_detect_pages_to_embed(pdf_filepath: str):
+    parser = PdfParser(use_ocr="never")
+    parser.read_file(pdf_filepath)
+    with pytest.raises(RuntimeError, match="detect_pages_to_embed=True"):
+        next(parser.classify_pages())
+
+
+@requires_ml_backends
+def test_detect_orientation_loads_classifier():
+    assert PdfParser(use_ocr="never").orientation_classifier is None
+    parser = PdfParser(detect_orientation=True, ocr_engine=MistralOCR(api_key="key"))
+    assert parser.orientation_classifier is not None
+
+
+def test_detect_orientation_is_ignored_without_ocr():
+    with pytest.warns(UserWarning, match="detect_orientation is ignored"):
+        parser = PdfParser(detect_orientation=True, use_ocr="never")
+    assert parser.orientation_classifier is None
+
+
+@requires_ml_backends
+def test_ml_models_are_shared_across_parsers():
+    first = PdfParser(
+        detect_orientation=True,
+        detect_pages_to_embed=True,
+        ocr_engine=MistralOCR(api_key="key"),
+    )
+    second = PdfParser(
+        detect_orientation=True,
+        detect_pages_to_embed=True,
+        ocr_engine=MistralOCR(api_key="key"),
+    )
+    assert first.orientation_classifier is second.orientation_classifier
+    assert first._page_classifier is second._page_classifier  # type: ignore -> private attribute
+
+
+def test_parse_file_leaves_span_bboxes_untouched(
+    pdf_parser: PdfParser, pdf_filepath: str, monkeypatch: pytest.MonkeyPatch
+):
+    snapshot: list[tuple[str, tuple[float, ...]]] = []
+    create_spans = pdf_parser._create_spans
+
+    def create_spans_and_snapshot():
+        spans = create_spans()
+        snapshot.extend((span.text, tuple(span.bbox)) for span in spans)
+        return spans
+
+    monkeypatch.setattr(pdf_parser, "_create_spans", create_spans_and_snapshot)
+    _ = pdf_parser.parse_file(pdf_filepath)
+    assert snapshot
+    assert [(span.text, tuple(span.bbox)) for span in pdf_parser.spans] == snapshot

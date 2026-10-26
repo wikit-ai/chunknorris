@@ -6,12 +6,10 @@ import yaml
 
 from ...core.components import MarkdownDoc
 from ...core.encoding import read_text_file
+from ...core.markdown_images import extract_images
 from ..abstract_parser import AbstractParser
 
 _RE_EXCESS_NEWLINES = re.compile(r"(?:\n\s*){3,}")
-_RE_BASE64_IMAGE = re.compile(
-    r"data:image/(?:bmp|gif|ico|jpg|jpeg|png|svg\+xml|webp|x-icon);base64,[a-zA-Z0-9+/]+=*"
-)
 
 
 class MarkdownParser(AbstractParser[str]):
@@ -20,6 +18,8 @@ class MarkdownParser(AbstractParser[str]):
         """Parses a markdown-formatted string.
         Ensures that the formatting is suited to be passed
         to the MarkdownChunker.
+        Images are referenced as ![alt](id) and listed in MarkdownDoc.images.
+        Embedded (base64) images get an id such as "img-0.png", others their url.
 
         Args:
             string (str): the markdown formatted string
@@ -30,8 +30,10 @@ class MarkdownParser(AbstractParser[str]):
         formatted_string = MarkdownParser.cleanup_string(string)
         formatted_string, metadata = MarkdownParser.parse_metadata(formatted_string)
         formatted_string = MarkdownParser.convert_setext_to_atx(formatted_string)
+        formatted_string, images = extract_images(formatted_string)
         md_doc = MarkdownDoc.from_string(formatted_string)
         md_doc.metadata = metadata
+        md_doc.images = images
 
         return md_doc
 
@@ -145,6 +147,5 @@ class MarkdownParser(AbstractParser[str]):
         """
         md_string = md_string.strip()
         md_string = _RE_EXCESS_NEWLINES.sub("\n\n", md_string)
-        md_string = _RE_BASE64_IMAGE.sub("", md_string)
 
         return md_string

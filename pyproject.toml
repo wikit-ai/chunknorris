@@ -23,7 +23,7 @@ chunknorris = "chunknorris.__main__:main"
 
 [project]
 name = "chunknorris"
-version = "1.4.0"
+version = "1.6.0"
 authors = [{ name = "Wikit", email = "dev@wikit.ai" }]
 description = "A package for chunking documents from various formats"
 keywords = [
@@ -38,10 +38,10 @@ keywords = [
   "RAG",
 ]
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 classifiers = [
   "Natural Language :: English",
-  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.13",
   "Framework :: Pytest",
   "License :: OSI Approved :: GNU Affero General Public License v3",
   "Topic :: Text Processing :: Markup :: Markdown",
@@ -49,13 +49,47 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 
-dynamic = ["dependencies", "optional-dependencies"]
+dependencies = [
+  "markdownify==1.2.0",
+  "lxml==6.1.0",
+  "html5lib==1.1",
+  "termcolor==2.4",
+  "PyMuPDF==2.0",
+  "matplotlib>=3.9.2",
+  "pydantic>=2.0,<3.0.0",
+  "pandas==2.2.3",
+  "pyyaml==6.0.2",
+  "openpyxl==3.1.5",
+  "thefuzz==0.22.1",
+  "tabulate==0.9.0",
+  "nbformat==5.10.4",
+  "mammoth==1.11.0",
+  "psutil>=5.9",
+]
 
-[tool.setuptools.dynamic]
-dependencies = { file = ["requirements.txt"] }
-optional-dependencies.dev = { file = ["requirements.dev.txt"] }
-optional-dependencies.ml-onnx = { file = ["requirements.ml-onnx.txt"] }
-optional-dependencies.ml-openvino = { file = ["requirements.ml-openvino.txt"] }
+[project.optional-dependencies]
+ml-onnx = ["onnxruntime>=1.19", "Pillow", "numpy", "huggingface-hub"]
+ml-openvino = ["openvino>=2026.0", "Pillow", "numpy", "huggingface-hub"]
+dev = [
+  "pytest==9.0.3",
+  "pytest-cov==4.1.0",
+  "black==26.10.1",
+  "isort==8.0.1",
+  "pylint==4.0.7",
+  "mypy",
+  "build",
+  "twine",
+  "mkdocs==1.6.1",
+  "mkdocs-click==0.8.1",
+  "mkdocs-jupyter==0.25.1",
+  "pymdown-extensions==11.0.1",
+  "mkdocstrings-python==1.12.2",
+  "mkdocs-material==9.7.7",
+  "tiktoken==0.9.0",
+  "ipython",
+  "ipykernel",
+  "tqdm",
+]
 
 
 [project.urls]

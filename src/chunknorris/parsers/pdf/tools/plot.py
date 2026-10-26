@@ -1,5 +1,5 @@
 import random
-from itertools import groupby
+from collections import defaultdict
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
@@ -10,7 +10,7 @@ from PIL import Image
 from ....decorators.decorators import mem_debug
 from .components import TextBlock, TextLine, TextSpan
 from .extract_tables import PdfTable
-from .utils import PdfParserState
+from .utils import PdfParserState, render_page
 
 
 class PdfPlotter(PdfParserState):
@@ -59,7 +59,7 @@ class PdfPlotter(PdfParserState):
             self.lines
         )
         blocks_per_page: dict[int, list[TextBlock]] = PdfPlotter._get_items_per_page(
-            self.blocks
+            self.blocks + self.ocr_blocks  # type: ignore : OCRBlock has the attributes of TextBlock used for plotting
         )
         tables_per_page: dict[int, list[PdfTable]] = PdfPlotter._get_items_per_page(
             self.tables
@@ -103,10 +103,12 @@ class PdfPlotter(PdfParserState):
         Returns:
             dict[int,list]: The map of pages to sublists of items
         """
-        return {
-            page: list(items_on_page)
-            for page, items_on_page in groupby(items_list, key=lambda item: item.page)
-        }
+        items_per_page: defaultdict[
+            int, list[TextSpan | TextLine | TextBlock | PdfTable]
+        ] = defaultdict(list)
+        for item in items_list:
+            items_per_page[item.page].append(item)
+        return items_per_page
 
     @staticmethod
     def show_page(page: pymupdf.Page, dpi: int = 100) -> None:
@@ -280,7 +282,7 @@ class PdfPlotter(PdfParserState):
         doc_to_draw_on = self.get_doc_to_draw_on()
 
         blocks_per_page: dict[int, list[TextBlock]] = PdfPlotter._get_items_per_page(
-            self.blocks
+            self.blocks + self.ocr_blocks  # type: ignore : OCRBlock has the attributes of TextBlock used for plotting
         )
         for page in doc_to_draw_on.pages(page_start, page_end):  # type: ignore : missing typing in pymupdf | Document.pages() -> Generator(Page)
             if not page.number in blocks_per_page:  # type: ignore : missing typing in pymupdf | Page.number -> int
@@ -343,5 +345,4 @@ class PdfPlotter(PdfParserState):
 
     def _render_page(self, page_number: int, resolution: int) -> Image.Image:
         """Render a single PDF page to a PIL image."""
-        pix = self.document.load_page(page_number).get_pixmap(dpi=resolution, alpha=False)  # type: ignore
-        return Image.frombuffer("RGB", (pix.width, pix.height), pix.samples, "raw", "RGB", 0, 1)  # type: ignore
+        return render_page(self.document.load_page(page_number), resolution)  # type: ignore

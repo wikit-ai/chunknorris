@@ -219,9 +219,10 @@ class TextLine:
 
     @cached_property
     def bbox(self) -> pymupdf.Rect:
-        bbox = self.spans[0].bbox
+        # Copy: include_rect() grows the Rect in place, which would alter the span's bbox
+        bbox = pymupdf.Rect(self.spans[0].bbox)
         for span in self.spans[1:]:
-            bbox = bbox.include_rect(span.bbox)  # type: ignore : missing typing in pymuPdf | Rect.include_rect(r: Rect) -> Rect
+            bbox.include_rect(span.bbox)
         return bbox
 
     @cached_property
@@ -313,9 +314,10 @@ class TextBlock:
 
     @cached_property
     def bbox(self) -> pymupdf.Rect:
-        bbox = self.lines[0].bbox
+        # Copy: include_rect() grows the Rect in place, which would alter the line's bbox
+        bbox = pymupdf.Rect(self.lines[0].bbox)
         for line in self.lines[1:]:
-            bbox = bbox.include_rect(line.bbox)  # type: ignore : missing typing in pymuPdf | Rect.include_rect(r: Rect) -> Rect
+            bbox.include_rect(line.bbox)
         return bbox
 
     @cached_property

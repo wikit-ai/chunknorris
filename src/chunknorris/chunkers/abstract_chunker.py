@@ -41,7 +41,7 @@ class AbstractChunker(ABC):
             os.makedirs(directory)
         content = [
             {
-                "text": chunk.get_text(remove_links=remove_links),
+                "text": chunk.to_string(remove_links=remove_links),
                 "start_page": chunk.start_page,
                 "end_page": chunk.end_page,
                 "start_line": chunk.start_line,

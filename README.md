@@ -73,7 +73,7 @@ chunks = pipeline.chunk_file(filepath="myfile.md")
 
 # Print or save :
 for chunk in chunks:
-    print(chunk.get_text())
+    print(chunk.to_string())
 pipeline.save_chunks(chunks)
 ```
 

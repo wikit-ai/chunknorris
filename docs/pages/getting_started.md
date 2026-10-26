@@ -29,7 +29,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 === ".html"
@@ -53,7 +53,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 === ".pdf"
@@ -77,7 +77,32 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
+    ```
+
+=== "images"
+
+    ```py
+    from chunknorris.ml.ocr import MistralOCR
+    from chunknorris.parsers import ImageParser
+    from chunknorris.chunkers import MarkdownChunker
+    from chunknorris.pipelines import BasePipeline
+
+    # Instanciate components
+    pipeline = BasePipeline(
+        parser=ImageParser(ocr_engine=MistralOCR()), # see the OCR page for the available engines
+        chunker=MarkdownChunker()
+        )
+
+    # Get some chunks !
+    chunks = pipeline.chunk_file(filepath="myfile.png") #  .jpg, .jpeg, .tiff, .bmp and .gif are also compatible.
+
+    # Save chunks
+    pipeline.save_chunks(chunks)
+
+    # Print chunks:
+    for chunk in chunks:
+        print(chunk.to_string())
     ```
 
 === ".docx"
@@ -101,7 +126,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 === ".csv"
@@ -125,7 +150,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 === ".xlsx"
@@ -149,7 +174,7 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 === ".ipynb"
@@ -173,10 +198,30 @@ Here are code examples for chunking documents according to their file type:
 
     # Print chunks:
     for chunk in chunks:
-        print(chunk.get_text())
+        print(chunk.to_string())
     ```
 
 Once you have your ``chunks``, you can easily print them of save them:
+
+## Images
+
+The images of markdown, HTML and .docx documents are kept in the markdown as ``![alt](id)`` references, and listed in ``md_doc.images`` and ``chunk.images``:
+
+- images embedded as base64 (all the images of a .docx) get an id such as ``img-0.png``, and their data URI is stored in ``image.base64``.
+- images pointing to a url get the url as id.
+- the ``<figcaption>`` of an HTML image, or a blockquote right under a markdown image, is stored in ``image.caption``.
+
+```py
+from chunknorris.parsers import DocxParser
+
+md_doc = DocxParser().parse_file("myfile.docx")
+for image_id, image in md_doc.images.items():
+    print(image_id, image.caption)
+
+print(md_doc.to_string(include_images=True))  # embeds the base64 images in the markdown
+```
+
+Images of PDF and image files are found by OCR, see the [OCR](ocr.md) page.
 
 ## Using the CLI 
 

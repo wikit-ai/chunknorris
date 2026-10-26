@@ -5,7 +5,7 @@ from thefuzz import fuzz  # type: ignore : no stubs
 
 from ....decorators.decorators import mem_debug
 from .components import TocTitle
-from .utils import PdfParserState
+from .utils import PdfParserState, native_parsing_only
 
 
 class PdfTocExtraction(PdfParserState):
@@ -31,6 +31,7 @@ class PdfTocExtraction(PdfParserState):
         r"(.+?)(?:\s+)?[\.\_\-\s….]{5,}(?:\s+)?(?:[pP]\.\s*)?(\d+)"
     )
 
+    @native_parsing_only
     @mem_debug("get_toc")
     def get_toc(self) -> list[TocTitle]:
         """Gets the table of content of a document.
@@ -66,6 +67,7 @@ class PdfTocExtraction(PdfParserState):
 
         return toc or []
 
+    @native_parsing_only
     def get_toc_from_metadata(self) -> list[TocTitle]:
         """Uses pymupdf.get_toc() to try to get the table of
         content of the document from the metadatas.
@@ -83,6 +85,7 @@ class PdfTocExtraction(PdfParserState):
             for item in toc
         ]
 
+    @native_parsing_only
     def get_toc_from_document(self) -> list[TocTitle]:
         """Tries to find a table of content in the document
         and parses it's titles. May return an ampty list

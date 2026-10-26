@@ -42,8 +42,9 @@ nav:
       - "ChunkNorris": index.md
       - Installation: pages/installation.md
       - Getting Started: pages/getting_started.md
+      - OCR: pages/ocr.md
       - How it works: pages/how_it_works.md
-      #- Performance report: pages/performance_report.md # TODO
+      - Performance report: pages/performance_report.md
       - Roadmap: pages/roadmap.md # -> chunknorris image
       - Current limitations: pages/current_limitations.md
       - Contributing: pages/how_to_contribute.md
@@ -74,6 +75,7 @@ nav:
           - DocxParser: reference/parsers/parser_docx.md
           - ExcelParser: reference/parsers/parser_excel.md
           - HTMLParser: reference/parsers/parser_html.md
+          - ImageParser: reference/parsers/parser_image.md
           - JupyterNotebookParser: reference/parsers/parser_jupyter_notebook.md
           - MarkdownParser: reference/parsers/parser_markdown.md
           - PdfParser: reference/parsers/parser_pdf.md

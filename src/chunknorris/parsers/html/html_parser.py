@@ -7,16 +7,13 @@ from ...core.custom_markdownify import (  # type: ignore : no stub file
     CustomMarkdownConverter,
 )
 from ...core.encoding import read_text_file
+from ...core.markdown_images import extract_images
 from ..abstract_parser import AbstractParser
 
 _RE_BLANK_LINES = re.compile(r"(?:\n\s*){3,}")
-_RE_BASE64_IMAGE = re.compile(
-    r"data:image/(?:bmp|gif|ico|jpg|jpeg|png|svg|webp|x-icon|svg\+xml);base64,[a-zA-Z0-9+/]+=*"
-)
 _MARKDOWNIFY_OPTIONS: dict[str, Any] = {
     "autolinks": False,
     "heading_style": "ATX",
-    "strip": ["figure", "img"],
     "bullets": "-*+",
     "escape_asterisks": False,
     "escape_underscores": False,
@@ -30,6 +27,9 @@ class HTMLParser(AbstractParser[str]):
         """Parses an HTML-formatted string.
         Ensures that the formatting is suited to be passed
         to the MarkdownChunker.
+        Images are referenced as ![alt](id) and listed in MarkdownDoc.images.
+        Embedded (base64) images get an id such as "img-0.png", others their src.
+        The <figcaption> of an image is used as its caption.
 
         Args:
             string (str): the HTML formatted string
@@ -37,10 +37,13 @@ class HTMLParser(AbstractParser[str]):
         Returns:
             MarkdownDoc: the parsed document. Can be fed to chunker.
         """
-        formatted_string = HTMLParser.apply_markdownify(string)
-        formatted_string = HTMLParser.cleanup_string(formatted_string)
+        formatted_string = self.apply_markdownify(string)
+        formatted_string = self.cleanup_string(formatted_string)
+        formatted_string, images = extract_images(formatted_string)
+        md_doc = MarkdownDoc.from_string(formatted_string)
+        md_doc.images = images
 
-        return MarkdownDoc.from_string(formatted_string)
+        return md_doc
 
     def parse_file(self, filepath: str) -> MarkdownDoc:
         """Reads and parses an HTML file.
@@ -116,6 +119,5 @@ class HTMLParser(AbstractParser[str]):
         """
         md_string = md_string.strip()
         md_string = _RE_BLANK_LINES.sub("\n\n", md_string)
-        md_string = _RE_BASE64_IMAGE.sub("", md_string)
 
         return md_string
